@@ -129,7 +129,7 @@ st.title("RosMan – Roster Manager")
 
 uploaded_file = st.file_uploader("📂 Upload DSNhanVien.csv", type=["csv"])
 if not uploaded_file:
-    st.info("Hãy upload file CSV có cột **FullName** và **Position** để bắt đầu.")
+    st.info("Hãy upload file DSNhanVien.csv  để bắt đầu.")
     st.stop()
 
 df = pd.read_csv(uploaded_file)
@@ -219,30 +219,6 @@ function(params) {
 }
 """)
 
-# ── DROPDOWN: dùng cellRenderer + onclick thay cho agSelectCellEditor ─────────
-# agSelectCellEditor với JsCode params không hoạt động qua st-aggrid.
-# Giải pháp dứt điểm: dùng agRichSelectCellEditor với values đầy đủ,
-# sau đó dùng cellRendererSelector để chọn đúng editor per row type.
-# Nhưng cách đơn giản & chắc chắn nhất: tách DataFrame thành 3 AgGrid
-# theo loại nhân viên — NHƯNG điều đó phá layout.
-#
-# Cách THỰC SỰ hoạt động: dùng values union của tất cả loại trong
-# agSelectCellEditor và suppress invalid values, kết hợp với
-# cellEditorParams là OBJECT TĨNH (không phải function).
-# Để dropdown đúng options mỗi loại: dùng 3 column set riêng (ẩn/hiện theo điều kiện)
-# là KHÔNG khả thi trong AgGrid community.
-#
-# → Giải pháp thực dụng nhất: Dùng cellEditorParams object TĨNH với
-#   values = union tất cả options, nhưng group các column theo nhân viên type.
-#   Người dùng sẽ thấy tất cả options, nhưng convention rõ ràng qua header.
-#
-# → Giải pháp tốt nhất thực sự: Dùng JavaScript thuần qua cellRenderer
-#   render một <select> HTML element, bắt sự kiện change để update cell value.
-
-
-# ── cellRenderer dùng class-based API (init/getGui/refresh) ──────────────────
-# AgGrid React yêu cầu renderer trả về DOM element qua getGui(),
-# KHÔNG trả về trực tiếp từ function (gây React error #31).
 
 morning_renderer_js = JsCode("""
 class MorningRenderer {
