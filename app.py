@@ -212,22 +212,18 @@ function(params) {{
 }}
 """)
 
-# editable function cho cột chiều (manager = không edit)
-afternoon_editable_js = JsCode("""
-function(params) {
-    return !(params.data.Position || '').includes('Quản');
-}
-""")
-
-
 morning_renderer_js = JsCode("""
 class MorningRenderer {
     init(params) {
         const pos = (params.data && params.data.Position) ? params.data.Position : '';
+        const normPos = pos
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase();
         const bgMap = {Q:'#1b4f8a', S:'#1a5c30', C:'#6b5000', B:'#7a2800'};
         let options;
-        if      (pos.includes('Quản')) options = ['', 'Q1', 'Q2', 'Q3'];
-        else if (pos.includes('Phục')) options = ['', 'S1', 'S2', 'S3'];
+        if      (normPos.includes('quan')) options = ['', 'Q1', 'Q2', 'Q3'];
+        else if (normPos.includes('phuc')) options = ['', 'S1', 'S2', 'S3'];
         else                           options = ['', 'B1', 'B2', 'B3'];
 
         const current = params.value || '';
@@ -279,17 +275,21 @@ afternoon_renderer_js = JsCode("""
 class AfternoonRenderer {
     init(params) {
         const pos = (params.data && params.data.Position) ? params.data.Position : '';
+        const normPos = pos
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase();
         const bgMap = {Q:'#1b4f8a', S:'#1a5c30', C:'#6b5000', B:'#7a2800'};
 
         // Manager: ô chiều hiển thị nền tối, không cho chọn
-        if (pos.includes('Quản')) {
+        if (normPos.includes('quan')) {
             this.el = document.createElement('div');
             this.el.style.cssText = 'width:100%;height:100%;background:#12151f;';
             return;
         }
 
         let options;
-        if (pos.includes('Phục')) options = ['', 'C1', 'C2', 'C3'];
+        if (normPos.includes('phuc')) options = ['', 'C1', 'C2', 'C3'];
         else                       options = ['', 'B4', 'B5', 'B6'];
 
         const current = params.value || '';
@@ -397,8 +397,11 @@ grid_options = gb.build()
 # ── Patch: wrap vào group structure ──────────────────────────────────────────
 built_defs = grid_options["columnDefs"]
 pinned_defs = [c for c in built_defs if c.get("pinned") == "left"]
-date_col_map = {c["field"]: c for c in built_defs if c.get("field", "").count("_") >= 2 or
-                any(c.get("field", "").endswith(s) for s in ["_M", "_C"])}
+date_col_map = {
+    c["field"]: c
+    for c in built_defs
+    if any(c.get("field", "").endswith(s) for s in ["_M", "_C"])
+}
 
 date_groups = []
 for d in dates:
@@ -422,7 +425,8 @@ grid_options["columnDefs"] = [pinned_group] + date_groups
 
 # ── Render ────────────────────────────────────────────────────────────────────
 st.subheader("📋 Roster")
-table_height = GRP_H + HDR_H + len(roster_df) * ROW_HEIGHT + 24
+MAX_TABLE_HEIGHT = 760
+table_height = min(GRP_H + HDR_H + len(roster_df) * ROW_HEIGHT + 24, MAX_TABLE_HEIGHT)
 
 grid_response = AgGrid(
     roster_df,
