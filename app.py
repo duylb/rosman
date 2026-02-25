@@ -8,7 +8,6 @@ from st_aggrid.shared import ColumnsAutoSizeMode
 
 st.set_page_config(layout="wide", page_title="RosMan – Roster Manager")
 
-# ── Constants ─────────────────────────────────────────────────────────────────
 CELL_SZ    = 44
 ROW_HEIGHT = CELL_SZ
 HDR_H      = 36
@@ -26,7 +25,6 @@ TEXT_DIM  = "#888eaa"
 SHIFT_BG = {"Q": "#1b4f8a", "S": "#1a5c30", "C": "#6b5000", "B": "#7a2800"}
 SHIFT_FG = "#ffffff"
 
-# ── Page CSS ──────────────────────────────────────────────────────────────────
 st.markdown(f"""
 <style>
   .stApp {{ background-color: {BG_PAGE} !important; }}
@@ -40,7 +38,6 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
-# ── AgGrid CSS ────────────────────────────────────────────────────────────────
 AGGRID_CSS = {
     ".ag-root-wrapper": {"background-color": f"{BG_TABLE} !important", "border": f"1px solid {BORDER} !important"},
     ".ag-root": {"background-color": f"{BG_TABLE} !important"},
@@ -68,8 +65,16 @@ AGGRID_CSS = {
         "font-size": "12px !important",
         "font-weight": "700 !important",
     },
-    ".ag-header-cell-label": {"justify-content": "center !important"},
-    ".ag-header-group-cell-label": {"justify-content": "center !important"},
+    # ── canh giữa header labels ──
+    ".ag-header-cell-label": {
+        "justify-content": "center !important",
+        "padding": "0 !important",
+    },
+    ".ag-header-group-cell-label": {
+        "justify-content": "center !important",
+        "padding": "0 !important",
+    },
+    ".ag-header-cell-text": {"text-align": "center !important"},
     ".ag-pinned-left-header": {
         "background-color": f"{BG_PINNED} !important",
         "border-right": f"3px solid {BORDER_HD} !important",
@@ -94,7 +99,7 @@ AGGRID_CSS = {
         "font-size": "12px !important",
         "color": f"{TEXT_MAIN} !important",
     },
-    # Dropdown
+    # Dropdown popup
     ".ag-select-list": {
         "background-color": "#22263a !important",
         "color": f"{TEXT_MAIN} !important",
@@ -122,7 +127,6 @@ AGGRID_CSS = {
 
 st.title("RosMan – Roster Manager")
 
-# ── Upload ────────────────────────────────────────────────────────────────────
 uploaded_file = st.file_uploader("📂 Upload DSNhanVien.csv", type=["csv"])
 if not uploaded_file:
     st.info("Hãy upload file CSV có cột **FullName** và **Position** để bắt đầu.")
@@ -136,7 +140,6 @@ if "FullName" not in df.columns or "Position" not in df.columns:
 
 employees = df[["FullName", "Position"]].copy()
 
-# ── Dates ─────────────────────────────────────────────────────────────────────
 c1, c2 = st.columns(2)
 with c1:
     start_date = st.date_input("📅 Start Date")
@@ -153,20 +156,20 @@ while cur <= end_date:
     dates.append(cur)
     cur += timedelta(days=1)
 
-# ── DataFrame ─────────────────────────────────────────────────────────────────
 roster_df = employees.copy()
 for d in dates:
     lbl = d.strftime("%d-%m")
     roster_df[f"{lbl}_M"] = ""
     roster_df[f"{lbl}_C"] = ""
 
-# ── Widths ────────────────────────────────────────────────────────────────────
 max_name_len = int(employees["FullName"].str.len().max()) if len(employees) else 15
 max_pos_len  = int(employees["Position"].str.len().max()) if len(employees) else 10
 NAME_W = min(max(max_name_len * 8 + 24, 140), 250)
 POS_W  = min(max(max_pos_len  * 8 + 24, 100), 200)
 
-# ── JsCode: cell style (shift highlight) ─────────────────────────────────────
+# ── JsCode ────────────────────────────────────────────────────────────────────
+
+# Cell style: highlight ca + canh giữa
 cell_style_js = JsCode(f"""
 function(params) {{
     const v = (params.value || '').trim();
@@ -191,24 +194,175 @@ function(params) {{
 }}
 """)
 
-text_style_js = JsCode(f"""
+# Cell style pinned cols: canh giữa cả chiều ngang lẫn dọc
+center_style_js = JsCode(f"""
 function(params) {{
     return {{
-        color: '{TEXT_MAIN}', fontSize: '13px', padding: '0 10px',
-        display: 'flex', alignItems: 'center',
-        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        color:          '{TEXT_MAIN}',
+        fontSize:       '13px',
+        padding:        '0',
+        display:        'flex',
+        alignItems:     'center',
+        justifyContent: 'center',
+        textAlign:      'center',
+        whiteSpace:     'nowrap',
+        overflow:       'hidden',
+        textOverflow:   'ellipsis',
     }};
 }}
 """)
 
-# ── JsCode: editable cho cột chiều (manager không edit) ──────────────────────
+# editable function cho cột chiều (manager = không edit)
 afternoon_editable_js = JsCode("""
 function(params) {
     return !(params.data.Position || '').includes('Quản');
 }
 """)
 
-# ── Build grid với GridOptionsBuilder (đảm bảo JsCode được register đúng) ────
+# ── DROPDOWN: dùng cellRenderer + onclick thay cho agSelectCellEditor ─────────
+# agSelectCellEditor với JsCode params không hoạt động qua st-aggrid.
+# Giải pháp dứt điểm: dùng agRichSelectCellEditor với values đầy đủ,
+# sau đó dùng cellRendererSelector để chọn đúng editor per row type.
+# Nhưng cách đơn giản & chắc chắn nhất: tách DataFrame thành 3 AgGrid
+# theo loại nhân viên — NHƯNG điều đó phá layout.
+#
+# Cách THỰC SỰ hoạt động: dùng values union của tất cả loại trong
+# agSelectCellEditor và suppress invalid values, kết hợp với
+# cellEditorParams là OBJECT TĨNH (không phải function).
+# Để dropdown đúng options mỗi loại: dùng 3 column set riêng (ẩn/hiện theo điều kiện)
+# là KHÔNG khả thi trong AgGrid community.
+#
+# → Giải pháp thực dụng nhất: Dùng cellEditorParams object TĨNH với
+#   values = union tất cả options, nhưng group các column theo nhân viên type.
+#   Người dùng sẽ thấy tất cả options, nhưng convention rõ ràng qua header.
+#
+# → Giải pháp tốt nhất thực sự: Dùng JavaScript thuần qua cellRenderer
+#   render một <select> HTML element, bắt sự kiện change để update cell value.
+
+
+# ── cellRenderer dùng class-based API (init/getGui/refresh) ──────────────────
+# AgGrid React yêu cầu renderer trả về DOM element qua getGui(),
+# KHÔNG trả về trực tiếp từ function (gây React error #31).
+
+morning_renderer_js = JsCode("""
+class MorningRenderer {
+    init(params) {
+        const pos = (params.data && params.data.Position) ? params.data.Position : '';
+        const bgMap = {Q:'#1b4f8a', S:'#1a5c30', C:'#6b5000', B:'#7a2800'};
+        let options;
+        if      (pos.includes('Quản')) options = ['', 'Q1', 'Q2', 'Q3'];
+        else if (pos.includes('Phục')) options = ['', 'S1', 'S2', 'S3'];
+        else                           options = ['', 'B1', 'B2', 'B3'];
+
+        const current = params.value || '';
+        const p = current.trim().charAt(0).toUpperCase();
+        const bg = bgMap[p] || '#1a1d27';
+        const fg = bgMap[p] ? '#fff' : '#e0e4f0';
+
+        this.select = document.createElement('select');
+        this.select.style.cssText =
+            'width:100%;height:100%;border:none;outline:none;' +
+            'font-size:12px;font-weight:600;text-align:center;' +
+            'cursor:pointer;padding:0;' +
+            'background:' + bg + ';color:' + fg + ';';
+
+        options.forEach(function(opt) {
+            const o = document.createElement('option');
+            o.value = opt; o.text = opt;
+            if (opt === current) o.selected = true;
+            this.select.appendChild(o);
+        }, this);
+
+        this.select.addEventListener('change', function() {
+            const newVal = this.select.value;
+            params.node.setDataValue(params.column.getId(), newVal);
+            const bg2 = bgMap[newVal.trim().charAt(0).toUpperCase()];
+            this.select.style.background = bg2 || '#1a1d27';
+            this.select.style.color = bg2 ? '#fff' : '#e0e4f0';
+        }.bind(this));
+
+        this.select.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+    getGui() { return this.select; }
+    refresh(params) {
+        const bgMap = {Q:'#1b4f8a', S:'#1a5c30', C:'#6b5000', B:'#7a2800'};
+        const v = params.value || '';
+        this.select.value = v;
+        const bg = bgMap[v.trim().charAt(0).toUpperCase()];
+        this.select.style.background = bg || '#1a1d27';
+        this.select.style.color = bg ? '#fff' : '#e0e4f0';
+        return true;
+    }
+    destroy() {}
+}
+""")
+
+afternoon_renderer_js = JsCode("""
+class AfternoonRenderer {
+    init(params) {
+        const pos = (params.data && params.data.Position) ? params.data.Position : '';
+        const bgMap = {Q:'#1b4f8a', S:'#1a5c30', C:'#6b5000', B:'#7a2800'};
+
+        // Manager: ô chiều hiển thị nền tối, không cho chọn
+        if (pos.includes('Quản')) {
+            this.el = document.createElement('div');
+            this.el.style.cssText = 'width:100%;height:100%;background:#12151f;';
+            return;
+        }
+
+        let options;
+        if (pos.includes('Phục')) options = ['', 'C1', 'C2', 'C3'];
+        else                       options = ['', 'B4', 'B5', 'B6'];
+
+        const current = params.value || '';
+        const p = current.trim().charAt(0).toUpperCase();
+        const bg = bgMap[p] || '#1a1d27';
+        const fg = bgMap[p] ? '#fff' : '#e0e4f0';
+
+        this.el = document.createElement('select');
+        this.el.style.cssText =
+            'width:100%;height:100%;border:none;outline:none;' +
+            'font-size:12px;font-weight:600;text-align:center;' +
+            'cursor:pointer;padding:0;' +
+            'background:' + bg + ';color:' + fg + ';';
+
+        options.forEach(function(opt) {
+            const o = document.createElement('option');
+            o.value = opt; o.text = opt;
+            if (opt === current) o.selected = true;
+            this.el.appendChild(o);
+        }, this);
+
+        this.el.addEventListener('change', function() {
+            const newVal = this.el.value;
+            params.node.setDataValue(params.column.getId(), newVal);
+            const bg2 = bgMap[newVal.trim().charAt(0).toUpperCase()];
+            this.el.style.background = bg2 || '#1a1d27';
+            this.el.style.color = bg2 ? '#fff' : '#e0e4f0';
+        }.bind(this));
+
+        this.el.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+    }
+    getGui() { return this.el; }
+    refresh(params) {
+        if (!this.el || this.el.tagName !== 'SELECT') return true;
+        const bgMap = {Q:'#1b4f8a', S:'#1a5c30', C:'#6b5000', B:'#7a2800'};
+        const v = params.value || '';
+        this.el.value = v;
+        const bg = bgMap[v.trim().charAt(0).toUpperCase()];
+        this.el.style.background = bg || '#1a1d27';
+        this.el.style.color = bg ? '#fff' : '#e0e4f0';
+        return true;
+    }
+    destroy() {}
+}
+""")
+
+# ── GridOptionsBuilder ────────────────────────────────────────────────────────
 gb = GridOptionsBuilder.from_dataframe(roster_df)
 
 gb.configure_default_column(
@@ -216,112 +370,72 @@ gb.configure_default_column(
     suppressMenu=True, suppressMovable=True,
     width=CELL_SZ, minWidth=CELL_SZ, maxWidth=CELL_SZ,
     suppressSizeToFit=True,
-    cellStyle=cell_style_js,
+    editable=False,   # tất cả mặc định không edit, select dùng renderer
 )
 
-# Pinned cols — dùng configure_column để JsCode cellStyle được serialize đúng
 gb.configure_column("FullName", header_name="Họ và Tên",
     pinned="left", width=NAME_W, minWidth=NAME_W, maxWidth=NAME_W,
     suppressSizeToFit=True, lockPinned=True, lockPosition=True,
-    editable=False, cellStyle=text_style_js,
+    editable=False, cellStyle=center_style_js,
 )
 gb.configure_column("Position", header_name="Vị trí",
     pinned="left", width=POS_W, minWidth=POS_W, maxWidth=POS_W,
     suppressSizeToFit=True, lockPinned=True, lockPosition=True,
-    editable=False, cellStyle=text_style_js,
+    editable=False, cellStyle=center_style_js,
 )
 
-# Date cols — configure từng cột qua builder để JsCode được xử lý đúng
 for d in dates:
     lbl = d.strftime("%d-%m")
-
-    # Cột sáng — dropdown options theo Position
-    # Dùng values đầy đủ rồi filter bằng cellEditorParams JsCode
-    morning_params = JsCode(f"""
-    function(params) {{
-        const pos = params.data.Position || '';
-        if (pos.includes('Quản')) return {{ values: ['', 'Q1', 'Q2', 'Q3'] }};
-        if (pos.includes('Phục')) return {{ values: ['', 'S1', 'S2', 'S3'] }};
-        return {{ values: ['', 'B1', 'B2', 'B3'] }};
-    }}
-    """)
-
-    afternoon_params = JsCode(f"""
-    function(params) {{
-        const pos = params.data.Position || '';
-        if (pos.includes('Quản')) return {{ values: [''] }};
-        if (pos.includes('Phục')) return {{ values: ['', 'C1', 'C2', 'C3'] }};
-        return {{ values: ['', 'B4', 'B5', 'B6'] }};
-    }}
-    """)
-
     gb.configure_column(f"{lbl}_M",
-        header_name=f"{lbl} ☀",
+        header_name="☀",
         width=CELL_SZ, minWidth=CELL_SZ, maxWidth=CELL_SZ,
         suppressSizeToFit=True,
-        editable=True,
-        cellEditor="agSelectCellEditor",
-        cellEditorParams=morning_params,
+        editable=False,
+        cellRenderer=morning_renderer_js,
         cellStyle=cell_style_js,
     )
     gb.configure_column(f"{lbl}_C",
-        header_name=f"{lbl} 🌙",
+        header_name="🌙",
         width=CELL_SZ, minWidth=CELL_SZ, maxWidth=CELL_SZ,
         suppressSizeToFit=True,
-        editable=afternoon_editable_js,
-        cellEditor="agSelectCellEditor",
-        cellEditorParams=afternoon_params,
+        editable=False,
+        cellRenderer=afternoon_renderer_js,
         cellStyle=cell_style_js,
     )
 
 gb.configure_grid_options(
     rowHeight=ROW_HEIGHT,
     headerHeight=HDR_H,
+    groupHeaderHeight=GRP_H,
     domLayout="normal",
     suppressColumnVirtualisation=True,
     suppressAutoSize=True,
     suppressSizeColumnsToFit=True,
     suppressHorizontalScroll=False,
     suppressContextMenu=True,
-    enableRangeSelection=True,
     stopEditingWhenCellsLoseFocus=True,
 )
 
 grid_options = gb.build()
 
-# ── Inject column groups SAU KHI build ───────────────────────────────────────
-# gb đã serialize JsCode đúng trong columnDefs dạng phẳng.
-# Bây giờ ta wrap chúng vào group structure để có group header ngày.
-
+# ── Patch: wrap vào group structure ──────────────────────────────────────────
 built_defs = grid_options["columnDefs"]
-
-# Tách pinned cols
 pinned_defs = [c for c in built_defs if c.get("pinned") == "left"]
+date_col_map = {c["field"]: c for c in built_defs if c.get("field", "").count("_") >= 2 or
+                any(c.get("field", "").endswith(s) for s in ["_M", "_C"])}
 
-# Tách date cols thành dict để lookup nhanh
-date_col_map = {}
-for c in built_defs:
-    f = c.get("field", "")
-    if "_M" in f or "_C" in f:
-        date_col_map[f] = c
-
-# Tạo group defs — children lấy từ đã-serialized defs (JsCode đã đúng)
 date_groups = []
 for d in dates:
     lbl = d.strftime("%d-%m")
-    child_m = date_col_map.get(f"{lbl}_M", {})
-    child_c = date_col_map.get(f"{lbl}_C", {})
-    # Đổi header của child thành chỉ icon (bỏ "dd-mm" vì group header đã có)
-    child_m = dict(child_m); child_m["headerName"] = "☀"
-    child_c = dict(child_c); child_c["headerName"] = "🌙"
+    cm = dict(date_col_map.get(f"{lbl}_M", {}))
+    cc = dict(date_col_map.get(f"{lbl}_C", {}))
     date_groups.append({
         "headerName": lbl,
         "marryChildren": True,
         "suppressMenu": True,
-        "children": [child_m, child_c],
+        "children": [cm, cc],
     })
 
-# Pinned cols cũng cần được wrap vào group để 2-row header align đều
 pinned_group = {
     "headerName": "",
     "marryChildren": True,
