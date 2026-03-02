@@ -1,36 +1,36 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>CSV Export</h2>
-  <p class="hint">Export one dataset at a time.</p>
+  <h2>{{ t('csv_export') }}</h2>
+  <p class="hint">{{ t('export_one_dataset') }}</p>
   <div class="button-row">
-    <a class="button-link" href="{{ url_for('export_dataset', dataset='staff') }}">Export Staff</a>
-    <a class="button-link" href="{{ url_for('export_dataset', dataset='shifts') }}">Export Shifts</a>
-    <a class="button-link" href="{{ url_for('export_dataset', dataset='assignments') }}">Export Roster</a>
-    <a class="button-link" href="{{ url_for('export_dataset', dataset='availability') }}">Export Availability</a>
+    <a class="button-link" href="{{ url_for('export_dataset', dataset='staff') }}">{{ t('export_staff') }}</a>
+    <a class="button-link" href="{{ url_for('export_dataset', dataset='shifts') }}">{{ t('export_shifts') }}</a>
+    <a class="button-link" href="{{ url_for('export_dataset', dataset='assignments') }}">{{ t('export_roster') }}</a>
+    <a class="button-link" href="{{ url_for('export_dataset', dataset='availability') }}">{{ t('export_availability') }}</a>
   </div>
 </section>
 
 <section class="panel">
-  <h2>CSV Import</h2>
-  <p class="hint">Required headers depend on dataset. Keep date format as YYYY-MM-DD.</p>
+  <h2>{{ t('csv_import') }}</h2>
+  <p class="hint">{{ t('import_headers_hint') }}</p>
   <form method="post" action="{{ url_for('import_dataset') }}" enctype="multipart/form-data" class="grid-form">
-    <label>Dataset
+    <label>{{ t('dataset') }}
       <select name="dataset" required>
-        <option value="staff">Staff</option>
-        <option value="shifts">Shifts</option>
-        <option value="assignments">Assignments</option>
-        <option value="availability">Availability</option>
+        <option value="staff">{{ t('staff') }}</option>
+        <option value="shifts">{{ t('nav_shifts') }}</option>
+        <option value="assignments">{{ t('assignments') }}</option>
+        <option value="availability">{{ t('availability') }}</option>
       </select>
     </label>
-    <label>CSV File <input type="file" name="csv_file" accept=".csv,text/csv" required /></label>
-    <label>Mode
+    <label>{{ t('csv_file') }} <input type="file" name="csv_file" accept=".csv,text/csv" required /></label>
+    <label>{{ t('mode') }}
       <select name="replace_existing">
-        <option value="0">Append to existing data</option>
-        <option value="1">Replace existing dataset</option>
+        <option value="0">{{ t('append_mode') }}</option>
+        <option value="1">{{ t('replace_mode') }}</option>
       </select>
     </label>
-    <button type="submit">Import CSV</button>
+    <button type="submit">{{ t('import_csv') }}</button>
   </form>
 </section>
 {% endblock %}

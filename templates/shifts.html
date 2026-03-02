@@ -1,24 +1,24 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>Add Shift Template</h2>
+  <h2>{{ t('add_shift_template') }}</h2>
   <form method="post" class="grid-form">
-    <label>Shift Name <input name="name" required /></label>
-    <label>Start Time <input type="time" name="start_time" required /></label>
-    <label>End Time <input type="time" name="end_time" required /></label>
-    <label>Required Staff <input type="number" name="required_staff" value="1" min="1" /></label>
-    <button type="submit">Add</button>
+    <label>{{ t('shift_name') }} <input name="name" required /></label>
+    <label>{{ t('start_time') }} <input type="time" name="start_time" required /></label>
+    <label>{{ t('end_time') }} <input type="time" name="end_time" required /></label>
+    <label>{{ t('required_staff') }} <input type="number" name="required_staff" value="1" min="1" /></label>
+    <button type="submit">{{ t('add') }}</button>
   </form>
 </section>
 
 <section class="panel">
-  <h2>Shift Templates</h2>
+  <h2>{{ t('shift_templates') }}</h2>
   <table>
     <thead>
       <tr>
-        <th>Name</th>
-        <th>Time</th>
-        <th>Required Staff</th>
+        <th>{{ t('name') }}</th>
+        <th>{{ t('time') }}</th>
+        <th>{{ t('required_staff') }}</th>
       </tr>
     </thead>
     <tbody>

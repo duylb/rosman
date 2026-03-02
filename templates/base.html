@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ lang }}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ title or "RosMan - Rostering Management" }}</title>
+    <title>{{ title or t('app_title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   </head>
   <body>
@@ -13,35 +13,45 @@
           <span class="brand-badge">RM</span>
           <div>
             <p class="brand-name">RosMan</p>
-            <p class="brand-sub">Rostering Management</p>
+            <p class="brand-sub">{{ t('brand_sub') }}</p>
           </div>
         </div>
         <nav class="side-nav">
-          <a class="{{ 'active' if request.path == url_for('dashboard') else '' }}" href="{{ url_for('dashboard') }}">Dashboard</a>
-          <a class="{{ 'active' if request.path.startswith('/staff') else '' }}" href="{{ url_for('staff') }}">Staff</a>
-          <a class="{{ 'active' if request.path.startswith('/shifts') else '' }}" href="{{ url_for('shifts') }}">Shifts</a>
-          <a class="{{ 'active' if request.path.startswith('/availability') else '' }}" href="{{ url_for('availability') }}">Availability</a>
-          <a class="{{ 'active' if request.path.startswith('/roster') else '' }}" href="{{ url_for('roster') }}">Roster</a>
-          <a class="{{ 'active' if request.path.startswith('/data') else '' }}" href="{{ url_for('data_page') }}">Data I/O</a>
+          <a class="{{ 'active' if request.path == url_for('dashboard') else '' }}" href="{{ url_for('dashboard') }}">{{ t('nav_dashboard') }}</a>
+          <a class="{{ 'active' if request.path.startswith('/staff') else '' }}" href="{{ url_for('staff') }}">{{ t('nav_staff') }}</a>
+          <a class="{{ 'active' if request.path.startswith('/shifts') else '' }}" href="{{ url_for('shifts') }}">{{ t('nav_shifts') }}</a>
+          <a class="{{ 'active' if request.path.startswith('/availability') else '' }}" href="{{ url_for('availability') }}">{{ t('nav_availability') }}</a>
+          <a class="{{ 'active' if request.path.startswith('/roster') else '' }}" href="{{ url_for('roster') }}">{{ t('nav_roster') }}</a>
+          <a class="{{ 'active' if request.path.startswith('/data') else '' }}" href="{{ url_for('data_page') }}">{{ t('nav_data_io') }}</a>
         </nav>
+        <div class="sidebar-footer">
+          <form method="post" action="{{ url_for('set_language') }}" class="lang-form">
+            <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}" />
+            <input type="hidden" name="lang" value="{{ 'vi' if lang == 'en' else 'en' }}" />
+            <button type="submit">{{ t('lang_toggle') }}</button>
+          </form>
+          <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+            <button type="submit">{{ t('logout') }}</button>
+          </form>
+        </div>
       </aside>
 
       <div class="workspace">
-        {% set page_name = "Dashboard" %}
+        {% set page_name = t('page_dashboard') %}
         {% if request.path.startswith('/staff') %}
-          {% set page_name = "Staff" %}
+          {% set page_name = t('page_staff') %}
         {% elif request.path.startswith('/shifts') %}
-          {% set page_name = "Shifts" %}
+          {% set page_name = t('page_shifts') %}
         {% elif request.path.startswith('/availability') %}
-          {% set page_name = "Availability" %}
+          {% set page_name = t('page_availability') %}
         {% elif request.path.startswith('/roster') %}
-          {% set page_name = "Roster" %}
+          {% set page_name = t('page_roster') %}
         {% elif request.path.startswith('/data') %}
-          {% set page_name = "Data Import / Export" %}
+          {% set page_name = t('page_data') %}
         {% endif %}
         <header class="workspace-bar">
           <div>
-            <p class="eyebrow">Workspace</p>
+            <p class="eyebrow">{{ t('workspace') }}</p>
             <h1>{{ page_name }}</h1>
           </div>
         </header>

@@ -7,13 +7,234 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, Response, flash, g, redirect, render_template, request, url_for
+from flask import Flask, Response, flash, g, redirect, render_template, request, session, url_for
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "roster.db"
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "change-this-in-production"
+LOGIN_USERNAME = "duylb"
+LOGIN_PASSWORD = "2026"
+SUPPORTED_LANGS = {"en", "vi"}
+TRANSLATIONS: dict[str, dict[str, str]] = {
+    "en": {
+        "app_title": "RosMan - Rostering Management",
+        "brand_sub": "Rostering Management",
+        "nav_dashboard": "Dashboard",
+        "nav_staff": "Staff",
+        "nav_shifts": "Shifts",
+        "nav_availability": "Availability",
+        "nav_roster": "Roster",
+        "nav_data_io": "Data I/O",
+        "logout": "Logout",
+        "workspace": "Workspace",
+        "page_dashboard": "Dashboard",
+        "page_staff": "Staff",
+        "page_shifts": "Shifts",
+        "page_availability": "Availability",
+        "page_roster": "Roster",
+        "page_data": "Data Import / Export",
+        "lang_toggle": "Tiếng Việt",
+        "login_title": "Login",
+        "login_hint": "Enter your credentials to access the roster management app.",
+        "username": "Username",
+        "password": "Password",
+        "btn_login": "Login",
+        "today": "Today",
+        "active_staff": "Active Staff",
+        "shift_templates": "Shift Templates",
+        "assignments_today": "Assignments Today",
+        "unavailable_today": "Unavailable Today",
+        "add_staff": "Add Staff",
+        "name": "Name",
+        "role": "Role",
+        "email": "Email",
+        "add": "Add",
+        "import_staff_csv": "Import Staff CSV",
+        "import_staff_hint": "Format: skip header, column A = staff name, B = role, C = email.",
+        "csv_file": "CSV File",
+        "import": "Import",
+        "staff_list": "Staff List",
+        "status": "Status",
+        "action": "Action",
+        "active": "Active",
+        "inactive": "Inactive",
+        "edit": "Edit",
+        "disable": "Disable",
+        "enable": "Enable",
+        "edit_staff": "Edit Staff",
+        "save": "Save",
+        "cancel": "Cancel",
+        "add_shift_template": "Add Shift Template",
+        "shift_name": "Shift Name",
+        "start_time": "Start Time",
+        "end_time": "End Time",
+        "required_staff": "Required Staff",
+        "time": "Time",
+        "add_leave_availability": "Add Leave / Availability",
+        "staff": "Staff",
+        "select_staff": "Select staff",
+        "start_date": "Start Date",
+        "end_date": "End Date",
+        "leave": "Leave",
+        "unavailable": "Unavailable",
+        "notes": "Notes",
+        "add_entry": "Add Entry",
+        "add_preferred_shifts": "Add Preferred Shifts (Date Range)",
+        "preferred_shifts_multi": "Preferred Shifts (hold Ctrl/Cmd to select multiple)",
+        "add_preferences": "Add Preferences",
+        "preferred_shift_entries": "Preferred Shift Entries",
+        "preferred_shift": "Preferred Shift",
+        "date_range": "Date Range",
+        "remove": "Remove",
+        "no_shift_preferences": "No shift preferences yet.",
+        "availability_entries": "Availability Entries",
+        "no_availability_entries": "No availability entries yet.",
+        "to": "to",
+        "roster": "Roster",
+        "date": "Date",
+        "load": "Load",
+        "shift": "Shift",
+        "select_shift": "Select shift",
+        "assign": "Assign",
+        "weekly_auto_scheduling": "Weekly Auto-Scheduling",
+        "week_start_monday": "Week Start (Monday)",
+        "generate_week": "Generate Week",
+        "auto_schedule_rule": "Rule: fills each shift's required headcount using active staff, prioritizes preferred shifts for that date, skips leave/unavailable entries, then balances by least assignments.",
+        "assignments_for": "Assignments for",
+        "no_assignments_for_date": "No assignments for this date.",
+        "csv_export": "CSV Export",
+        "export_one_dataset": "Export one dataset at a time.",
+        "export_staff": "Export Staff",
+        "export_shifts": "Export Shifts",
+        "export_roster": "Export Roster",
+        "export_availability": "Export Availability",
+        "csv_import": "CSV Import",
+        "import_headers_hint": "Required headers depend on dataset. Keep date format as YYYY-MM-DD.",
+        "dataset": "Dataset",
+        "assignments": "Assignments",
+        "availability": "Availability",
+        "mode": "Mode",
+        "append_mode": "Append to existing data",
+        "replace_mode": "Replace existing dataset",
+        "import_csv": "Import CSV",
+        "invalid_login": "Invalid username or password.",
+    },
+    "vi": {
+        "app_title": "RosMan - Quản Lý Phân Ca",
+        "brand_sub": "Quản Lý Phân Ca",
+        "nav_dashboard": "Bảng Điều Khiển",
+        "nav_staff": "Nhân Sự",
+        "nav_shifts": "Ca Làm",
+        "nav_availability": "Lịch Trực",
+        "nav_roster": "Lịch Phân Ca",
+        "nav_data_io": "Nhập/Xuất Dữ Liệu",
+        "logout": "Đăng Xuất",
+        "workspace": "Không Gian Làm Việc",
+        "page_dashboard": "Bảng Điều Khiển",
+        "page_staff": "Nhân Sự",
+        "page_shifts": "Ca Làm",
+        "page_availability": "Lịch Trực",
+        "page_roster": "Lịch Phân Ca",
+        "page_data": "Nhập / Xuất Dữ Liệu",
+        "lang_toggle": "English",
+        "login_title": "Đăng Nhập",
+        "login_hint": "Nhập thông tin đăng nhập để truy cập ứng dụng quản lý phân ca.",
+        "username": "Tên Đăng Nhập",
+        "password": "Mật Khẩu",
+        "btn_login": "Đăng Nhập",
+        "today": "Hôm Nay",
+        "active_staff": "Nhân Sự Đang Hoạt Động",
+        "shift_templates": "Mẫu Ca",
+        "assignments_today": "Phân Ca Hôm Nay",
+        "unavailable_today": "Không Sẵn Sàng Hôm Nay",
+        "add_staff": "Thêm Nhân Sự",
+        "name": "Tên",
+        "role": "Vai Trò",
+        "email": "Email",
+        "add": "Thêm",
+        "import_staff_csv": "Nhập CSV Nhân Sự",
+        "import_staff_hint": "Định dạng: bỏ qua header, cột A = tên, B = vai trò, C = email.",
+        "csv_file": "Tệp CSV",
+        "import": "Nhập",
+        "staff_list": "Danh Sách Nhân Sự",
+        "status": "Trạng Thái",
+        "action": "Thao Tác",
+        "active": "Hoạt Động",
+        "inactive": "Ngừng Hoạt Động",
+        "edit": "Sửa",
+        "disable": "Tắt",
+        "enable": "Bật",
+        "edit_staff": "Sửa Nhân Sự",
+        "save": "Lưu",
+        "cancel": "Hủy",
+        "add_shift_template": "Thêm Mẫu Ca",
+        "shift_name": "Tên Ca",
+        "start_time": "Giờ Bắt Đầu",
+        "end_time": "Giờ Kết Thúc",
+        "required_staff": "Số Nhân Sự Cần",
+        "time": "Thời Gian",
+        "add_leave_availability": "Thêm Nghỉ / Khả Năng Làm Việc",
+        "staff": "Nhân Sự",
+        "select_staff": "Chọn nhân sự",
+        "start_date": "Ngày Bắt Đầu",
+        "end_date": "Ngày Kết Thúc",
+        "leave": "Nghỉ",
+        "unavailable": "Không Sẵn Sàng",
+        "notes": "Ghi Chú",
+        "add_entry": "Thêm",
+        "add_preferred_shifts": "Thêm Ca Ưu Tiên (Theo Khoảng Ngày)",
+        "preferred_shifts_multi": "Ca Ưu Tiên (giữ Ctrl/Cmd để chọn nhiều)",
+        "add_preferences": "Thêm Ưu Tiên",
+        "preferred_shift_entries": "Danh Sách Ca Ưu Tiên",
+        "preferred_shift": "Ca Ưu Tiên",
+        "date_range": "Khoảng Ngày",
+        "remove": "Xóa",
+        "no_shift_preferences": "Chưa có ca ưu tiên.",
+        "availability_entries": "Danh Sách Khả Năng Làm Việc",
+        "no_availability_entries": "Chưa có dữ liệu khả năng làm việc.",
+        "to": "đến",
+        "roster": "Lịch Phân Ca",
+        "date": "Ngày",
+        "load": "Tải",
+        "shift": "Ca",
+        "select_shift": "Chọn ca",
+        "assign": "Phân Ca",
+        "weekly_auto_scheduling": "Tự Động Phân Ca Theo Tuần",
+        "week_start_monday": "Ngày Bắt Đầu Tuần (Thứ Hai)",
+        "generate_week": "Tạo Lịch Tuần",
+        "auto_schedule_rule": "Quy tắc: điền đủ số lượng cho mỗi ca bằng nhân sự đang hoạt động, ưu tiên ca mong muốn theo ngày, bỏ qua nhân sự nghỉ/không sẵn sàng, sau đó cân bằng theo số ca thấp nhất.",
+        "assignments_for": "Phân Ca Cho",
+        "no_assignments_for_date": "Không có phân ca cho ngày này.",
+        "csv_export": "Xuất CSV",
+        "export_one_dataset": "Xuất từng bộ dữ liệu một.",
+        "export_staff": "Xuất Nhân Sự",
+        "export_shifts": "Xuất Ca Làm",
+        "export_roster": "Xuất Lịch Phân Ca",
+        "export_availability": "Xuất Khả Năng Làm Việc",
+        "csv_import": "Nhập CSV",
+        "import_headers_hint": "Header bắt buộc tùy theo bộ dữ liệu. Giữ định dạng ngày YYYY-MM-DD.",
+        "dataset": "Bộ Dữ Liệu",
+        "assignments": "Phân Ca",
+        "availability": "Khả Năng Làm Việc",
+        "mode": "Chế Độ",
+        "append_mode": "Thêm vào dữ liệu hiện có",
+        "replace_mode": "Thay thế toàn bộ bộ dữ liệu",
+        "import_csv": "Nhập CSV",
+        "invalid_login": "Sai tên đăng nhập hoặc mật khẩu.",
+    },
+}
+
+
+def get_lang() -> str:
+    lang = session.get("lang", "en")
+    return lang if lang in SUPPORTED_LANGS else "en"
+
+
+def t(key: str) -> str:
+    lang = get_lang()
+    return TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)
 
 
 def get_db() -> sqlite3.Connection:
@@ -29,6 +250,24 @@ def close_db(_: Any) -> None:
     db = g.pop("db", None)
     if db is not None:
         db.close()
+
+
+@app.before_request
+def require_login() -> Any:
+    if request.endpoint is None:
+        return None
+    if request.endpoint in {"login", "set_language", "static"}:
+        return None
+    if session.get("is_authenticated"):
+        return None
+
+    next_url = request.full_path if request.query_string else request.path
+    return redirect(url_for("login", next=next_url))
+
+
+@app.context_processor
+def inject_translation_helpers() -> dict[str, Any]:
+    return {"t": t, "lang": get_lang()}
 
 
 def parse_iso_date(raw: str) -> date | None:
@@ -161,6 +400,48 @@ def csv_response(filename: str, headers: list[str], rows: list[sqlite3.Row]) -> 
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login() -> str | Any:
+    if session.get("is_authenticated"):
+        return redirect(url_for("dashboard"))
+
+    next_url = request.args.get("next", "")
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        next_form = request.form.get("next", "").strip()
+        if next_form:
+            next_url = next_form
+
+        if username == LOGIN_USERNAME and password == LOGIN_PASSWORD:
+            session["is_authenticated"] = True
+            session["username"] = username
+            if not next_url.startswith("/"):
+                next_url = url_for("dashboard")
+            return redirect(next_url or url_for("dashboard"))
+
+        flash(t("invalid_login"), "error")
+
+    return render_template("login.html", next_url=next_url)
+
+
+@app.post("/set-language")
+def set_language() -> Any:
+    lang = request.form.get("lang", "en").strip().lower()
+    if lang in SUPPORTED_LANGS:
+        session["lang"] = lang
+    next_url = request.form.get("next", "").strip()
+    if not next_url.startswith("/"):
+        next_url = request.referrer or url_for("dashboard")
+    return redirect(next_url)
+
+
+@app.post("/logout")
+def logout() -> Any:
+    session.clear()
+    return redirect(url_for("login"))
 
 
 def auto_schedule_week(db: sqlite3.Connection, week_start: date) -> tuple[int, int, int]:

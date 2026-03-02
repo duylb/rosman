@@ -44,6 +44,8 @@ body {
   border-right: 1px solid rgba(164, 183, 214, 0.16);
   color: var(--sidebar-text);
   padding: 1rem 0.85rem;
+  display: flex;
+  flex-direction: column;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -110,6 +112,24 @@ body {
   color: #def9f4;
   background: rgba(15, 140, 123, 0.26);
   border-color: rgba(124, 235, 217, 0.32);
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgba(176, 196, 226, 0.16);
+  display: grid;
+  gap: 0.5rem;
+}
+
+.lang-form,
+.logout-form {
+  margin: 0;
+}
+
+.lang-form button,
+.logout-form button {
+  width: 100%;
 }
 
 .workspace {
@@ -406,6 +426,26 @@ tbody tr:last-child td {
 
 .panel {
   overflow-x: auto;
+}
+
+.auth-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.auth-card {
+  width: min(460px, 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  padding: 1rem;
+}
+
+.auth-lang-form {
+  margin-top: 0.7rem;
 }
 
 .modal {

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="{{ lang }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ t('login_title') }} - RosMan</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <main class="auth-wrap">
+      <section class="auth-card">
+        <p class="eyebrow">RosMan</p>
+        <h1>{{ t('login_title') }}</h1>
+        <p class="hint">{{ t('login_hint') }}</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <ul class="alerts">
+              {% for category, msg in messages %}
+                <li class="{{ category }}">{{ msg }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        {% endwith %}
+
+        <form method="post" class="grid-form">
+          <input type="hidden" name="next" value="{{ next_url }}" />
+          <label>{{ t('username') }} <input name="username" required autofocus /></label>
+          <label>{{ t('password') }} <input type="password" name="password" required /></label>
+          <button type="submit">{{ t('btn_login') }}</button>
+        </form>
+        <form method="post" action="{{ url_for('set_language') }}" class="lang-form auth-lang-form">
+          <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}" />
+          <input type="hidden" name="lang" value="{{ 'vi' if lang == 'en' else 'en' }}" />
+          <button type="submit">{{ t('lang_toggle') }}</button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>
