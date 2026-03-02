@@ -554,33 +554,6 @@ def dashboard() -> str:
         unavailable_today=unavailable_today,
     )
 
-@app.route("/bootstrap-admin")
-def bootstrap_admin():
-    # prevent reuse
-    if User.query.first():
-        return "Admin already exists.", 403
-
-    email = os.environ.get("BOOTSTRAP_ADMIN_EMAIL")
-    password = os.environ.get("BOOTSTRAP_ADMIN_PASSWORD")
-
-    if not email or not password:
-        return "Bootstrap credentials not configured.", 500
-
-    org = Organization(name="Default Organization")
-    db.session.add(org)
-    db.session.flush()
-
-    user = User(
-        email=email,
-        password_hash=generate_password_hash(password),
-        role="owner",
-        org_id=org.id,
-    )
-
-    db.session.add(user)
-    db.session.commit()
-
-    return "Admin user created successfully."
 
 @app.route("/staff", methods=["GET", "POST"])
 @login_required
