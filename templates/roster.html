@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>Roster</h2>
+  <form method="get" class="inline-form">
+    <label>Date <input type="date" name="roster_date" value="{{ selected_date }}" /></label>
+    <button type="submit">Load</button>
+  </form>
+
+  <form method="post" class="grid-form">
+    <input type="hidden" name="roster_date" value="{{ selected_date }}" />
+    <label>Staff
+      <select name="staff_id" required>
+        <option value="">Select staff</option>
+        {% for row in staff_rows %}
+          <option value="{{ row.id }}">{{ row.name }} ({{ row.role }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Shift
+      <select name="shift_id" required>
+        <option value="">Select shift</option>
+        {% for row in shift_rows %}
+          <option value="{{ row.id }}">{{ row.name }} ({{ row.start_time }} - {{ row.end_time }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Notes <input name="notes" /></label>
+    <button type="submit">Assign</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Weekly Auto-Scheduling</h2>
+  <form method="post" action="{{ url_for('auto_schedule') }}" class="inline-form">
+    <label>Week Start (Monday)
+      <input type="date" name="week_start" value="{{ week_start }}" required />
+    </label>
+    <button type="submit">Generate Week</button>
+  </form>
+  <p class="hint">Rule: fills each shift's required headcount using active staff, prioritizes preferred shifts for that date, skips leave/unavailable entries, then balances by least assignments.</p>
+</section>
+
+<section class="panel">
+  <h2>Assignments for {{ selected_date }}</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Staff</th>
+        <th>Role</th>
+        <th>Shift</th>
+        <th>Notes</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in assignments %}
+      <tr>
+        <td>{{ row.staff_name }}</td>
+        <td>{{ row.staff_role }}</td>
+        <td>{{ row.shift_name }} ({{ row.start_time }} - {{ row.end_time }})</td>
+        <td>{{ row.notes or '-' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('delete_assignment', assignment_id=row.id) }}">
+            <input type="hidden" name="roster_date" value="{{ selected_date }}" />
+            <button type="submit">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      {% if not assignments %}
+      <tr>
+        <td colspan="5">No assignments for this date.</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

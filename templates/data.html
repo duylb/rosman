@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>CSV Export</h2>
+  <p class="hint">Export one dataset at a time.</p>
+  <div class="button-row">
+    <a class="button-link" href="{{ url_for('export_dataset', dataset='staff') }}">Export Staff</a>
+    <a class="button-link" href="{{ url_for('export_dataset', dataset='shifts') }}">Export Shifts</a>
+    <a class="button-link" href="{{ url_for('export_dataset', dataset='assignments') }}">Export Roster</a>
+    <a class="button-link" href="{{ url_for('export_dataset', dataset='availability') }}">Export Availability</a>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>CSV Import</h2>
+  <p class="hint">Required headers depend on dataset. Keep date format as YYYY-MM-DD.</p>
+  <form method="post" action="{{ url_for('import_dataset') }}" enctype="multipart/form-data" class="grid-form">
+    <label>Dataset
+      <select name="dataset" required>
+        <option value="staff">Staff</option>
+        <option value="shifts">Shifts</option>
+        <option value="assignments">Assignments</option>
+        <option value="availability">Availability</option>
+      </select>
+    </label>
+    <label>CSV File <input type="file" name="csv_file" accept=".csv,text/csv" required /></label>
+    <label>Mode
+      <select name="replace_existing">
+        <option value="0">Append to existing data</option>
+        <option value="1">Replace existing dataset</option>
+      </select>
+    </label>
+    <button type="submit">Import CSV</button>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>Add Leave / Availability</h2>
+  <form method="post" class="grid-form">
+    <label>Staff
+      <select name="staff_id" required>
+        <option value="">Select staff</option>
+        {% for row in staff_rows %}
+          <option value="{{ row.id }}">{{ row.name }} ({{ row.role }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Start Date <input type="date" name="start_date" value="{{ today }}" required /></label>
+    <label>End Date <input type="date" name="end_date" value="{{ today }}" required /></label>
+    <label>Status
+      <select name="status" required>
+        <option value="leave">Leave</option>
+        <option value="unavailable">Unavailable</option>
+      </select>
+    </label>
+    <label>Notes <input name="notes" /></label>
+    <button type="submit">Add Entry</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Add Preferred Shifts (Date Range)</h2>
+  <form method="post" action="{{ url_for('add_shift_preference') }}" class="grid-form">
+    <label>Staff
+      <select name="staff_id" required>
+        <option value="">Select staff</option>
+        {% for row in staff_rows %}
+          <option value="{{ row.id }}">{{ row.name }} ({{ row.role }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Start Date <input type="date" name="start_date" value="{{ today }}" required /></label>
+    <label>End Date <input type="date" name="end_date" value="{{ today }}" required /></label>
+    <label>Preferred Shifts (hold Ctrl/Cmd to select multiple)
+      <select name="shift_ids" multiple size="4" required>
+        {% for shift in shift_rows %}
+          <option value="{{ shift.id }}">{{ shift.name }} ({{ shift.start_time }} - {{ shift.end_time }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Notes <input name="notes" /></label>
+    <button type="submit">Add Preferences</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Preferred Shift Entries</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Staff</th>
+        <th>Role</th>
+        <th>Preferred Shift</th>
+        <th>Date Range</th>
+        <th>Notes</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in preference_rows %}
+      <tr>
+        <td>{{ row.staff_name }}</td>
+        <td>{{ row.staff_role }}</td>
+        <td>{{ row.shift_name }} ({{ row.start_time }} - {{ row.end_time }})</td>
+        <td>{{ row.start_date }} to {{ row.end_date }}</td>
+        <td>{{ row.notes or '-' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('delete_shift_preference', preference_id=row.id) }}">
+            <button type="submit">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      {% if not preference_rows %}
+      <tr>
+        <td colspan="6">No shift preferences yet.</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</section>
+
+<section class="panel">
+  <h2>Availability Entries</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Staff</th>
+        <th>Role</th>
+        <th>Date Range</th>
+        <th>Status</th>
+        <th>Notes</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in availability_rows %}
+      <tr>
+        <td>{{ row.staff_name }}</td>
+        <td>{{ row.staff_role }}</td>
+        <td>{{ row.start_date }} to {{ row.end_date }}</td>
+        <td>{{ row.status }}</td>
+        <td>{{ row.notes or '-' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('delete_availability', entry_id=row.id) }}">
+            <button type="submit">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      {% if not availability_rows %}
+      <tr>
+        <td colspan="6">No availability entries yet.</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

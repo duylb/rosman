@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="cards">
+  <article class="card">
+    <h2>Today</h2>
+    <p>{{ today }}</p>
+  </article>
+  <article class="card">
+    <h2>Active Staff</h2>
+    <p>{{ staff_count }}</p>
+  </article>
+  <article class="card">
+    <h2>Shift Templates</h2>
+    <p>{{ shift_count }}</p>
+  </article>
+  <article class="card">
+    <h2>Assignments Today</h2>
+    <p>{{ assignments_today }}</p>
+  </article>
+  <article class="card">
+    <h2>Unavailable Today</h2>
+    <p>{{ unavailable_today }}</p>
+  </article>
+</section>
+{% endblock %}

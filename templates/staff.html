@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>Add Staff</h2>
+  <form method="post" class="grid-form">
+    <label>Name <input name="name" required /></label>
+    <label>Role <input name="role" required /></label>
+    <label>Email <input type="email" name="email" /></label>
+    <button type="submit">Add</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Import Staff CSV</h2>
+  <p class="hint">Format: skip header, column A = staff name, B = role, C = email.</p>
+  <form method="post" action="{{ url_for('import_staff_csv') }}" enctype="multipart/form-data" class="inline-form">
+    <label>CSV File <input type="file" name="csv_file" accept=".csv,text/csv" required /></label>
+    <button type="submit">Import</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Staff List</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Role</th>
+        <th>Email</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in staff %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.role }}</td>
+        <td>{{ row.email or '-' }}</td>
+        <td>{{ 'Active' if row.active else 'Inactive' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('toggle_staff', staff_id=row.id) }}">
+            <button type="submit">{{ 'Disable' if row.active else 'Enable' }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

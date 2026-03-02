@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>Add Shift Template</h2>
+  <form method="post" class="grid-form">
+    <label>Shift Name <input name="name" required /></label>
+    <label>Start Time <input type="time" name="start_time" required /></label>
+    <label>End Time <input type="time" name="end_time" required /></label>
+    <label>Required Staff <input type="number" name="required_staff" value="1" min="1" /></label>
+    <button type="submit">Add</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Shift Templates</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Time</th>
+        <th>Required Staff</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in shifts %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.start_time }} - {{ row.end_time }}</td>
+        <td>{{ row.required_staff }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
