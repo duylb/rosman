@@ -39,13 +39,83 @@
         <td>{{ row.email or '-' }}</td>
         <td>{{ 'Active' if row.active else 'Inactive' }}</td>
         <td>
-          <form method="post" action="{{ url_for('toggle_staff', staff_id=row.id) }}">
-            <button type="submit">{{ 'Disable' if row.active else 'Enable' }}</button>
-          </form>
+          <div class="action-group">
+            <button
+              type="button"
+              class="btn-secondary js-edit-staff"
+              data-id="{{ row.id }}"
+              data-name="{{ row.name|e }}"
+              data-role="{{ row.role|e }}"
+              data-email="{{ (row.email or '')|e }}"
+            >
+              Edit
+            </button>
+            <form method="post" action="{{ url_for('toggle_staff', staff_id=row.id) }}">
+              <button type="submit" class="{{ 'btn-danger-lite' if row.active else '' }}">{{ 'Disable' if row.active else 'Enable' }}</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </section>
+
+<div id="staff-edit-modal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop js-close-modal"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="edit-staff-title">
+    <h2 id="edit-staff-title">Edit Staff</h2>
+    <form id="staff-edit-form" method="post" class="grid-form">
+      <label>Name <input id="edit-name" name="name" required /></label>
+      <label>Role <input id="edit-role" name="role" required /></label>
+      <label>Email <input id="edit-email" type="email" name="email" /></label>
+      <div class="action-group">
+        <button type="submit">Save</button>
+        <button type="button" class="btn-secondary js-close-modal">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const modal = document.getElementById("staff-edit-modal");
+    const form = document.getElementById("staff-edit-form");
+    const inputName = document.getElementById("edit-name");
+    const inputRole = document.getElementById("edit-role");
+    const inputEmail = document.getElementById("edit-email");
+
+    if (!modal || !form || !inputName || !inputRole || !inputEmail) return;
+
+    const openModal = (button) => {
+      const staffId = button.dataset.id;
+      form.action = `/staff/${staffId}/edit`;
+      inputName.value = button.dataset.name || "";
+      inputRole.value = button.dataset.role || "";
+      inputEmail.value = button.dataset.email || "";
+      modal.classList.remove("hidden");
+      modal.setAttribute("aria-hidden", "false");
+      inputName.focus();
+    };
+
+    const closeModal = () => {
+      modal.classList.add("hidden");
+      modal.setAttribute("aria-hidden", "true");
+    };
+
+    document.querySelectorAll(".js-edit-staff").forEach((button) => {
+      button.addEventListener("click", () => openModal(button));
+    });
+
+    document.querySelectorAll(".js-close-modal").forEach((el) => {
+      el.addEventListener("click", closeModal);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !modal.classList.contains("hidden")) {
+        closeModal();
+      }
+    });
+  })();
+</script>
 {% endblock %}

@@ -1,4 +1,4 @@
-# Staff Roster Manager (Local Python App)
+# RosMan - Rostering Management (Local Python App)
 
 A lightweight Flask + SQLite app for managing:
 - Staff members

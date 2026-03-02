@@ -378,6 +378,31 @@ def toggle_staff(staff_id: int) -> Any:
     return redirect(url_for("staff"))
 
 
+@app.post("/staff/<int:staff_id>/edit")
+def edit_staff(staff_id: int) -> Any:
+    db = get_db()
+    row = db.execute("SELECT id FROM staff WHERE id = ?", (staff_id,)).fetchone()
+    if row is None:
+        flash("Staff member not found.", "error")
+        return redirect(url_for("staff"))
+
+    name = request.form.get("name", "").strip()
+    role = request.form.get("role", "").strip()
+    email = request.form.get("email", "").strip()
+
+    if not name or not role:
+        flash("Name and role are required.", "error")
+        return redirect(url_for("staff"))
+
+    db.execute(
+        "UPDATE staff SET name = ?, role = ?, email = ? WHERE id = ?",
+        (name, role, email or None, staff_id),
+    )
+    db.commit()
+    flash("Staff information updated.", "success")
+    return redirect(url_for("staff"))
+
+
 @app.post("/staff/import")
 def import_staff_csv() -> Any:
     db = get_db()
