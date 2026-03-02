@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: rosman-web
+    env: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: flask db upgrade
+    startCommand: gunicorn wsgi:app
+    healthCheckPath: /login
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.10
+      - key: APP_ENV
+        value: production
+      - key: FLASK_APP
+        value: wsgi.py
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: rosman-db
+          property: connectionString
+
+databases:
+  - name: rosman-db
+    plan: starter
+    databaseName: rosman
+    user: rosman

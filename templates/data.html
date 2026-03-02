@@ -15,6 +15,7 @@
   <h2>{{ t('csv_import') }}</h2>
   <p class="hint">{{ t('import_headers_hint') }}</p>
   <form method="post" action="{{ url_for('import_dataset') }}" enctype="multipart/form-data" class="grid-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label>{{ t('dataset') }}
       <select name="dataset" required>
         <option value="staff">{{ t('staff') }}</option>

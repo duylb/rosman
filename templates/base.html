@@ -26,11 +26,13 @@
         </nav>
         <div class="sidebar-footer">
           <form method="post" action="{{ url_for('set_language') }}" class="lang-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}" />
             <input type="hidden" name="lang" value="{{ 'vi' if lang == 'en' else 'en' }}" />
             <button type="submit">{{ t('lang_toggle') }}</button>
           </form>
           <form method="post" action="{{ url_for('logout') }}" class="logout-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <button type="submit">{{ t('logout') }}</button>
           </form>
         </div>

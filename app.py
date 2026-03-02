@@ -2,20 +2,55 @@ from __future__ import annotations
 
 import csv
 import io
-import sqlite3
+import importlib.util
+import os
+import sys
+from functools import wraps
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import click
 from flask import Flask, Response, flash, g, redirect, render_template, request, session, url_for
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from config import DevelopmentConfig, ProductionConfig
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "roster.db"
+EXTENSIONS_FILE = BASE_DIR / "app" / "extensions.py"
+_extensions_spec = importlib.util.spec_from_file_location("rosman_extensions", EXTENSIONS_FILE)
+if _extensions_spec is None or _extensions_spec.loader is None:
+    raise RuntimeError(f"Cannot load SQLAlchemy extensions module at {EXTENSIONS_FILE}.")
+_extensions_module = importlib.util.module_from_spec(_extensions_spec)
+_extensions_spec.loader.exec_module(_extensions_module)
+sys.modules["rosman_extensions"] = _extensions_module
+db = _extensions_module.db
+csrf = _extensions_module.csrf
+migrate = _extensions_module.migrate
+MODELS_FILE = BASE_DIR / "app" / "models.py"
+_models_spec = importlib.util.spec_from_file_location("rosman_models", MODELS_FILE)
+if _models_spec is None or _models_spec.loader is None:
+    raise RuntimeError(f"Cannot load models module at {MODELS_FILE}.")
+_models_module = importlib.util.module_from_spec(_models_spec)
+_models_spec.loader.exec_module(_models_module)
+Staff = _models_module.Staff
+ShiftTemplate = _models_module.ShiftTemplate
+RosterAssignment = _models_module.RosterAssignment
+StaffAvailability = _models_module.StaffAvailability
+StaffShiftPreference = _models_module.StaffShiftPreference
+User = _models_module.User
+Organization = _models_module.Organization
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "change-this-in-production"
-LOGIN_USERNAME = "duylb"
-LOGIN_PASSWORD = "2026"
+app_env = os.environ.get("APP_ENV", os.environ.get("FLASK_ENV", "development")).lower()
+app.config.from_object(ProductionConfig if app_env == "production" else DevelopmentConfig)
+if not app.config.get("SQLALCHEMY_DATABASE_URI"):
+    raise RuntimeError("DATABASE_URL is required.")
+db.init_app(app)
+csrf.init_app(app)
+migrate.init_app(app, db)
 SUPPORTED_LANGS = {"en", "vi"}
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "en": {
@@ -237,32 +272,29 @@ def t(key: str) -> str:
     return TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)
 
 
-def get_db() -> sqlite3.Connection:
-    if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA foreign_keys = ON")
-    return g.db
-
-
-@app.teardown_appcontext
-def close_db(_: Any) -> None:
-    db = g.pop("db", None)
-    if db is not None:
-        db.close()
-
-
 @app.before_request
-def require_login() -> Any:
-    if request.endpoint is None:
-        return None
-    if request.endpoint in {"login", "set_language", "static"}:
-        return None
-    if session.get("is_authenticated"):
-        return None
+def load_current_user() -> None:
+    user_id = session.get("user_id")
+    g.user = User.query.get(user_id) if user_id else None
+    if user_id and g.user is None:
+        session.clear()
 
-    next_url = request.full_path if request.query_string else request.path
-    return redirect(url_for("login", next=next_url))
+
+def current_org_id() -> int:
+    if getattr(g, "user", None) is None:
+        raise RuntimeError("Authenticated user is required.")
+    return int(g.user.org_id)
+
+
+def login_required(func: Any) -> Any:
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if getattr(g, "user", None) is not None:
+            return func(*args, **kwargs)
+        next_url = request.full_path if request.query_string else request.path
+        return redirect(url_for("login", next=next_url))
+
+    return wrapper
 
 
 @app.context_processor
@@ -294,101 +326,7 @@ def ranges_overlap(start_a: str, end_a: str, start_b: str, end_b: str) -> bool:
     return a_start < b_end and b_start < a_end
 
 
-def migrate_roster_assignments_for_split_shifts(db: sqlite3.Connection) -> None:
-    row = db.execute(
-        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'roster_assignments'"
-    ).fetchone()
-    if row is None or row["sql"] is None:
-        return
-
-    sql_text = row["sql"].replace("\n", " ").replace("  ", " ")
-    if "UNIQUE(roster_date, staff_id, shift_id)" in sql_text:
-        return
-    if "UNIQUE(roster_date, staff_id)" not in sql_text:
-        return
-
-    db.executescript(
-        """
-        CREATE TABLE roster_assignments_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            roster_date TEXT NOT NULL,
-            staff_id INTEGER NOT NULL,
-            shift_id INTEGER NOT NULL,
-            notes TEXT,
-            FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE,
-            FOREIGN KEY (shift_id) REFERENCES shift_templates(id) ON DELETE CASCADE,
-            UNIQUE(roster_date, staff_id, shift_id)
-        );
-
-        INSERT INTO roster_assignments_new (id, roster_date, staff_id, shift_id, notes)
-        SELECT id, roster_date, staff_id, shift_id, notes
-        FROM roster_assignments;
-
-        DROP TABLE roster_assignments;
-        ALTER TABLE roster_assignments_new RENAME TO roster_assignments;
-        """
-    )
-
-
-def init_db() -> None:
-    db = get_db()
-    db.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS staff (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            role TEXT NOT NULL,
-            email TEXT,
-            active INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS shift_templates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            start_time TEXT NOT NULL,
-            end_time TEXT NOT NULL,
-            required_staff INTEGER NOT NULL DEFAULT 1
-        );
-
-        CREATE TABLE IF NOT EXISTS roster_assignments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            roster_date TEXT NOT NULL,
-            staff_id INTEGER NOT NULL,
-            shift_id INTEGER NOT NULL,
-            notes TEXT,
-            FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE,
-            FOREIGN KEY (shift_id) REFERENCES shift_templates(id) ON DELETE CASCADE,
-            UNIQUE(roster_date, staff_id, shift_id)
-        );
-
-        CREATE TABLE IF NOT EXISTS staff_availability (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            staff_id INTEGER NOT NULL,
-            start_date TEXT NOT NULL,
-            end_date TEXT NOT NULL,
-            status TEXT NOT NULL,
-            notes TEXT,
-            FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
-        );
-
-        CREATE TABLE IF NOT EXISTS staff_shift_preferences (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            staff_id INTEGER NOT NULL,
-            shift_id INTEGER NOT NULL,
-            start_date TEXT NOT NULL,
-            end_date TEXT NOT NULL,
-            notes TEXT,
-            FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE,
-            FOREIGN KEY (shift_id) REFERENCES shift_templates(id) ON DELETE CASCADE
-        );
-        """
-    )
-    migrate_roster_assignments_for_split_shifts(db)
-    db.commit()
-
-
-def csv_response(filename: str, headers: list[str], rows: list[sqlite3.Row]) -> Response:
+def csv_response(filename: str, headers: list[str], rows: list[dict[str, Any]]) -> Response:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(headers)
@@ -404,20 +342,24 @@ def csv_response(filename: str, headers: list[str], rows: list[sqlite3.Row]) -> 
 
 @app.route("/login", methods=["GET", "POST"])
 def login() -> str | Any:
-    if session.get("is_authenticated"):
+    if session.get("user_id"):
         return redirect(url_for("dashboard"))
 
     next_url = request.args.get("next", "")
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
+        email = (
+            request.form.get("email", "").strip().lower()
+            or request.form.get("username", "").strip().lower()
+        )
         password = request.form.get("password", "")
         next_form = request.form.get("next", "").strip()
         if next_form:
             next_url = next_form
 
-        if username == LOGIN_USERNAME and password == LOGIN_PASSWORD:
-            session["is_authenticated"] = True
-            session["username"] = username
+        user = User.query.filter(func.lower(User.email) == email).first()
+        if user and check_password_hash(user.password_hash, password):
+            session["user_id"] = user.id
+            session["role"] = user.role
             if not next_url.startswith("/"):
                 next_url = url_for("dashboard")
             return redirect(next_url or url_for("dashboard"))
@@ -428,6 +370,7 @@ def login() -> str | Any:
 
 
 @app.post("/set-language")
+@login_required
 def set_language() -> Any:
     lang = request.form.get("lang", "en").strip().lower()
     if lang in SUPPORTED_LANGS:
@@ -439,18 +382,16 @@ def set_language() -> Any:
 
 
 @app.post("/logout")
+@login_required
 def logout() -> Any:
     session.clear()
     return redirect(url_for("login"))
 
 
-def auto_schedule_week(db: sqlite3.Connection, week_start: date) -> tuple[int, int, int]:
-    staff_rows = db.execute(
-        "SELECT id, name FROM staff WHERE active = 1 ORDER BY name"
-    ).fetchall()
-    shift_rows = db.execute(
-        "SELECT id, start_time, end_time, required_staff FROM shift_templates ORDER BY start_time"
-    ).fetchall()
+def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
+    org_id = current_org_id()
+    staff_rows = Staff.query.filter_by(org_id=org_id, active=1).order_by(Staff.name).all()
+    shift_rows = ShiftTemplate.query.filter_by(org_id=org_id).order_by(ShiftTemplate.start_time).all()
 
     if not staff_rows or not shift_rows:
         return 0, 0, 0
@@ -461,27 +402,27 @@ def auto_schedule_week(db: sqlite3.Connection, week_start: date) -> tuple[int, i
     week_end_str = week_end.isoformat()
 
     recent_counts = {
-        row["staff_id"]: row["c"]
-        for row in db.execute(
-            """
-            SELECT staff_id, COUNT(*) AS c
-            FROM roster_assignments
-            WHERE roster_date BETWEEN ? AND ?
-            GROUP BY staff_id
-            """,
-            (recent_start.isoformat(), week_end.isoformat()),
-        ).fetchall()
+        staff_id: count
+        for staff_id, count in (
+            db.session.query(RosterAssignment.staff_id, func.count(RosterAssignment.id))
+            .filter(
+                RosterAssignment.org_id == org_id,
+                RosterAssignment.roster_date.between(
+                    recent_start.isoformat(), week_end.isoformat()
+                )
+            )
+            .group_by(RosterAssignment.staff_id)
+            .all()
+        )
     }
-    week_counts: dict[int, int] = {row["id"]: 0 for row in staff_rows}
-    preference_rows = db.execute(
-        """
-        SELECT staff_id, shift_id, start_date, end_date
-        FROM staff_shift_preferences
-        WHERE start_date <= ?
-          AND end_date >= ?
-        """,
-        (week_end_str, week_start_str),
-    ).fetchall()
+    week_counts: dict[int, int] = {row.id: 0 for row in staff_rows}
+    preference_rows = (
+        StaffShiftPreference.query.filter(
+            StaffShiftPreference.org_id == org_id,
+            StaffShiftPreference.start_date <= week_end_str,
+            StaffShiftPreference.end_date >= week_start_str,
+        ).all()
+    )
 
     added = 0
     unfilled = 0
@@ -491,68 +432,63 @@ def auto_schedule_week(db: sqlite3.Connection, week_start: date) -> tuple[int, i
         day_str = day_value.isoformat()
 
         blocked = {
-            row["staff_id"]
-            for row in db.execute(
-                """
-                SELECT DISTINCT staff_id
-                FROM staff_availability
-                WHERE status IN ('leave', 'unavailable')
-                  AND start_date <= ?
-                  AND end_date >= ?
-                """,
-                (day_str, day_str),
-            ).fetchall()
+            staff_id
+            for (staff_id,) in (
+                db.session.query(StaffAvailability.staff_id)
+                .filter(
+                    StaffAvailability.org_id == org_id,
+                    StaffAvailability.status.in_(["leave", "unavailable"]),
+                    StaffAvailability.start_date <= day_str,
+                    StaffAvailability.end_date >= day_str,
+                )
+                .distinct()
+                .all()
+            )
         }
 
         assigned_ranges: dict[int, list[tuple[str, str]]] = {}
-        for row in db.execute(
-            """
-            SELECT ra.staff_id, st.start_time, st.end_time
-            FROM roster_assignments ra
-            JOIN shift_templates st ON st.id = ra.shift_id
-            WHERE ra.roster_date = ?
-            """,
-            (day_str,),
-        ).fetchall():
-            assigned_ranges.setdefault(row["staff_id"], []).append(
-                (row["start_time"], row["end_time"])
+        for staff_id, start_time, end_time in (
+            db.session.query(
+                RosterAssignment.staff_id,
+                ShiftTemplate.start_time,
+                ShiftTemplate.end_time,
             )
+            .join(ShiftTemplate, ShiftTemplate.id == RosterAssignment.shift_id)
+            .filter(RosterAssignment.org_id == org_id, ShiftTemplate.org_id == org_id, RosterAssignment.roster_date == day_str)
+            .all()
+        ):
+            assigned_ranges.setdefault(staff_id, []).append((start_time, end_time))
 
         shift_fill = {
-            row["shift_id"]: row["c"]
-            for row in db.execute(
-                """
-                SELECT shift_id, COUNT(*) AS c
-                FROM roster_assignments
-                WHERE roster_date = ?
-                GROUP BY shift_id
-                """,
-                (day_str,),
-            ).fetchall()
+            shift_id: count
+            for shift_id, count in (
+                db.session.query(RosterAssignment.shift_id, func.count(RosterAssignment.id))
+                .filter(RosterAssignment.org_id == org_id, RosterAssignment.roster_date == day_str)
+                .group_by(RosterAssignment.shift_id)
+                .all()
+            )
         }
 
         for shift in shift_rows:
-            open_slots = max(0, shift["required_staff"] - shift_fill.get(shift["id"], 0))
+            open_slots = max(0, shift.required_staff - shift_fill.get(shift.id, 0))
             preferred_for_shift = {
-                pref["staff_id"]
+                pref.staff_id
                 for pref in preference_rows
-                if pref["shift_id"] == shift["id"]
-                and pref["start_date"] <= day_str
-                and pref["end_date"] >= day_str
+                if pref.shift_id == shift.id and pref.start_date <= day_str and pref.end_date >= day_str
             }
             for _ in range(open_slots):
                 eligible = [
                     s
                     for s in staff_rows
-                    if s["id"] not in blocked
+                    if s.id not in blocked
                     and all(
                         not ranges_overlap(
-                            shift["start_time"],
-                            shift["end_time"],
+                            shift.start_time,
+                            shift.end_time,
                             existing_start,
                             existing_end,
                         )
-                        for existing_start, existing_end in assigned_ranges.get(s["id"], [])
+                        for existing_start, existing_end in assigned_ranges.get(s.id, [])
                     )
                 ]
                 if not eligible:
@@ -562,52 +498,52 @@ def auto_schedule_week(db: sqlite3.Connection, week_start: date) -> tuple[int, i
                 chosen = min(
                     eligible,
                     key=lambda s: (
-                        0 if s["id"] in preferred_for_shift else 1,
-                        week_counts.get(s["id"], 0),
-                        recent_counts.get(s["id"], 0),
-                        s["name"],
+                        0 if s.id in preferred_for_shift else 1,
+                        week_counts.get(s.id, 0),
+                        recent_counts.get(s.id, 0),
+                        s.name,
                     ),
                 )
 
-                db.execute(
-                    """
-                    INSERT INTO roster_assignments (roster_date, staff_id, shift_id, notes)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (day_str, chosen["id"], shift["id"], "Auto-scheduled"),
+                db.session.add(
+                    RosterAssignment(
+                        org_id=org_id,
+                        roster_date=day_str,
+                        staff_id=chosen.id,
+                        shift_id=shift.id,
+                        notes="Auto-scheduled",
+                    )
                 )
-                assigned_ranges.setdefault(chosen["id"], []).append(
-                    (shift["start_time"], shift["end_time"])
-                )
-                week_counts[chosen["id"]] = week_counts.get(chosen["id"], 0) + 1
-                recent_counts[chosen["id"]] = recent_counts.get(chosen["id"], 0) + 1
-                shift_fill[shift["id"]] = shift_fill.get(shift["id"], 0) + 1
+                assigned_ranges.setdefault(chosen.id, []).append((shift.start_time, shift.end_time))
+                week_counts[chosen.id] = week_counts.get(chosen.id, 0) + 1
+                recent_counts[chosen.id] = recent_counts.get(chosen.id, 0) + 1
+                shift_fill[shift.id] = shift_fill.get(shift.id, 0) + 1
                 added += 1
 
-    db.commit()
+    db.session.commit()
     return added, unfilled, 1
 
 
 @app.route("/")
+@login_required
 def dashboard() -> str:
-    db = get_db()
+    org_id = current_org_id()
     today = date.today().isoformat()
 
-    staff_count = db.execute("SELECT COUNT(*) AS c FROM staff WHERE active = 1").fetchone()["c"]
-    shift_count = db.execute("SELECT COUNT(*) AS c FROM shift_templates").fetchone()["c"]
-    assignments_today = db.execute(
-        "SELECT COUNT(*) AS c FROM roster_assignments WHERE roster_date = ?", (today,)
-    ).fetchone()["c"]
-    unavailable_today = db.execute(
-        """
-        SELECT COUNT(DISTINCT staff_id) AS c
-        FROM staff_availability
-        WHERE status IN ('leave', 'unavailable')
-          AND start_date <= ?
-          AND end_date >= ?
-        """,
-        (today, today),
-    ).fetchone()["c"]
+    staff_count = Staff.query.filter_by(org_id=org_id, active=1).count()
+    shift_count = ShiftTemplate.query.filter_by(org_id=org_id).count()
+    assignments_today = RosterAssignment.query.filter_by(org_id=org_id, roster_date=today).count()
+    unavailable_today = (
+        db.session.query(StaffAvailability.staff_id)
+        .filter(
+            StaffAvailability.org_id == org_id,
+            StaffAvailability.status.in_(["leave", "unavailable"]),
+            StaffAvailability.start_date <= today,
+            StaffAvailability.end_date >= today,
+        )
+        .distinct()
+        .count()
+    )
 
     return render_template(
         "dashboard.html",
@@ -620,9 +556,9 @@ def dashboard() -> str:
 
 
 @app.route("/staff", methods=["GET", "POST"])
+@login_required
 def staff() -> str:
-    db = get_db()
-
+    org_id = current_org_id()
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         role = request.form.get("role", "").strip()
@@ -631,38 +567,32 @@ def staff() -> str:
         if not name or not role:
             flash("Name and role are required.", "error")
         else:
-            db.execute(
-                "INSERT INTO staff (name, role, email) VALUES (?, ?, ?)",
-                (name, role, email or None),
-            )
-            db.commit()
+            db.session.add(Staff(org_id=org_id, name=name, role=role, email=email or None))
+            db.session.commit()
             flash("Staff member added.", "success")
             return redirect(url_for("staff"))
 
-    rows = db.execute(
-        "SELECT id, name, role, email, active, created_at FROM staff ORDER BY active DESC, name"
-    ).fetchall()
+    rows = Staff.query.filter_by(org_id=org_id).order_by(Staff.active.desc(), Staff.name).all()
     return render_template("staff.html", staff=rows)
 
 
 @app.post("/staff/<int:staff_id>/toggle")
+@login_required
 def toggle_staff(staff_id: int) -> Any:
-    db = get_db()
-    row = db.execute("SELECT active FROM staff WHERE id = ?", (staff_id,)).fetchone()
+    row = Staff.query.filter_by(id=staff_id, org_id=current_org_id()).first()
     if row is None:
         flash("Staff member not found.", "error")
     else:
-        new_value = 0 if row["active"] else 1
-        db.execute("UPDATE staff SET active = ? WHERE id = ?", (new_value, staff_id))
-        db.commit()
+        row.active = 0 if row.active else 1
+        db.session.commit()
         flash("Staff status updated.", "success")
     return redirect(url_for("staff"))
 
 
 @app.post("/staff/<int:staff_id>/edit")
+@login_required
 def edit_staff(staff_id: int) -> Any:
-    db = get_db()
-    row = db.execute("SELECT id FROM staff WHERE id = ?", (staff_id,)).fetchone()
+    row = Staff.query.filter_by(id=staff_id, org_id=current_org_id()).first()
     if row is None:
         flash("Staff member not found.", "error")
         return redirect(url_for("staff"))
@@ -675,18 +605,18 @@ def edit_staff(staff_id: int) -> Any:
         flash("Name and role are required.", "error")
         return redirect(url_for("staff"))
 
-    db.execute(
-        "UPDATE staff SET name = ?, role = ?, email = ? WHERE id = ?",
-        (name, role, email or None, staff_id),
-    )
-    db.commit()
+    row.name = name
+    row.role = role
+    row.email = email or None
+    db.session.commit()
     flash("Staff information updated.", "success")
     return redirect(url_for("staff"))
 
 
 @app.post("/staff/import")
+@login_required
 def import_staff_csv() -> Any:
-    db = get_db()
+    org_id = current_org_id()
     file_obj = request.files.get("csv_file")
 
     if not file_obj or not file_obj.filename:
@@ -717,21 +647,18 @@ def import_staff_csv() -> Any:
             skipped += 1
             continue
 
-        db.execute(
-            "INSERT INTO staff (name, role, email) VALUES (?, ?, ?)",
-            (name, role, email or None),
-        )
+        db.session.add(Staff(org_id=org_id, name=name, role=role, email=email or None))
         added += 1
 
-    db.commit()
+    db.session.commit()
     flash(f"Staff import finished: {added} rows added, {skipped} rows skipped.", "success")
     return redirect(url_for("staff"))
 
 
 @app.route("/shifts", methods=["GET", "POST"])
+@login_required
 def shifts() -> str:
-    db = get_db()
-
+    org_id = current_org_id()
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         start_time = request.form.get("start_time", "").strip()
@@ -747,25 +674,30 @@ def shifts() -> str:
             flash("Name, start time, and end time are required.", "error")
         else:
             try:
-                db.execute(
-                    "INSERT INTO shift_templates (name, start_time, end_time, required_staff) VALUES (?, ?, ?, ?)",
-                    (name, start_time, end_time, required_staff),
+                db.session.add(
+                    ShiftTemplate(
+                        org_id=org_id,
+                        name=name,
+                        start_time=start_time,
+                        end_time=end_time,
+                        required_staff=required_staff,
+                    )
                 )
-                db.commit()
+                db.session.commit()
                 flash("Shift template added.", "success")
                 return redirect(url_for("shifts"))
-            except sqlite3.IntegrityError:
+            except IntegrityError:
+                db.session.rollback()
                 flash("Shift name must be unique.", "error")
 
-    rows = db.execute(
-        "SELECT id, name, start_time, end_time, required_staff FROM shift_templates ORDER BY start_time"
-    ).fetchall()
+    rows = ShiftTemplate.query.filter_by(org_id=org_id).order_by(ShiftTemplate.start_time).all()
     return render_template("shifts.html", shifts=rows)
 
 
 @app.route("/availability", methods=["GET", "POST"])
+@login_required
 def availability() -> str:
-    db = get_db()
+    org_id = current_org_id()
     today = date.today().isoformat()
 
     if request.method == "POST":
@@ -785,54 +717,72 @@ def availability() -> str:
         elif status not in {"leave", "unavailable"}:
             flash("Invalid availability status.", "error")
         else:
-            db.execute(
-                """
-                INSERT INTO staff_availability (staff_id, start_date, end_date, status, notes)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (int(staff_id), start_date, end_date, status, notes or None),
+            try:
+                staff_id_int = int(staff_id)
+            except ValueError:
+                flash("Invalid staff.", "error")
+                return redirect(url_for("availability"))
+
+            staff = Staff.query.filter_by(id=staff_id_int, org_id=org_id).first()
+            if staff is None:
+                flash("Staff member not found.", "error")
+                return redirect(url_for("availability"))
+            db.session.add(
+                StaffAvailability(
+                    org_id=org_id,
+                    staff_id=staff_id_int,
+                    start_date=start_date,
+                    end_date=end_date,
+                    status=status,
+                    notes=notes or None,
+                )
             )
-            db.commit()
+            db.session.commit()
             flash("Availability entry added.", "success")
             return redirect(url_for("availability"))
 
-    staff_rows = db.execute("SELECT id, name, role FROM staff ORDER BY name").fetchall()
-    availability_rows = db.execute(
-        """
-        SELECT
-            sa.id,
-            sa.start_date,
-            sa.end_date,
-            sa.status,
-            sa.notes,
-            s.name AS staff_name,
-            s.role AS staff_role
-        FROM staff_availability sa
-        JOIN staff s ON s.id = sa.staff_id
-        ORDER BY sa.start_date DESC, s.name
-        """
-    ).fetchall()
-    shift_rows = db.execute(
-        "SELECT id, name, start_time, end_time FROM shift_templates ORDER BY start_time"
-    ).fetchall()
-    preference_rows = db.execute(
-        """
-        SELECT
-            sp.id,
-            sp.start_date,
-            sp.end_date,
-            sp.notes,
-            s.name AS staff_name,
-            s.role AS staff_role,
-            st.name AS shift_name,
-            st.start_time,
-            st.end_time
-        FROM staff_shift_preferences sp
-        JOIN staff s ON s.id = sp.staff_id
-        JOIN shift_templates st ON st.id = sp.shift_id
-        ORDER BY sp.start_date DESC, s.name, st.start_time
-        """
-    ).fetchall()
+    staff_rows = Staff.query.filter_by(org_id=org_id).order_by(Staff.name).all()
+    availability_rows = [
+        {
+            "id": row.id,
+            "start_date": row.start_date,
+            "end_date": row.end_date,
+            "status": row.status,
+            "notes": row.notes,
+            "staff_name": row.staff.name,
+            "staff_role": row.staff.role,
+        }
+        for row in (
+            StaffAvailability.query.join(Staff)
+            .filter(StaffAvailability.org_id == org_id, Staff.org_id == org_id)
+            .order_by(StaffAvailability.start_date.desc(), Staff.name)
+            .all()
+        )
+    ]
+    shift_rows = ShiftTemplate.query.filter_by(org_id=org_id).order_by(ShiftTemplate.start_time).all()
+    preference_rows = [
+        {
+            "id": row.id,
+            "start_date": row.start_date,
+            "end_date": row.end_date,
+            "notes": row.notes,
+            "staff_name": row.staff.name,
+            "staff_role": row.staff.role,
+            "shift_name": row.shift_template.name,
+            "start_time": row.shift_template.start_time,
+            "end_time": row.shift_template.end_time,
+        }
+        for row in (
+            StaffShiftPreference.query.join(Staff).join(ShiftTemplate)
+            .filter(
+                StaffShiftPreference.org_id == org_id,
+                Staff.org_id == org_id,
+                ShiftTemplate.org_id == org_id,
+            )
+            .order_by(StaffShiftPreference.start_date.desc(), Staff.name, ShiftTemplate.start_time)
+            .all()
+        )
+    ]
 
     return render_template(
         "availability.html",
@@ -845,17 +795,20 @@ def availability() -> str:
 
 
 @app.post("/availability/<int:entry_id>/delete")
+@login_required
 def delete_availability(entry_id: int) -> Any:
-    db = get_db()
-    db.execute("DELETE FROM staff_availability WHERE id = ?", (entry_id,))
-    db.commit()
+    entry = StaffAvailability.query.filter_by(id=entry_id, org_id=current_org_id()).first()
+    if entry is not None:
+        db.session.delete(entry)
+        db.session.commit()
     flash("Availability entry removed.", "success")
     return redirect(url_for("availability"))
 
 
 @app.post("/availability/preferences")
+@login_required
 def add_shift_preference() -> Any:
-    db = get_db()
+    org_id = current_org_id()
     staff_id = request.form.get("staff_id", "").strip()
     start_date = request.form.get("start_date", "").strip()
     end_date = request.form.get("end_date", "").strip()
@@ -876,37 +829,58 @@ def add_shift_preference() -> Any:
         return redirect(url_for("availability"))
 
     added = 0
+    try:
+        staff_id_int = int(staff_id)
+    except ValueError:
+        flash("Invalid staff.", "error")
+        return redirect(url_for("availability"))
+
+    staff = Staff.query.filter_by(id=staff_id_int, org_id=org_id).first()
+    if staff is None:
+        flash("Staff member not found.", "error")
+        return redirect(url_for("availability"))
+
     for shift_id_raw in shift_ids:
         try:
             shift_id = int(shift_id_raw)
         except ValueError:
             continue
-        db.execute(
-            """
-            INSERT INTO staff_shift_preferences (staff_id, shift_id, start_date, end_date, notes)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (int(staff_id), shift_id, start_date, end_date, notes or None),
+        shift = ShiftTemplate.query.filter_by(id=shift_id, org_id=org_id).first()
+        if shift is None:
+            continue
+        db.session.add(
+            StaffShiftPreference(
+                org_id=org_id,
+                staff_id=staff_id_int,
+                shift_id=shift_id,
+                start_date=start_date,
+                end_date=end_date,
+                notes=notes or None,
+            )
         )
         added += 1
-    db.commit()
+    db.session.commit()
     flash(f"Added {added} preferred shift entries.", "success")
     return redirect(url_for("availability"))
 
 
 @app.post("/availability/preferences/<int:preference_id>/delete")
+@login_required
 def delete_shift_preference(preference_id: int) -> Any:
-    db = get_db()
-    db.execute("DELETE FROM staff_shift_preferences WHERE id = ?", (preference_id,))
-    db.commit()
+    preference = StaffShiftPreference.query.filter_by(
+        id=preference_id, org_id=current_org_id()
+    ).first()
+    if preference is not None:
+        db.session.delete(preference)
+        db.session.commit()
     flash("Shift preference removed.", "success")
     return redirect(url_for("availability"))
 
 
 @app.route("/roster", methods=["GET", "POST"])
+@login_required
 def roster() -> str:
-    db = get_db()
-
+    org_id = current_org_id()
     selected_date = request.values.get("roster_date", date.today().isoformat())
     selected_obj = parse_iso_date(selected_date) or date.today()
 
@@ -925,87 +899,89 @@ def roster() -> str:
                 flash("Invalid staff or shift.", "error")
                 return redirect(url_for("roster", roster_date=selected_date))
 
-            target_shift = db.execute(
-                "SELECT start_time, end_time FROM shift_templates WHERE id = ?",
-                (shift_id_int,),
-            ).fetchone()
+            target_shift = ShiftTemplate.query.filter_by(id=shift_id_int, org_id=org_id).first()
             if target_shift is None:
                 flash("Shift not found.", "error")
                 return redirect(url_for("roster", roster_date=selected_date))
 
-            blocked = db.execute(
-                """
-                SELECT 1
-                FROM staff_availability
-                WHERE staff_id = ?
-                  AND status IN ('leave', 'unavailable')
-                  AND start_date <= ?
-                  AND end_date >= ?
-                LIMIT 1
-                """,
-                (staff_id_int, selected_date, selected_date),
-            ).fetchone()
+            staff_member = Staff.query.filter_by(id=staff_id_int, org_id=org_id, active=1).first()
+            if staff_member is None:
+                flash("Staff member not found.", "error")
+                return redirect(url_for("roster", roster_date=selected_date))
+
+            blocked = (
+                StaffAvailability.query.filter(
+                    StaffAvailability.org_id == org_id,
+                    StaffAvailability.staff_id == staff_id_int,
+                    StaffAvailability.status.in_(["leave", "unavailable"]),
+                    StaffAvailability.start_date <= selected_date,
+                    StaffAvailability.end_date >= selected_date,
+                ).first()
+                is not None
+            )
             if blocked:
                 flash("Staff member is unavailable on this date.", "error")
             else:
-                overlap = db.execute(
-                    """
-                    SELECT 1
-                    FROM roster_assignments ra
-                    JOIN shift_templates st ON st.id = ra.shift_id
-                    WHERE ra.staff_id = ?
-                      AND ra.roster_date = ?
-                      AND (? < st.end_time AND st.start_time < ?)
-                    LIMIT 1
-                    """,
-                    (
-                        staff_id_int,
-                        selected_date,
-                        target_shift["start_time"],
-                        target_shift["end_time"],
-                    ),
-                ).fetchone()
+                overlap = (
+                    db.session.query(RosterAssignment.id)
+                    .join(ShiftTemplate, ShiftTemplate.id == RosterAssignment.shift_id)
+                    .filter(
+                        RosterAssignment.org_id == org_id,
+                        ShiftTemplate.org_id == org_id,
+                        RosterAssignment.staff_id == staff_id_int,
+                        RosterAssignment.roster_date == selected_date,
+                        target_shift.start_time < ShiftTemplate.end_time,
+                        ShiftTemplate.start_time < target_shift.end_time,
+                    )
+                    .first()
+                )
                 if overlap:
                     flash("Shift overlaps with an existing assignment for this staff on this date.", "error")
                     return redirect(url_for("roster", roster_date=selected_date))
 
                 try:
-                    db.execute(
-                        "INSERT INTO roster_assignments (roster_date, staff_id, shift_id, notes) VALUES (?, ?, ?, ?)",
-                        (selected_date, staff_id_int, shift_id_int, notes or None),
+                    db.session.add(
+                        RosterAssignment(
+                            org_id=org_id,
+                            roster_date=selected_date,
+                            staff_id=staff_id_int,
+                            shift_id=shift_id_int,
+                            notes=notes or None,
+                        )
                     )
-                    db.commit()
+                    db.session.commit()
                     flash("Assignment added.", "success")
                     return redirect(url_for("roster", roster_date=selected_date))
-                except sqlite3.IntegrityError:
+                except IntegrityError:
+                    db.session.rollback()
                     flash("This staff member already has this shift on this date.", "error")
 
-    staff_rows = db.execute(
-        "SELECT id, name, role FROM staff WHERE active = 1 ORDER BY name"
-    ).fetchall()
-    shift_rows = db.execute(
-        "SELECT id, name, start_time, end_time FROM shift_templates ORDER BY start_time"
-    ).fetchall()
+    staff_rows = Staff.query.filter_by(org_id=org_id, active=1).order_by(Staff.name).all()
+    shift_rows = ShiftTemplate.query.filter_by(org_id=org_id).order_by(ShiftTemplate.start_time).all()
 
-    assignments = db.execute(
-        """
-        SELECT
-            ra.id,
-            ra.roster_date,
-            ra.notes,
-            s.name AS staff_name,
-            s.role AS staff_role,
-            st.name AS shift_name,
-            st.start_time,
-            st.end_time
-        FROM roster_assignments ra
-        JOIN staff s ON s.id = ra.staff_id
-        JOIN shift_templates st ON st.id = ra.shift_id
-        WHERE ra.roster_date = ?
-        ORDER BY st.start_time, s.name
-        """,
-        (selected_date,),
-    ).fetchall()
+    assignments = [
+        {
+            "id": row.id,
+            "roster_date": row.roster_date,
+            "notes": row.notes,
+            "staff_name": row.staff.name,
+            "staff_role": row.staff.role,
+            "shift_name": row.shift_template.name,
+            "start_time": row.shift_template.start_time,
+            "end_time": row.shift_template.end_time,
+        }
+        for row in (
+            RosterAssignment.query.join(Staff).join(ShiftTemplate)
+            .filter(
+                RosterAssignment.org_id == org_id,
+                Staff.org_id == org_id,
+                ShiftTemplate.org_id == org_id,
+                RosterAssignment.roster_date == selected_date,
+            )
+            .order_by(ShiftTemplate.start_time, Staff.name)
+            .all()
+        )
+    ]
 
     return render_template(
         "roster.html",
@@ -1018,15 +994,15 @@ def roster() -> str:
 
 
 @app.post("/roster/auto-schedule")
+@login_required
 def auto_schedule() -> Any:
-    db = get_db()
     week_start_raw = request.form.get("week_start", "")
     week_start = parse_iso_date(week_start_raw)
     if week_start is None:
         flash("Invalid week start date.", "error")
         return redirect(url_for("roster"))
 
-    added, unfilled, ran = auto_schedule_week(db, week_start)
+    added, unfilled, ran = auto_schedule_week(week_start)
     if ran == 0:
         flash("Need at least one active staff and one shift template before auto-scheduling.", "error")
     else:
@@ -1038,39 +1014,48 @@ def auto_schedule() -> Any:
 
 
 @app.post("/roster/<int:assignment_id>/delete")
+@login_required
 def delete_assignment(assignment_id: int) -> Any:
-    db = get_db()
     roster_date = request.form.get("roster_date", date.today().isoformat())
-    db.execute("DELETE FROM roster_assignments WHERE id = ?", (assignment_id,))
-    db.commit()
+    assignment = RosterAssignment.query.filter_by(id=assignment_id, org_id=current_org_id()).first()
+    if assignment is not None:
+        db.session.delete(assignment)
+        db.session.commit()
     flash("Assignment removed.", "success")
     return redirect(url_for("roster", roster_date=roster_date))
 
 
 @app.route("/data")
+@login_required
 def data_page() -> str:
     return render_template("data.html")
 
 
 @app.route("/data/export/<dataset>")
+@login_required
 def export_dataset(dataset: str) -> Response:
-    db = get_db()
+    org_id = current_org_id()
     if dataset == "assignments":
-        rows = db.execute(
-            """
-            SELECT
-                ra.roster_date,
-                s.id AS staff_id,
-                s.name AS staff_name,
-                s.role AS staff_role,
-                st.name AS shift_name,
-                st.start_time
-            FROM roster_assignments ra
-            JOIN staff s ON s.id = ra.staff_id
-            JOIN shift_templates st ON st.id = ra.shift_id
-            ORDER BY ra.roster_date, s.name, st.start_time
-            """
-        ).fetchall()
+        rows = [
+            {
+                "roster_date": row.roster_date,
+                "staff_id": row.staff.id,
+                "staff_name": row.staff.name,
+                "staff_role": row.staff.role,
+                "shift_name": row.shift_template.name,
+                "start_time": row.shift_template.start_time,
+            }
+            for row in (
+                RosterAssignment.query.join(Staff).join(ShiftTemplate)
+                .filter(
+                    RosterAssignment.org_id == org_id,
+                    Staff.org_id == org_id,
+                    ShiftTemplate.org_id == org_id,
+                )
+                .order_by(RosterAssignment.roster_date, Staff.name, ShiftTemplate.start_time)
+                .all()
+            )
+        ]
 
         if not rows:
             return Response(
@@ -1125,47 +1110,67 @@ def export_dataset(dataset: str) -> Response:
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
 
-    queries: dict[str, tuple[str, list[str], str]] = {
-        "staff": (
-            "SELECT id, name, role, email, active FROM staff ORDER BY id",
-            ["id", "name", "role", "email", "active"],
-            "staff.csv",
-        ),
-        "shifts": (
-            "SELECT id, name, start_time, end_time, required_staff FROM shift_templates ORDER BY id",
-            ["id", "name", "start_time", "end_time", "required_staff"],
+    if dataset == "staff":
+        rows = [
+            {
+                "id": row.id,
+                "name": row.name,
+                "role": row.role,
+                "email": row.email,
+                "active": row.active,
+            }
+            for row in Staff.query.filter_by(org_id=org_id).order_by(Staff.id).all()
+        ]
+        return csv_response("staff.csv", ["id", "name", "role", "email", "active"], rows)
+
+    if dataset == "shifts":
+        rows = [
+            {
+                "id": row.id,
+                "name": row.name,
+                "start_time": row.start_time,
+                "end_time": row.end_time,
+                "required_staff": row.required_staff,
+            }
+            for row in ShiftTemplate.query.filter_by(org_id=org_id).order_by(ShiftTemplate.id).all()
+        ]
+        return csv_response(
             "shifts.csv",
-        ),
-        "availability": (
-            """
-            SELECT
-                sa.id,
-                s.name AS staff_name,
-                sa.start_date,
-                sa.end_date,
-                sa.status,
-                sa.notes
-            FROM staff_availability sa
-            JOIN staff s ON s.id = sa.staff_id
-            ORDER BY sa.start_date, sa.id
-            """,
-            ["id", "staff_name", "start_date", "end_date", "status", "notes"],
+            ["id", "name", "start_time", "end_time", "required_staff"],
+            rows,
+        )
+
+    if dataset == "availability":
+        rows = [
+            {
+                "id": row.id,
+                "staff_name": row.staff.name,
+                "start_date": row.start_date,
+                "end_date": row.end_date,
+                "status": row.status,
+                "notes": row.notes,
+            }
+            for row in (
+                StaffAvailability.query.join(Staff)
+                .filter(StaffAvailability.org_id == org_id, Staff.org_id == org_id)
+                .order_by(StaffAvailability.start_date, StaffAvailability.id)
+                .all()
+            )
+        ]
+        return csv_response(
             "availability.csv",
-        ),
-    }
+            ["id", "staff_name", "start_date", "end_date", "status", "notes"],
+            rows,
+        )
 
-    if dataset not in queries:
-        flash("Unknown dataset.", "error")
-        return redirect(url_for("data_page"))
-
-    query, headers, filename = queries[dataset]
-    rows = db.execute(query).fetchall()
-    return csv_response(filename, headers, rows)
+    flash("Unknown dataset.", "error")
+    return redirect(url_for("data_page"))
 
 
 @app.post("/data/import")
+@login_required
 def import_dataset() -> Any:
-    db = get_db()
+    org_id = current_org_id()
     dataset = request.form.get("dataset", "")
     replace_existing = request.form.get("replace_existing") == "1"
     file_obj = request.files.get("csv_file")
@@ -1190,7 +1195,8 @@ def import_dataset() -> Any:
     try:
         if dataset == "staff":
             if replace_existing:
-                db.execute("DELETE FROM staff")
+                for item in Staff.query.filter_by(org_id=org_id).all():
+                    db.session.delete(item)
             added, skipped = 0, 0
             for row in rows:
                 name = (row.get("name") or "").strip()
@@ -1201,15 +1207,15 @@ def import_dataset() -> Any:
                     skipped += 1
                     continue
                 active = 1 if active_raw not in {"0", "false", "False"} else 0
-                db.execute(
-                    "INSERT INTO staff (name, role, email, active) VALUES (?, ?, ?, ?)",
-                    (name, role, email or None, active),
+                db.session.add(
+                    Staff(org_id=org_id, name=name, role=role, email=email or None, active=active)
                 )
                 added += 1
 
         elif dataset == "shifts":
             if replace_existing:
-                db.execute("DELETE FROM shift_templates")
+                for item in ShiftTemplate.query.filter_by(org_id=org_id).all():
+                    db.session.delete(item)
             added, skipped = 0, 0
             for row in rows:
                 name = (row.get("name") or "").strip()
@@ -1221,17 +1227,25 @@ def import_dataset() -> Any:
                     continue
                 try:
                     required_staff = max(1, int(required_raw))
-                    db.execute(
-                        "INSERT INTO shift_templates (name, start_time, end_time, required_staff) VALUES (?, ?, ?, ?)",
-                        (name, start_time, end_time, required_staff),
-                    )
+                    with db.session.begin_nested():
+                        db.session.add(
+                            ShiftTemplate(
+                                org_id=org_id,
+                                name=name,
+                                start_time=start_time,
+                                end_time=end_time,
+                                required_staff=required_staff,
+                            )
+                        )
+                        db.session.flush()
                     added += 1
-                except (ValueError, sqlite3.IntegrityError):
+                except (ValueError, IntegrityError):
                     skipped += 1
 
         elif dataset == "assignments":
             if replace_existing:
-                db.execute("DELETE FROM roster_assignments")
+                for item in RosterAssignment.query.filter_by(org_id=org_id).all():
+                    db.session.delete(item)
             added, skipped = 0, 0
             for row in rows:
                 roster_date = (row.get("roster_date") or "").strip()
@@ -1242,17 +1256,36 @@ def import_dataset() -> Any:
                     skipped += 1
                     continue
                 try:
-                    db.execute(
-                        "INSERT INTO roster_assignments (roster_date, staff_id, shift_id, notes) VALUES (?, ?, ?, ?)",
-                        (roster_date, int(staff_id_raw), int(shift_id_raw), notes or None),
+                    staff_id = int(staff_id_raw)
+                    shift_id = int(shift_id_raw)
+                    staff_exists = (
+                        Staff.query.filter_by(id=staff_id, org_id=org_id).first() is not None
                     )
+                    shift_exists = (
+                        ShiftTemplate.query.filter_by(id=shift_id, org_id=org_id).first() is not None
+                    )
+                    if not staff_exists or not shift_exists:
+                        skipped += 1
+                        continue
+                    with db.session.begin_nested():
+                        db.session.add(
+                            RosterAssignment(
+                                org_id=org_id,
+                                roster_date=roster_date,
+                                staff_id=staff_id,
+                                shift_id=shift_id,
+                                notes=notes or None,
+                            )
+                        )
+                        db.session.flush()
                     added += 1
-                except (ValueError, sqlite3.IntegrityError):
+                except (ValueError, IntegrityError):
                     skipped += 1
 
         elif dataset == "availability":
             if replace_existing:
-                db.execute("DELETE FROM staff_availability")
+                for item in StaffAvailability.query.filter_by(org_id=org_id).all():
+                    db.session.delete(item)
             added, skipped = 0, 0
             for row in rows:
                 staff_id_raw = (row.get("staff_id") or "").strip()
@@ -1271,30 +1304,84 @@ def import_dataset() -> Any:
                     skipped += 1
                     continue
                 try:
-                    db.execute(
-                        "INSERT INTO staff_availability (staff_id, start_date, end_date, status, notes) VALUES (?, ?, ?, ?, ?)",
-                        (int(staff_id_raw), start_date, end_date, status, notes or None),
-                    )
+                    staff_id = int(staff_id_raw)
+                    if Staff.query.filter_by(id=staff_id, org_id=org_id).first() is None:
+                        skipped += 1
+                        continue
+                    with db.session.begin_nested():
+                        db.session.add(
+                            StaffAvailability(
+                                org_id=org_id,
+                                staff_id=staff_id,
+                                start_date=start_date,
+                                end_date=end_date,
+                                status=status,
+                                notes=notes or None,
+                            )
+                        )
+                        db.session.flush()
                     added += 1
-                except (ValueError, sqlite3.IntegrityError):
+                except (ValueError, IntegrityError):
                     skipped += 1
 
         else:
             flash("Unknown dataset.", "error")
             return redirect(url_for("data_page"))
 
-        db.commit()
+        db.session.commit()
         flash(f"Import finished: {added} rows added, {skipped} rows skipped.", "success")
-    except sqlite3.IntegrityError:
-        db.rollback()
+    except IntegrityError:
+        db.session.rollback()
         flash("Import failed because rows reference missing records or duplicate unique fields.", "error")
 
     return redirect(url_for("data_page"))
 
 
+@app.cli.command("create-admin")
+def create_admin() -> None:
+    if User.query.count() > 0:
+        click.echo("Admin creation skipped: at least one user already exists.")
+        return
+
+    email = click.prompt("Admin email").strip().lower()
+    while not email:
+        click.echo("Email is required.")
+        email = click.prompt("Admin email").strip().lower()
+
+    if User.query.filter(func.lower(User.email) == email).first():
+        click.echo("A user with that email already exists.")
+        return
+
+    password = click.prompt("Password", hide_input=True, confirmation_prompt=True)
+    while not password:
+        click.echo("Password is required.")
+        password = click.prompt("Password", hide_input=True, confirmation_prompt=True)
+
+    default_org_name = f"{email.split('@')[0]}'s Organization"
+    org_name = click.prompt("Organization name", default=default_org_name).strip()
+    while not org_name:
+        click.echo("Organization name is required.")
+        org_name = click.prompt("Organization name", default=default_org_name).strip()
+
+    organization = Organization(name=org_name)
+    db.session.add(organization)
+    db.session.flush()
+
+    user = User(
+        email=email,
+        password_hash=generate_password_hash(password),
+        role="owner",
+        org_id=organization.id,
+    )
+    db.session.add(user)
+    db.session.commit()
+    click.echo(f"Admin user created: {email} (org: {org_name})")
+
+
 with app.app_context():
-    init_db()
+    db.create_all()
 
 
 if __name__ == "__main__":
     app.run(debug=True)
+

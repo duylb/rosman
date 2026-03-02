@@ -3,6 +3,7 @@
 <section class="panel">
   <h2>{{ t('add_staff') }}</h2>
   <form method="post" class="grid-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label>{{ t('name') }} <input name="name" required /></label>
     <label>{{ t('role') }} <input name="role" required /></label>
     <label>{{ t('email') }} <input type="email" name="email" /></label>
@@ -14,6 +15,7 @@
   <h2>{{ t('import_staff_csv') }}</h2>
   <p class="hint">{{ t('import_staff_hint') }}</p>
   <form method="post" action="{{ url_for('import_staff_csv') }}" enctype="multipart/form-data" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label>{{ t('csv_file') }} <input type="file" name="csv_file" accept=".csv,text/csv" required /></label>
     <button type="submit">{{ t('import') }}</button>
   </form>
@@ -51,6 +53,7 @@
               {{ t('edit') }}
             </button>
             <form method="post" action="{{ url_for('toggle_staff', staff_id=row.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
               <button type="submit" class="{{ 'btn-danger-lite' if row.active else '' }}">{{ t('disable') if row.active else t('enable') }}</button>
             </form>
           </div>
@@ -66,6 +69,7 @@
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="edit-staff-title">
     <h2 id="edit-staff-title">{{ t('edit_staff') }}</h2>
     <form id="staff-edit-form" method="post" class="grid-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <label>{{ t('name') }} <input id="edit-name" name="name" required /></label>
       <label>{{ t('role') }} <input id="edit-role" name="role" required /></label>
       <label>{{ t('email') }} <input id="edit-email" type="email" name="email" /></label>

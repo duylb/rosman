@@ -3,6 +3,7 @@
 <section class="panel">
   <h2>{{ t('add_leave_availability') }}</h2>
   <form method="post" class="grid-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label>{{ t('staff') }}
       <select name="staff_id" required>
         <option value="">{{ t('select_staff') }}</option>
@@ -27,6 +28,7 @@
 <section class="panel">
   <h2>{{ t('add_preferred_shifts') }}</h2>
   <form method="post" action="{{ url_for('add_shift_preference') }}" class="grid-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label>{{ t('staff') }}
       <select name="staff_id" required>
         <option value="">{{ t('select_staff') }}</option>
@@ -72,6 +74,7 @@
         <td>{{ row.notes or '-' }}</td>
         <td>
           <form method="post" action="{{ url_for('delete_shift_preference', preference_id=row.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <button type="submit">{{ t('remove') }}</button>
           </form>
         </td>
@@ -109,6 +112,7 @@
         <td>{{ row.notes or '-' }}</td>
         <td>
           <form method="post" action="{{ url_for('delete_availability', entry_id=row.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <button type="submit">{{ t('remove') }}</button>
           </form>
         </td>

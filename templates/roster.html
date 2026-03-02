@@ -8,6 +8,7 @@
   </form>
 
   <form method="post" class="grid-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <input type="hidden" name="roster_date" value="{{ selected_date }}" />
     <label>{{ t('staff') }}
       <select name="staff_id" required>
@@ -33,6 +34,7 @@
 <section class="panel">
   <h2>{{ t('weekly_auto_scheduling') }}</h2>
   <form method="post" action="{{ url_for('auto_schedule') }}" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label>{{ t('week_start_monday') }}
       <input type="date" name="week_start" value="{{ week_start }}" required />
     </label>
@@ -62,6 +64,7 @@
         <td>{{ row.notes or '-' }}</td>
         <td>
           <form method="post" action="{{ url_for('delete_assignment', assignment_id=row.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <input type="hidden" name="roster_date" value="{{ selected_date }}" />
             <button type="submit">{{ t('remove') }}</button>
           </form>
