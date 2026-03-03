@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import click
-from flask import Flask, Response, flash, g, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, Response, abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -1237,6 +1237,31 @@ def confirm_roster_version(version_id: int) -> Any:
             return jsonify({"error": "Unable to confirm roster version."}), 409
         flash("Unable to confirm roster version.", "error")
         return redirect(url_for("roster", roster_date=roster_date or date.today().isoformat()))
+
+
+@app.post("/roster/discard/<int:version_id>")
+@login_required
+def discard_roster_version(version_id: int) -> Any:
+    org_id = current_org_id()
+    version = RosterVersion.query.filter_by(id=version_id, org_id=org_id).first()
+    if version is None:
+        abort(404)
+    if version.status != "draft":
+        abort(403)
+
+    target_date = version.week_start.isoformat()
+    try:
+        RosterAssignment.query.filter_by(
+            org_id=org_id,
+            version_id=version.id,
+        ).delete(synchronize_session=False)
+        db.session.delete(version)
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        raise
+
+    return redirect(url_for("roster", roster_date=target_date))
 
 
 @app.post("/roster/<int:assignment_id>/delete")

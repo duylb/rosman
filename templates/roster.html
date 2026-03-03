@@ -21,6 +21,10 @@
           <input type="hidden" name="roster_date" value="{{ selected_date }}" />
           <button type="submit" class="btn-danger-lite">Confirm Roster</button>
         </form>
+        <form method="post" action="{{ url_for('discard_roster_version', version_id=current_version.id) }}" onsubmit="return confirm('Are you sure you want to discard this draft? This cannot be undone.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <button type="submit" class="btn-secondary">Discard Draft</button>
+        </form>
       {% else %}
         <span class="hint">No roster version for this week yet.</span>
       {% endif %}
