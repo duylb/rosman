@@ -914,17 +914,17 @@ def roster() -> str:
     selected_obj = parse_iso_date(selected_date) or date.today()
     week_start_obj = monday_for(selected_obj)
 
-    draft_version = (
-        RosterVersion.query.filter_by(org_id=org_id, week_start=week_start_obj, status="draft")
-        .order_by(RosterVersion.id.desc())
-        .first()
-    )
     confirmed_version = (
         RosterVersion.query.filter_by(org_id=org_id, week_start=week_start_obj, status="confirmed")
         .order_by(RosterVersion.id.desc())
         .first()
     )
-    current_version = draft_version or confirmed_version
+    draft_version = (
+        RosterVersion.query.filter_by(org_id=org_id, week_start=week_start_obj, status="draft")
+        .order_by(RosterVersion.id.desc())
+        .first()
+    )
+    current_version = confirmed_version or draft_version
 
     if request.method == "POST":
         staff_id = request.form.get("staff_id", "").strip()
@@ -975,10 +975,13 @@ def roster() -> str:
 
                 overlap = (
                     db.session.query(RosterAssignment.id)
+                    .join(RosterVersion, RosterVersion.id == RosterAssignment.version_id)
                     .join(ShiftTemplate, ShiftTemplate.id == RosterAssignment.shift_id)
                     .filter(
                         RosterAssignment.org_id == org_id,
                         RosterAssignment.version_id == current_version.id,
+                        RosterVersion.org_id == org_id,
+                        RosterVersion.week_start == week_start_obj,
                         ShiftTemplate.org_id == org_id,
                         RosterAssignment.staff_id == staff_id_int,
                         RosterAssignment.roster_date == selected_date,
@@ -1020,30 +1023,37 @@ def roster() -> str:
         for offset in range(7)
     ]
     week_dates = [item["date"] for item in week_columns]
-    assignments = [
-        {
-            "id": row.id,
-            "roster_date": row.roster_date,
-            "notes": row.notes,
-            "staff_name": row.staff.name,
-            "staff_role": row.staff.role,
-            "shift_name": row.shift_template.name,
-            "start_time": row.shift_template.start_time,
-            "end_time": row.shift_template.end_time,
-        }
-        for row in (
-            RosterAssignment.query.join(Staff).join(ShiftTemplate)
-            .filter(
-                RosterAssignment.org_id == org_id,
-                RosterAssignment.version_id == current_version.id if current_version else False,
-                Staff.org_id == org_id,
-                ShiftTemplate.org_id == org_id,
-                RosterAssignment.roster_date.between(week_dates[0], week_dates[-1]),
+    assignments: list[dict[str, Any]] = []
+    if current_version is not None:
+        assignments = [
+            {
+                "id": row.id,
+                "roster_date": row.roster_date,
+                "staff_id": row.staff.id,
+                "notes": row.notes,
+                "staff_name": row.staff.name,
+                "staff_role": row.staff.role,
+                "shift_name": row.shift_template.name,
+                "start_time": row.shift_template.start_time,
+                "end_time": row.shift_template.end_time,
+            }
+            for row in (
+                RosterAssignment.query.join(RosterVersion, RosterVersion.id == RosterAssignment.version_id)
+                .join(Staff)
+                .join(ShiftTemplate)
+                .filter(
+                    RosterAssignment.org_id == org_id,
+                    RosterVersion.org_id == org_id,
+                    RosterVersion.week_start == week_start_obj,
+                    RosterAssignment.version_id == current_version.id,
+                    Staff.org_id == org_id,
+                    ShiftTemplate.org_id == org_id,
+                    RosterAssignment.roster_date.between(week_dates[0], week_dates[-1]),
+                )
+                .order_by(RosterAssignment.roster_date, ShiftTemplate.start_time, Staff.name)
+                .all()
             )
-            .order_by(RosterAssignment.roster_date, ShiftTemplate.start_time, Staff.name)
-            .all()
-        )
-    ]
+        ]
 
     assignments_by_staff_and_day: dict[int, dict[str, list[dict[str, Any]]]] = {
         row.id: {day_value: [] for day_value in week_dates}
