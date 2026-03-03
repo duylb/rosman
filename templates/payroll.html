@@ -3,7 +3,7 @@
 <section class="panel">
   <h2 class="section-title">{{ t('payroll') }}</h2>
   <p class="hint">{{ t('payroll_note_confirmed_only') }}</p>
-  <form method="get" class="inline-form">
+  <form method="get" class="inline-form table-toolbar">
     <label>{{ t('start_date') }} <input type="date" name="start_date" value="{{ start_date }}" required /></label>
     <label>{{ t('end_date') }} <input type="date" name="end_date" value="{{ end_date }}" required /></label>
     <label>{{ t('department') }}
@@ -36,7 +36,7 @@
 </section>
 
 <section class="panel">
-  <table class="app-table payroll-table">
+  <table class="data-table app-table payroll-table">
     <thead>
       <tr>
         <th>{{ t('staff_name') }}</th>
@@ -94,3 +94,4 @@
   </table>
 </section>
 {% endblock %}
+

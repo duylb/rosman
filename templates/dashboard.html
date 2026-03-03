@@ -1,25 +1,66 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="cards">
-  <article class="card">
-    <h2>{{ t('today') }}</h2>
-    <p>{{ today|datefmt }}</p>
+<section class="metric-grid">
+  <article class="metric-card">
+    <div class="metric-head">
+      <h2 class="metric-title">{{ t('today') }}</h2>
+      <span class="metric-badge">◷</span>
+    </div>
+    <p class="metric-value">{{ today|datefmt }}</p>
+    <p class="metric-sub">{{ t('workspace') }}</p>
   </article>
-  <article class="card">
-    <h2>{{ t('active_staff') }}</h2>
-    <p>{{ staff_count }}</p>
+  <article class="metric-card">
+    <div class="metric-head">
+      <h2 class="metric-title">{{ t('active_staff') }}</h2>
+      <span class="metric-badge">◉</span>
+    </div>
+    <p class="metric-value">{{ staff_count }}</p>
+    <p class="metric-sub">{{ t('staff') }}</p>
   </article>
-  <article class="card">
-    <h2>{{ t('shift_templates') }}</h2>
-    <p>{{ shift_count }}</p>
+  <article class="metric-card">
+    <div class="metric-head">
+      <h2 class="metric-title">{{ t('shift_templates') }}</h2>
+      <span class="metric-badge">◌</span>
+    </div>
+    <p class="metric-value">{{ shift_count }}</p>
+    <p class="metric-sub">{{ t('nav_shifts') }}</p>
   </article>
-  <article class="card">
-    <h2>{{ t('assignments_today') }}</h2>
-    <p>{{ assignments_today }}</p>
+  <article class="metric-card">
+    <div class="metric-head">
+      <h2 class="metric-title">{{ t('assignments_today') }}</h2>
+      <span class="metric-badge">▦</span>
+    </div>
+    <p class="metric-value">{{ assignments_today }}</p>
+    <p class="metric-sub">{{ t('assignments') }}</p>
   </article>
-  <article class="card">
-    <h2>{{ t('unavailable_today') }}</h2>
-    <p>{{ unavailable_today }}</p>
+  <article class="metric-card">
+    <div class="metric-head">
+      <h2 class="metric-title">{{ t('unavailable_today') }}</h2>
+      <span class="metric-badge">◎</span>
+    </div>
+    <p class="metric-value">{{ unavailable_today }}</p>
+    <p class="metric-sub">{{ t('availability') }}</p>
   </article>
+</section>
+
+<section class="panel">
+  <h2 class="section-title">{{ t('payroll') }}</h2>
+  <div class="chart-block">
+    <div class="chart-donut"></div>
+    <div class="chart-legend">
+      <div class="chart-legend-item">
+        <span class="legend-label"><span class="legend-dot legend-dot-primary"></span>{{ t('active_staff') }}</span>
+        <strong>{{ staff_count }}</strong>
+      </div>
+      <div class="chart-legend-item">
+        <span class="legend-label"><span class="legend-dot legend-dot-pricing"></span>{{ t('assignments_today') }}</span>
+        <strong>{{ assignments_today }}</strong>
+      </div>
+      <div class="chart-legend-item">
+        <span class="legend-label"><span class="legend-dot legend-dot-closed"></span>{{ t('unavailable_today') }}</span>
+        <strong>{{ unavailable_today }}</strong>
+      </div>
+    </div>
+  </div>
 </section>
 {% endblock %}

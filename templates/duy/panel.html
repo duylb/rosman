@@ -34,7 +34,7 @@
 
 <section class="panel">
   <h2>{{ t('duy_users_title') }}</h2>
-  <table class="app-table">
+  <table class="data-table app-table">
     <thead>
       <tr>
         <th>{{ t('email') }}</th>
@@ -51,9 +51,13 @@
         <td>{{ row.email }}</td>
         <td>{{ row.org_name }}</td>
         <td>
-          <span class="meta-chip {% if row.status_key == 'status_locked' %}btn-danger-lite{% elif row.status_key == 'status_expired' %}btn-secondary{% endif %}">
-            {{ t(row.status_key) }}
-          </span>
+          {% if row.status_key == 'status_locked' %}
+          <span class="badge-status locked">{{ t(row.status_key) }}</span>
+          {% elif row.status_key == 'status_expired' %}
+          <span class="badge-status expired">{{ t(row.status_key) }}</span>
+          {% else %}
+          <span class="badge-status confirmed">{{ t(row.status_key) }}</span>
+          {% endif %}
         </td>
         <td>{{ row.expires_at|datetimefmt if row.expires_at else '-' }}</td>
         <td>{{ t('yes') if row.is_owner else t('no') }}</td>
@@ -85,3 +89,4 @@
   </table>
 </section>
 {% endblock %}
+

@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block content %}
 <section class="panel">
   <div class="roster-head">
@@ -26,10 +26,10 @@
           >
             <span>
               {% if version.status == "confirmed" %}
-                <span class="meta-chip">{{ t('confirmed') }}</span>
+                <span class="badge-status confirmed">{{ t('confirmed') }}</span>
                 <span class="hint">{{ (version.confirmed_at or version.created_at)|datefmt }}</span>
               {% else %}
-                <span class="meta-chip meta-chip-draft">{{ t('draft') }}</span>
+                <span class="badge-status draft">{{ t('draft') }}</span>
                 <span class="hint">{{ version.created_at|datefmt }}</span>
               {% endif %}
             </span>
@@ -43,13 +43,13 @@
       {% endif %}
       {% if current_version and current_version.status == "confirmed" %}
         <div>
-          <span class="meta-chip">{{ t('confirmed') }}</span>
+          <span class="badge-status confirmed">{{ t('confirmed') }}</span>
           {% if current_version.confirmed_at %}
           <div class="hint hint-top-sm">{{ t('confirmed_at') }} {{ current_version.confirmed_at|datefmt }}</div>
           {% endif %}
         </div>
       {% elif current_version and current_version.status == "draft" %}
-        <span class="meta-chip meta-chip-draft">{{ t('draft') }}</span>
+        <span class="badge-status draft">{{ t('draft') }}</span>
         <form method="post" action="{{ url_for('confirm_roster_version', version_id=current_version.id) }}" onsubmit="return confirm('{{ t('confirm_roster_prompt') }}');">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input type="hidden" name="roster_date" value="{{ selected_date }}" />
@@ -123,7 +123,7 @@
 
 <section class="panel{% if current_version and current_version.status == "draft" %} panel-draft{% endif %}">
   <h2>{{ t('roster') }}: {{ week_dates[0]|datefmt }} {{ t('to') }} {{ week_dates[-1]|datefmt }}</h2>
-  <table class="app-table roster-table">
+  <table class="data-table app-table roster-table">
     <thead>
       <tr>
         <th>{{ t('staff') }}</th>
@@ -176,3 +176,4 @@
   {% endif %}
 </section>
 {% endblock %}
+
