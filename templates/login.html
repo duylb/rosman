@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ t('login_title') }} - {{ t('brand_name') }}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   </head>
   <body>
@@ -28,14 +29,24 @@
           <input type="hidden" name="next" value="{{ next_url }}" />
           <label>{{ t('email') }} <input type="email" name="email" required autofocus /></label>
           <label>{{ t('password') }} <input type="password" name="password" required /></label>
-          <button type="submit">{{ t('btn_login') }}</button>
+          <button type="submit" class="btn-primary">{{ t('btn_login') }}</button>
         </form>
-        <form method="post" action="{{ url_for('set_language') }}" class="lang-form auth-lang-form lang-toggle">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-          <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}" />
-          <button type="submit" name="lang" value="en" class="lang-toggle-btn {{ 'active' if lang == 'en' else '' }}">EN</button>
-          <button type="submit" name="lang" value="vi" class="lang-toggle-btn {{ 'active' if lang == 'vi' else '' }}">VI</button>
-        </form>
+        <div class="auth-footer">
+          <form method="post" action="{{ url_for('set_language') }}" class="lang-form auth-lang-form lang-toggle">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}" />
+            <button type="submit" name="lang" value="en" class="lang-toggle-btn {{ 'active' if lang == 'en' else '' }}">EN</button>
+            <button type="submit" name="lang" value="vi" class="lang-toggle-btn {{ 'active' if lang == 'vi' else '' }}">VI</button>
+          </form>
+          <div class="auth-branding" aria-label="{{ t('brand_name') }}">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="{{ t('brand_name') }}" class="auth-branding-logo" width="18" height="18" />
+            <div>
+              <p class="auth-branding-title">{{ t('brand_name') }}</p>
+              <p class="auth-branding-meta">{{ t('by_author').format(author=app_author) }}</p>
+              <p class="auth-branding-meta">{{ app_version }}</p>
+            </div>
+          </div>
+        </div>
       </section>
     </main>
   </body>

@@ -9,7 +9,7 @@
     <label>{{ t('department') }} <input name="department" /></label>
     <label>{{ t('email') }} <input type="email" name="email" /></label>
     <label>{{ t('hourly_wage') }} <input type="number" name="hourly_wage" min="0" step="0.01" inputmode="decimal" /></label>
-    <button type="submit">{{ t('add') }}</button>
+    <button type="submit" class="btn-primary">{{ t('add') }}</button>
   </form>
 </section>
 
@@ -19,7 +19,7 @@
   <form method="post" action="{{ url_for('import_staff_csv') }}" enctype="multipart/form-data" class="inline-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label>{{ t('csv_file') }} <input type="file" name="csv_file" accept=".csv,text/csv" required /></label>
-    <button type="submit">{{ t('import') }}</button>
+    <button type="submit" class="btn-primary">{{ t('import') }}</button>
   </form>
 </section>
 
@@ -65,7 +65,7 @@
             </button>
             <form method="post" action="{{ url_for('toggle_staff', staff_id=row.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-              <button type="submit" class="{{ 'btn-danger-lite' if row.active else '' }}">{{ t('disable') if row.active else t('enable') }}</button>
+              <button type="submit" class="{{ 'btn-danger' if row.active else 'btn-secondary' }}">{{ t('disable') if row.active else t('enable') }}</button>
             </form>
           </div>
         </td>
@@ -86,11 +86,17 @@
       <label>{{ t('department') }} <input id="edit-department" name="department" /></label>
       <label>{{ t('email') }} <input id="edit-email" type="email" name="email" /></label>
       <label>{{ t('hourly_wage') }} <input id="edit-hourly-wage" type="number" name="hourly_wage" min="0" step="0.01" inputmode="decimal" /></label>
-      <div class="action-group">
-        <button type="submit">{{ t('save') }}</button>
-        <button type="button" class="btn-secondary js-close-modal">{{ t('cancel') }}</button>
-      </div>
     </form>
+    <div class="modal-actions">
+      <form id="staff-delete-form" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button type="submit" id="staff-delete-btn" class="btn-danger">{{ t('delete') }}</button>
+      </form>
+      <div class="action-group modal-actions-main">
+        <button type="button" class="btn-secondary js-close-modal">{{ t('cancel') }}</button>
+        <button type="submit" class="btn-primary" form="staff-edit-form">{{ t('save') }}</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -103,16 +109,20 @@
     const inputDepartment = document.getElementById("edit-department");
     const inputEmail = document.getElementById("edit-email");
     const inputHourlyWage = document.getElementById("edit-hourly-wage");
+    const deleteForm = document.getElementById("staff-delete-form");
     const wageToggleButton = document.getElementById("toggle-wages");
     const wageHeader = document.getElementById("wage-header");
     const wageCells = document.querySelectorAll(".js-wage-cell");
+    let currentStaffName = "";
     let wagesVisible = false;
 
-    if (!modal || !form || !inputName || !inputRole || !inputDepartment || !inputEmail || !inputHourlyWage) return;
+    if (!modal || !form || !inputName || !inputRole || !inputDepartment || !inputEmail || !inputHourlyWage || !deleteForm) return;
 
     const openModal = (button) => {
       const staffId = button.dataset.id;
+      currentStaffName = button.dataset.name || "";
       form.action = `/staff/${staffId}/edit`;
+      deleteForm.action = `/staff/${staffId}/delete`;
       inputName.value = button.dataset.name || "";
       inputRole.value = button.dataset.role || "";
       inputDepartment.value = button.dataset.department || "";
@@ -139,6 +149,13 @@
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !modal.classList.contains("hidden")) {
         closeModal();
+      }
+    });
+
+    deleteForm.addEventListener("submit", (event) => {
+      const confirmMessage = `Are you sure you want to delete this staff member?\n${currentStaffName || ""}`;
+      if (!window.confirm(confirmMessage)) {
+        event.preventDefault();
       }
     });
 

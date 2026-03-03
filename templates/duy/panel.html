@@ -28,7 +28,7 @@
         <option value="1">{{ t('yes') }}</option>
       </select>
     </label>
-    <button type="submit">{{ t('create_user') }}</button>
+    <button type="submit" class="btn-primary">{{ t('create_user') }}</button>
   </form>
 </section>
 
@@ -55,7 +55,7 @@
             {{ t(row.status_key) }}
           </span>
         </td>
-        <td>{{ row.expires_at.strftime('%Y-%m-%d %H:%M') if row.expires_at else '-' }}</td>
+        <td>{{ row.expires_at|datetimefmt if row.expires_at else '-' }}</td>
         <td>{{ t('yes') if row.is_owner else t('no') }}</td>
         <td>
           <div class="action-group">
@@ -70,7 +70,7 @@
             <form method="post" action="{{ url_for('duy.extend_expiration', user_id=row.id) }}" class="inline-form inline-form-compact">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
               <input type="datetime-local" name="expires_at" required />
-              <button type="submit">{{ t('extend') }}</button>
+              <button type="submit" class="btn-primary">{{ t('extend') }}</button>
             </form>
           </div>
         </td>

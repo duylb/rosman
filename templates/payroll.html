@@ -22,7 +22,7 @@
         {% endfor %}
       </select>
     </label>
-    <button type="submit">{{ t('load') }}</button>
+    <button type="submit" class="btn-primary">{{ t('load') }}</button>
     <a
       class="button-link btn-secondary"
       href="{{ url_for('payroll', start_date=start_date, end_date=end_date, department=selected_department or '', staff_id=selected_staff_id or '', export='csv') }}"
@@ -42,7 +42,7 @@
         <th>{{ t('staff_name') }}</th>
         <th>{{ t('role') }}</th>
         {% for date_key in date_columns %}
-        <th>{{ date_key|ddmm }}</th>
+        <th>{{ date_key|datefmt }}</th>
         {% endfor %}
         <th>{{ t('total_hours') }}</th>
         <th>{{ t('hourly_wage') }}</th>

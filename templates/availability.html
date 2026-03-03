@@ -21,7 +21,7 @@
       </select>
     </label>
     <label>{{ t('notes') }} <input name="notes" /></label>
-    <button type="submit">{{ t('add_entry') }}</button>
+    <button type="submit" class="btn-primary">{{ t('add_entry') }}</button>
   </form>
 </section>
 
@@ -47,7 +47,7 @@
       </select>
     </label>
     <label>{{ t('notes') }} <input name="notes" /></label>
-    <button type="submit">{{ t('add_preferences') }}</button>
+    <button type="submit" class="btn-primary">{{ t('add_preferences') }}</button>
   </form>
 </section>
 
@@ -70,12 +70,12 @@
         <td>{{ row.staff_name }}</td>
         <td>{{ row.staff_role }}</td>
         <td>{{ row.shift_name }} ({{ row.start_time }} - {{ row.end_time }})</td>
-        <td>{{ row.start_date|ddmm }} {{ t('to') }} {{ row.end_date|ddmm }}</td>
+        <td>{{ row.start_date|datefmt }} {{ t('to') }} {{ row.end_date|datefmt }}</td>
         <td>{{ row.notes or '-' }}</td>
         <td>
           <form method="post" action="{{ url_for('delete_shift_preference', preference_id=row.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <button type="submit">{{ t('remove') }}</button>
+            <button type="submit" class="btn-danger">{{ t('remove') }}</button>
           </form>
         </td>
       </tr>
@@ -107,13 +107,13 @@
       <tr>
         <td>{{ row.staff_name }}</td>
         <td>{{ row.staff_role }}</td>
-        <td>{{ row.start_date|ddmm }} {{ t('to') }} {{ row.end_date|ddmm }}</td>
+        <td>{{ row.start_date|datefmt }} {{ t('to') }} {{ row.end_date|datefmt }}</td>
         <td>{{ t(row.status) }}</td>
         <td>{{ row.notes or '-' }}</td>
         <td>
           <form method="post" action="{{ url_for('delete_availability', entry_id=row.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <button type="submit">{{ t('remove') }}</button>
+            <button type="submit" class="btn-danger">{{ t('remove') }}</button>
           </form>
         </td>
       </tr>

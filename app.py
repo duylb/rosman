@@ -55,7 +55,9 @@ if not app.config.get("SQLALCHEMY_DATABASE_URI"):
 db.init_app(app)
 csrf.init_app(app)
 migrate.init_app(app, db)
-app.jinja_env.filters["ddmm"] = lambda value: format_ddmm(value)
+app.jinja_env.filters["ddmm"] = lambda value: format_date(value, include_year=False)
+app.jinja_env.filters["datefmt"] = lambda value, include_year=True: format_date(value, include_year=include_year)
+app.jinja_env.filters["datetimefmt"] = lambda value: format_datetime(value)
 app.jinja_env.filters["money"] = lambda value: format_money(value)
 def format_money(value: Any) -> str:
     amount = Decimal(str(value or 0))
@@ -175,20 +177,46 @@ def is_user_denied(user: Any, now_utc: datetime | None = None) -> bool:
     return is_account_expired(user, now_utc=now_utc)
 
 
-def format_ddmm(value: Any) -> str:
+def format_date(value: Any, include_year: bool = True) -> str:
     if value is None:
         return ""
+    date_format = "%d/%m/%Y" if include_year else "%d/%m"
     if isinstance(value, datetime):
-        return value.strftime("%d-%m")
+        return value.strftime(date_format)
     if isinstance(value, date):
-        return value.strftime("%d-%m")
+        return value.strftime(date_format)
     if isinstance(value, str):
         raw = value.strip()
         if len(raw) >= 10 and raw[4:5] == "-" and raw[7:8] == "-":
             parsed = parse_iso_date(raw[:10])
             if parsed is not None:
-                return parsed.strftime("%d-%m")
+                return parsed.strftime(date_format)
         return value
+    return str(value)
+
+
+def format_datetime(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return f"{format_date(value.date())} {value.strftime('%H:%M')}"
+    if isinstance(value, str):
+        raw = value.strip()
+        parsed: datetime | None = None
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M"):
+            try:
+                parsed = datetime.strptime(raw, fmt)
+                break
+            except ValueError:
+                continue
+        if parsed is not None:
+            return f"{format_date(parsed.date())} {parsed.strftime('%H:%M')}"
+        parsed_date = parse_iso_date(raw[:10]) if len(raw) >= 10 else None
+        if parsed_date is not None:
+            return format_date(parsed_date)
+        return value
+    if isinstance(value, date):
+        return format_date(value)
     return str(value)
 
 
@@ -770,6 +798,22 @@ def edit_staff(staff_id: int) -> Any:
     return redirect(url_for("staff"))
 
 
+@app.post("/staff/<int:staff_id>/delete")
+@login_required
+def delete_staff(staff_id: int) -> Any:
+    row = Staff.query.get(staff_id)
+    if row is None:
+        flash(t("msg_staff_member_not_found"), "error")
+        return redirect(url_for("staff"))
+    if row.org_id != current_org_id():
+        abort(403)
+
+    db.session.delete(row)
+    db.session.commit()
+    flash(t("msg_staff_removed"), "success")
+    return redirect(url_for("staff"))
+
+
 @app.post("/staff/import")
 @login_required
 def import_staff_csv() -> Any:
@@ -1206,7 +1250,8 @@ def roster() -> str:
         for offset in range(7)
     ]
     week_dates = [item["date"] for item in week_columns]
-    week_range_label = f"{week_start_obj.strftime('%d-%m')} - {(week_start_obj + timedelta(days=6)).strftime('%d-%m')}"
+    week_end_obj = week_start_obj + timedelta(days=6)
+    week_range_label = f"From {format_date(week_start_obj)} to {format_date(week_end_obj)}"
     is_historical_view = (
         current_version is not None
         and default_version is not None
@@ -1305,7 +1350,7 @@ def auto_schedule() -> Any:
     else:
         flash(
             t("msg_auto_schedule_completed").format(
-                week_start=week_start.strftime("%d-%m"),
+                week_start=format_date(week_start),
                 added=added,
                 unfilled=unfilled,
             ),
