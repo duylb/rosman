@@ -116,7 +116,7 @@ def create_duy_blueprint(
 
         owner_exists = (
             db.session.query(User.id)
-            .filter(User.is_owner == 1)
+            .filter(User.is_owner.is_(True))
             .first()
             is not None
         )

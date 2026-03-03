@@ -349,26 +349,39 @@ def ensure_user_schema_compatibility() -> None:
     inspector = inspect(db.engine)
     if not inspector.has_table("users"):
         return
+    dialect_name = db.engine.dialect.name.lower()
+    bool_type = "BOOLEAN" if dialect_name == "postgresql" else "INTEGER"
+    bool_true = "TRUE" if dialect_name == "postgresql" else "1"
+    bool_false = "FALSE" if dialect_name == "postgresql" else "0"
+    datetime_type = "TIMESTAMP" if dialect_name == "postgresql" else "DATETIME"
+
     user_columns = {col["name"] for col in inspector.get_columns("users")}
     if "is_active" not in user_columns:
-        db.session.execute(text("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"))
+        db.session.execute(
+            text(f"ALTER TABLE users ADD COLUMN is_active {bool_type} NOT NULL DEFAULT {bool_true}")
+        )
     if "expires_at" not in user_columns:
-        db.session.execute(text("ALTER TABLE users ADD COLUMN expires_at DATETIME"))
+        db.session.execute(text(f"ALTER TABLE users ADD COLUMN expires_at {datetime_type}"))
     if "is_owner" not in user_columns:
-        db.session.execute(text("ALTER TABLE users ADD COLUMN is_owner INTEGER NOT NULL DEFAULT 0"))
+        db.session.execute(
+            text(f"ALTER TABLE users ADD COLUMN is_owner {bool_type} NOT NULL DEFAULT {bool_false}")
+        )
 
     # Keep legacy owner role semantics while introducing explicit owner flag.
-    db.session.execute(text("UPDATE users SET is_owner = 1 WHERE role = 'owner'"))
-    db.session.execute(text("UPDATE users SET is_active = 1 WHERE is_owner = 1"))
+    db.session.execute(text(f"UPDATE users SET is_owner = {bool_true} WHERE role = 'owner'"))
+    db.session.execute(text(f"UPDATE users SET is_active = {bool_true} WHERE is_owner = {bool_true}"))
 
     owner_count = db.session.execute(
-        text("SELECT COUNT(1) FROM users WHERE is_owner = 1")
+        text(f"SELECT COUNT(1) FROM users WHERE is_owner = {bool_true}")
     ).scalar_one()
     if int(owner_count or 0) == 0:
         first_user_id = db.session.execute(text("SELECT id FROM users ORDER BY id ASC LIMIT 1")).scalar_one_or_none()
         if first_user_id is not None:
             db.session.execute(
-                text("UPDATE users SET is_owner = 1, is_active = 1 WHERE id = :user_id"),
+                text(
+                    f"UPDATE users SET is_owner = {bool_true}, is_active = {bool_true} "
+                    "WHERE id = :user_id"
+                ),
                 {"user_id": int(first_user_id)},
             )
     db.session.commit()
