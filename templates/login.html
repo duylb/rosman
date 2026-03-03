@@ -3,21 +3,21 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ t('login_title') }} - RosMan</title>
+    <title>{{ t('login_title') }} - {{ t('brand_name') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   </head>
   <body>
     <main class="auth-wrap">
       <section class="auth-card">
-        <p class="eyebrow">RosMan</p>
+        <p class="eyebrow">{{ t('brand_name') }}</p>
         <h1>{{ t('login_title') }}</h1>
         <p class="hint">{{ t('login_hint') }}</p>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
           {% if messages %}
             <ul class="alerts">
-              {% for category, msg in messages %}
-                <li class="{{ category }}">{{ msg }}</li>
+                {% for category, msg in messages %}
+                <li class="{{ category }}">{{ t(msg) }}</li>
               {% endfor %}
             </ul>
           {% endif %}
@@ -30,11 +30,11 @@
           <label>{{ t('password') }} <input type="password" name="password" required /></label>
           <button type="submit">{{ t('btn_login') }}</button>
         </form>
-        <form method="post" action="{{ url_for('set_language') }}" class="lang-form auth-lang-form">
+        <form method="post" action="{{ url_for('set_language') }}" class="lang-form auth-lang-form" style="display:flex;gap:0.4rem;">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}" />
-          <input type="hidden" name="lang" value="{{ 'vi' if lang == 'en' else 'en' }}" />
-          <button type="submit">{{ t('lang_toggle') }}</button>
+          <button type="submit" name="lang" value="en" class="{{ '' if lang == 'en' else 'btn-secondary' }}">EN</button>
+          <button type="submit" name="lang" value="vi" class="{{ '' if lang == 'vi' else 'btn-secondary' }}">VI</button>
         </form>
       </section>
     </main>

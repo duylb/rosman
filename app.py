@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import DevelopmentConfig, ProductionConfig
+from utils.i18n import get_lang, set_lang, t
 
 BASE_DIR = Path(__file__).resolve().parent
 EXTENSIONS_FILE = BASE_DIR / "app" / "extensions.py"
@@ -55,231 +56,6 @@ csrf.init_app(app)
 migrate.init_app(app, db)
 app.jinja_env.filters["ddmm"] = lambda value: format_ddmm(value)
 app.jinja_env.filters["money"] = lambda value: format_money(value)
-SUPPORTED_LANGS = {"en", "vi"}
-TRANSLATIONS: dict[str, dict[str, str]] = {
-    "en": {
-        "app_title": "RosMan - Rostering Management",
-        "brand_sub": "Rostering Management",
-        "nav_dashboard": "Dashboard",
-        "nav_staff": "Staff",
-        "nav_shifts": "Shifts",
-        "nav_availability": "Availability",
-        "nav_roster": "Roster",
-        "nav_payroll": "Payroll",
-        "nav_data_io": "Data I/O",
-        "logout": "Logout",
-        "workspace": "Workspace",
-        "page_dashboard": "Dashboard",
-        "page_staff": "Staff",
-        "page_shifts": "Shifts",
-        "page_availability": "Availability",
-        "page_roster": "Roster",
-        "page_payroll": "Payroll",
-        "page_data": "Data Import / Export",
-        "lang_toggle": "Tiếng Việt",
-        "login_title": "Login",
-        "login_hint": "Enter your credentials to access the roster management app.",
-        "username": "Username",
-        "password": "Password",
-        "btn_login": "Login",
-        "today": "Today",
-        "active_staff": "Active Staff",
-        "shift_templates": "Shift Templates",
-        "assignments_today": "Assignments Today",
-        "unavailable_today": "Unavailable Today",
-        "add_staff": "Add Staff",
-        "name": "Name",
-        "role": "Role",
-        "email": "Email",
-        "add": "Add",
-        "import_staff_csv": "Import Staff CSV",
-        "import_staff_hint": "Format: skip header, column A = staff name, B = role, C = email.",
-        "csv_file": "CSV File",
-        "import": "Import",
-        "staff_list": "Staff List",
-        "status": "Status",
-        "action": "Action",
-        "active": "Active",
-        "inactive": "Inactive",
-        "edit": "Edit",
-        "disable": "Disable",
-        "enable": "Enable",
-        "edit_staff": "Edit Staff",
-        "save": "Save",
-        "cancel": "Cancel",
-        "add_shift_template": "Add Shift Template",
-        "shift_name": "Shift Name",
-        "start_time": "Start Time",
-        "end_time": "End Time",
-        "required_staff": "Required Staff",
-        "time": "Time",
-        "add_leave_availability": "Add Leave / Availability",
-        "staff": "Staff",
-        "select_staff": "Select staff",
-        "start_date": "Start Date",
-        "end_date": "End Date",
-        "leave": "Leave",
-        "unavailable": "Unavailable",
-        "notes": "Notes",
-        "add_entry": "Add Entry",
-        "add_preferred_shifts": "Add Preferred Shifts (Date Range)",
-        "preferred_shifts_multi": "Preferred Shifts (hold Ctrl/Cmd to select multiple)",
-        "add_preferences": "Add Preferences",
-        "preferred_shift_entries": "Preferred Shift Entries",
-        "preferred_shift": "Preferred Shift",
-        "date_range": "Date Range",
-        "remove": "Remove",
-        "no_shift_preferences": "No shift preferences yet.",
-        "availability_entries": "Availability Entries",
-        "no_availability_entries": "No availability entries yet.",
-        "to": "to",
-        "roster": "Roster",
-        "date": "Date",
-        "load": "Load",
-        "shift": "Shift",
-        "select_shift": "Select shift",
-        "assign": "Assign",
-        "weekly_auto_scheduling": "Weekly Auto-Scheduling",
-        "week_start_monday": "Week Start (Monday)",
-        "generate_week": "Generate Week",
-        "auto_schedule_rule": "Rule: fills each shift's required headcount using active staff, prioritizes preferred shifts for that date, skips leave/unavailable entries, then balances by least assignments.",
-        "assignments_for": "Assignments for",
-        "no_assignments_for_date": "No assignments for this date.",
-        "csv_export": "CSV Export",
-        "export_one_dataset": "Export one dataset at a time.",
-        "export_staff": "Export Staff",
-        "export_shifts": "Export Shifts",
-        "export_roster": "Export Roster",
-        "export_availability": "Export Availability",
-        "csv_import": "CSV Import",
-        "import_headers_hint": "Required headers depend on dataset. Keep date format as YYYY-MM-DD.",
-        "dataset": "Dataset",
-        "assignments": "Assignments",
-        "availability": "Availability",
-        "mode": "Mode",
-        "append_mode": "Append to existing data",
-        "replace_mode": "Replace existing dataset",
-        "import_csv": "Import CSV",
-        "show_wages": "Show Wages",
-        "hourly_wage": "Hourly Wage",
-        "invalid_login": "Invalid username or password.",
-    },
-    "vi": {
-        "app_title": "RosMan - Quản Lý Phân Ca",
-        "brand_sub": "Quản Lý Phân Ca",
-        "nav_dashboard": "Bảng Điều Khiển",
-        "nav_staff": "Nhân Sự",
-        "nav_shifts": "Ca Làm",
-        "nav_availability": "Lịch Trực",
-        "nav_roster": "Lịch Phân Ca",
-        "nav_data_io": "Nhập/Xuất Dữ Liệu",
-        "logout": "Đăng Xuất",
-        "workspace": "Không Gian Làm Việc",
-        "page_dashboard": "Bảng Điều Khiển",
-        "page_staff": "Nhân Sự",
-        "page_shifts": "Ca Làm",
-        "page_availability": "Lịch Trực",
-        "page_roster": "Lịch Phân Ca",
-        "page_data": "Nhập / Xuất Dữ Liệu",
-        "lang_toggle": "English",
-        "login_title": "Đăng Nhập",
-        "login_hint": "Nhập thông tin đăng nhập để truy cập ứng dụng quản lý phân ca.",
-        "username": "Tên Đăng Nhập",
-        "password": "Mật Khẩu",
-        "btn_login": "Đăng Nhập",
-        "today": "Hôm Nay",
-        "active_staff": "Nhân Sự Đang Hoạt Động",
-        "shift_templates": "Mẫu Ca",
-        "assignments_today": "Phân Ca Hôm Nay",
-        "unavailable_today": "Không Sẵn Sàng Hôm Nay",
-        "add_staff": "Thêm Nhân Sự",
-        "name": "Tên",
-        "role": "Vai Trò",
-        "email": "Email",
-        "add": "Thêm",
-        "import_staff_csv": "Nhập CSV Nhân Sự",
-        "import_staff_hint": "Định dạng: bỏ qua header, cột A = tên, B = vai trò, C = email.",
-        "csv_file": "Tệp CSV",
-        "import": "Nhập",
-        "staff_list": "Danh Sách Nhân Sự",
-        "status": "Trạng Thái",
-        "action": "Thao Tác",
-        "active": "Hoạt Động",
-        "inactive": "Ngừng Hoạt Động",
-        "edit": "Sửa",
-        "disable": "Tắt",
-        "enable": "Bật",
-        "edit_staff": "Sửa Nhân Sự",
-        "save": "Lưu",
-        "cancel": "Hủy",
-        "add_shift_template": "Thêm Mẫu Ca",
-        "shift_name": "Tên Ca",
-        "start_time": "Giờ Bắt Đầu",
-        "end_time": "Giờ Kết Thúc",
-        "required_staff": "Số Nhân Sự Cần",
-        "time": "Thời Gian",
-        "add_leave_availability": "Thêm Nghỉ / Khả Năng Làm Việc",
-        "staff": "Nhân Sự",
-        "select_staff": "Chọn nhân sự",
-        "start_date": "Ngày Bắt Đầu",
-        "end_date": "Ngày Kết Thúc",
-        "leave": "Nghỉ",
-        "unavailable": "Không Sẵn Sàng",
-        "notes": "Ghi Chú",
-        "add_entry": "Thêm",
-        "add_preferred_shifts": "Thêm Ca Ưu Tiên (Theo Khoảng Ngày)",
-        "preferred_shifts_multi": "Ca Ưu Tiên (giữ Ctrl/Cmd để chọn nhiều)",
-        "add_preferences": "Thêm Ưu Tiên",
-        "preferred_shift_entries": "Danh Sách Ca Ưu Tiên",
-        "preferred_shift": "Ca Ưu Tiên",
-        "date_range": "Khoảng Ngày",
-        "remove": "Xóa",
-        "no_shift_preferences": "Chưa có ca ưu tiên.",
-        "availability_entries": "Danh Sách Khả Năng Làm Việc",
-        "no_availability_entries": "Chưa có dữ liệu khả năng làm việc.",
-        "to": "đến",
-        "roster": "Lịch Phân Ca",
-        "date": "Ngày",
-        "load": "Tải",
-        "shift": "Ca",
-        "select_shift": "Chọn ca",
-        "assign": "Phân Ca",
-        "weekly_auto_scheduling": "Tự Động Phân Ca Theo Tuần",
-        "week_start_monday": "Ngày Bắt Đầu Tuần (Thứ Hai)",
-        "generate_week": "Tạo Lịch Tuần",
-        "auto_schedule_rule": "Quy tắc: điền đủ số lượng cho mỗi ca bằng nhân sự đang hoạt động, ưu tiên ca mong muốn theo ngày, bỏ qua nhân sự nghỉ/không sẵn sàng, sau đó cân bằng theo số ca thấp nhất.",
-        "assignments_for": "Phân Ca Cho",
-        "no_assignments_for_date": "Không có phân ca cho ngày này.",
-        "csv_export": "Xuất CSV",
-        "export_one_dataset": "Xuất từng bộ dữ liệu một.",
-        "export_staff": "Xuất Nhân Sự",
-        "export_shifts": "Xuất Ca Làm",
-        "export_roster": "Xuất Lịch Phân Ca",
-        "export_availability": "Xuất Khả Năng Làm Việc",
-        "csv_import": "Nhập CSV",
-        "import_headers_hint": "Header bắt buộc tùy theo bộ dữ liệu. Giữ định dạng ngày YYYY-MM-DD.",
-        "dataset": "Bộ Dữ Liệu",
-        "assignments": "Phân Ca",
-        "availability": "Khả Năng Làm Việc",
-        "mode": "Chế Độ",
-        "append_mode": "Thêm vào dữ liệu hiện có",
-        "replace_mode": "Thay thế toàn bộ bộ dữ liệu",
-        "import_csv": "Nhập CSV",
-        "invalid_login": "Sai tên đăng nhập hoặc mật khẩu.",
-    },
-}
-
-
-def get_lang() -> str:
-    lang = session.get("lang", "en")
-    return lang if lang in SUPPORTED_LANGS else "en"
-
-
-def t(key: str) -> str:
-    lang = get_lang()
-    return TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)
-
-
 def format_money(value: Any) -> str:
     amount = Decimal(str(value or 0))
     return f"{amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP):.2f}"
@@ -543,19 +319,17 @@ def login() -> str | Any:
                 next_url = url_for("dashboard")
             return redirect(next_url or url_for("dashboard"))
 
-        flash(t("invalid_login"), "error")
+        flash("invalid_login", "error")
 
     return render_template("login.html", next_url=next_url)
 
 
 @app.post("/set-language")
-@login_required
 def set_language() -> Any:
     lang = request.form.get("lang", "en").strip().lower()
-    if lang in SUPPORTED_LANGS:
-        session["lang"] = lang
+    set_lang(lang)
     next_url = request.form.get("next", "").strip()
-    if not next_url.startswith("/"):
+    if not next_url.startswith("/") or next_url.startswith("//"):
         next_url = request.referrer or url_for("dashboard")
     return redirect(next_url)
 
@@ -819,9 +593,9 @@ def staff() -> str:
         hourly_wage = parse_non_negative_decimal(hourly_wage_raw)
 
         if not name or not role:
-            flash("Name and role are required.", "error")
+            flash(t("msg_name_role_required"), "error")
         elif hourly_wage_raw and hourly_wage is None:
-            flash("Hourly wage must be a non-negative number.", "error")
+            flash(t("msg_hourly_wage_non_negative"), "error")
         else:
             db.session.add(
                 Staff(
@@ -834,7 +608,7 @@ def staff() -> str:
                 )
             )
             db.session.commit()
-            flash("Staff member added.", "success")
+            flash(t("msg_staff_member_added"), "success")
             return redirect(url_for("staff"))
 
     rows = Staff.query.filter_by(org_id=org_id).order_by(Staff.active.desc(), Staff.name).all()
@@ -846,11 +620,11 @@ def staff() -> str:
 def toggle_staff(staff_id: int) -> Any:
     row = Staff.query.filter_by(id=staff_id, org_id=current_org_id()).first()
     if row is None:
-        flash("Staff member not found.", "error")
+        flash(t("msg_staff_member_not_found"), "error")
     else:
         row.active = 0 if row.active else 1
         db.session.commit()
-        flash("Staff status updated.", "success")
+        flash(t("msg_staff_status_updated"), "success")
     return redirect(url_for("staff"))
 
 
@@ -859,7 +633,7 @@ def toggle_staff(staff_id: int) -> Any:
 def edit_staff(staff_id: int) -> Any:
     row = Staff.query.filter_by(id=staff_id, org_id=current_org_id()).first()
     if row is None:
-        flash("Staff member not found.", "error")
+        flash(t("msg_staff_member_not_found"), "error")
         return redirect(url_for("staff"))
 
     name = request.form.get("name", "").strip()
@@ -870,10 +644,10 @@ def edit_staff(staff_id: int) -> Any:
     hourly_wage = parse_non_negative_decimal(hourly_wage_raw)
 
     if not name or not role:
-        flash("Name and role are required.", "error")
+        flash(t("msg_name_role_required"), "error")
         return redirect(url_for("staff"))
     if hourly_wage_raw and hourly_wage is None:
-        flash("Hourly wage must be a non-negative number.", "error")
+        flash(t("msg_hourly_wage_non_negative"), "error")
         return redirect(url_for("staff"))
 
     row.name = name
@@ -882,7 +656,7 @@ def edit_staff(staff_id: int) -> Any:
     row.department = department or None
     row.hourly_wage = hourly_wage
     db.session.commit()
-    flash("Staff information updated.", "success")
+    flash(t("msg_staff_info_updated"), "success")
     return redirect(url_for("staff"))
 
 
@@ -893,19 +667,19 @@ def import_staff_csv() -> Any:
     file_obj = request.files.get("csv_file")
 
     if not file_obj or not file_obj.filename:
-        flash("Choose a CSV file to import.", "error")
+        flash(t("msg_choose_csv_file"), "error")
         return redirect(url_for("staff"))
 
     try:
         content = file_obj.stream.read().decode("utf-8-sig")
     except UnicodeDecodeError:
-        flash("CSV must be UTF-8 encoded.", "error")
+        flash(t("msg_csv_utf8_required"), "error")
         return redirect(url_for("staff"))
 
     reader = csv.reader(io.StringIO(content))
     rows = list(reader)
     if len(rows) <= 1:
-        flash("CSV must include a header row and at least one staff row.", "error")
+        flash(t("msg_csv_staff_header_required"), "error")
         return redirect(url_for("staff"))
 
     added = 0
@@ -924,7 +698,7 @@ def import_staff_csv() -> Any:
         added += 1
 
     db.session.commit()
-    flash(f"Staff import finished: {added} rows added, {skipped} rows skipped.", "success")
+    flash(t("msg_staff_import_finished").format(added=added, skipped=skipped), "success")
     return redirect(url_for("staff"))
 
 
@@ -944,7 +718,7 @@ def shifts() -> str:
             required_staff = 1
 
         if not name or not start_time or not end_time:
-            flash("Name, start time, and end time are required.", "error")
+            flash(t("msg_shift_required_fields"), "error")
         else:
             try:
                 db.session.add(
@@ -957,11 +731,11 @@ def shifts() -> str:
                     )
                 )
                 db.session.commit()
-                flash("Shift template added.", "success")
+                flash(t("msg_shift_template_added"), "success")
                 return redirect(url_for("shifts"))
             except IntegrityError:
                 db.session.rollback()
-                flash("Shift name must be unique.", "error")
+                flash(t("msg_shift_name_unique"), "error")
 
     rows = ShiftTemplate.query.filter_by(org_id=org_id).order_by(ShiftTemplate.start_time).all()
     return render_template("shifts.html", shifts=rows)
@@ -984,21 +758,21 @@ def availability() -> str:
         end_obj = parse_iso_date(end_date)
 
         if not staff_id or not start_obj or not end_obj:
-            flash("Staff, start date, and end date are required.", "error")
+            flash(t("msg_availability_required_fields"), "error")
         elif end_obj < start_obj:
-            flash("End date must be on or after start date.", "error")
+            flash(t("msg_end_date_on_or_after_start"), "error")
         elif status not in {"leave", "unavailable"}:
-            flash("Invalid availability status.", "error")
+            flash(t("msg_invalid_availability_status"), "error")
         else:
             try:
                 staff_id_int = int(staff_id)
             except ValueError:
-                flash("Invalid staff.", "error")
+                flash(t("msg_invalid_staff"), "error")
                 return redirect(url_for("availability"))
 
             staff = Staff.query.filter_by(id=staff_id_int, org_id=org_id).first()
             if staff is None:
-                flash("Staff member not found.", "error")
+                flash(t("msg_staff_member_not_found"), "error")
                 return redirect(url_for("availability"))
             db.session.add(
                 StaffAvailability(
@@ -1011,7 +785,7 @@ def availability() -> str:
                 )
             )
             db.session.commit()
-            flash("Availability entry added.", "success")
+            flash(t("msg_availability_entry_added"), "success")
             return redirect(url_for("availability"))
 
     staff_rows = Staff.query.filter_by(org_id=org_id).order_by(Staff.name).all()
@@ -1095,7 +869,7 @@ def delete_availability(entry_id: int) -> Any:
     if entry is not None:
         db.session.delete(entry)
         db.session.commit()
-    flash("Availability entry removed.", "success")
+    flash(t("msg_availability_entry_removed"), "success")
     return redirect(url_for("availability"))
 
 
@@ -1113,25 +887,25 @@ def add_shift_preference() -> Any:
     end_obj = parse_iso_date(end_date)
 
     if not staff_id or not start_obj or not end_obj:
-        flash("Staff, start date, and end date are required for shift preferences.", "error")
+        flash(t("msg_shift_pref_required_fields"), "error")
         return redirect(url_for("availability"))
     if end_obj < start_obj:
-        flash("Preference end date must be on or after start date.", "error")
+        flash(t("msg_shift_pref_end_date_on_or_after_start"), "error")
         return redirect(url_for("availability"))
     if not shift_ids:
-        flash("Select at least one preferred shift.", "error")
+        flash(t("msg_select_preferred_shift"), "error")
         return redirect(url_for("availability"))
 
     added = 0
     try:
         staff_id_int = int(staff_id)
     except ValueError:
-        flash("Invalid staff.", "error")
+        flash(t("msg_invalid_staff"), "error")
         return redirect(url_for("availability"))
 
     staff = Staff.query.filter_by(id=staff_id_int, org_id=org_id).first()
     if staff is None:
-        flash("Staff member not found.", "error")
+        flash(t("msg_staff_member_not_found"), "error")
         return redirect(url_for("availability"))
 
     for shift_id_raw in shift_ids:
@@ -1154,7 +928,7 @@ def add_shift_preference() -> Any:
         )
         added += 1
     db.session.commit()
-    flash(f"Added {added} preferred shift entries.", "success")
+    flash(t("msg_added_preferred_shift_entries").format(count=added), "success")
     return redirect(url_for("availability"))
 
 
@@ -1167,7 +941,7 @@ def delete_shift_preference(preference_id: int) -> Any:
     if preference is not None:
         db.session.delete(preference)
         db.session.commit()
-    flash("Shift preference removed.", "success")
+    flash(t("msg_shift_preference_removed"), "success")
     return redirect(url_for("availability"))
 
 
@@ -1217,7 +991,7 @@ def roster() -> str:
             and current_version is not None
             and current_version.status == "confirmed"
         ):
-            flash("Confirmed versions are read-only. Switch to a draft version to edit.", "error")
+            flash(t("msg_confirmed_read_only"), "error")
             return redirect(
                 url_for(
                     "roster",
@@ -1231,23 +1005,23 @@ def roster() -> str:
         notes = request.form.get("notes", "").strip()
 
         if not staff_id or not shift_id:
-            flash("Staff and shift are required.", "error")
+            flash(t("msg_staff_shift_required"), "error")
         else:
             try:
                 staff_id_int = int(staff_id)
                 shift_id_int = int(shift_id)
             except ValueError:
-                flash("Invalid staff or shift.", "error")
+                flash(t("msg_invalid_staff_or_shift"), "error")
                 return redirect(url_for("roster", roster_date=selected_date))
 
             target_shift = ShiftTemplate.query.filter_by(id=shift_id_int, org_id=org_id).first()
             if target_shift is None:
-                flash("Shift not found.", "error")
+                flash(t("msg_shift_not_found"), "error")
                 return redirect(url_for("roster", roster_date=selected_date))
 
             staff_member = Staff.query.filter_by(id=staff_id_int, org_id=org_id, active=1).first()
             if staff_member is None:
-                flash("Staff member not found.", "error")
+                flash(t("msg_staff_member_not_found"), "error")
                 return redirect(url_for("roster", roster_date=selected_date))
 
             blocked = (
@@ -1261,7 +1035,7 @@ def roster() -> str:
                 is not None
             )
             if blocked:
-                flash("Staff member is unavailable on this date.", "error")
+                flash(t("msg_staff_unavailable_on_date"), "error")
             else:
                 if current_version is None or current_version.status != "draft":
                     current_version = RosterVersion(
@@ -1290,7 +1064,7 @@ def roster() -> str:
                     .first()
                 )
                 if overlap:
-                    flash("Shift overlaps with an existing assignment for this staff on this date.", "error")
+                    flash(t("msg_shift_overlap"), "error")
                     return redirect(url_for("roster", roster_date=selected_date))
 
                 try:
@@ -1305,11 +1079,11 @@ def roster() -> str:
                         )
                     )
                     db.session.commit()
-                    flash("Assignment added.", "success")
+                    flash(t("msg_assignment_added"), "success")
                     return redirect(url_for("roster", roster_date=selected_date))
                 except IntegrityError:
                     db.session.rollback()
-                    flash("This staff member already has this shift on this date.", "error")
+                    flash(t("msg_assignment_duplicate"), "error")
 
     staff_rows = Staff.query.filter_by(org_id=org_id, active=1).order_by(Staff.name).all()
     shift_rows = ShiftTemplate.query.filter_by(org_id=org_id).order_by(ShiftTemplate.start_time).all()
@@ -1317,7 +1091,7 @@ def roster() -> str:
     week_columns = [
         {
             "date": (week_start_obj + timedelta(days=offset)).isoformat(),
-            "weekday": (week_start_obj + timedelta(days=offset)).strftime("%A"),
+            "weekday": t(f"weekday_{(week_start_obj + timedelta(days=offset)).weekday()}"),
         }
         for offset in range(7)
     ]
@@ -1407,20 +1181,24 @@ def auto_schedule() -> Any:
     week_start_raw = request.form.get("week_start", "")
     week_start = parse_iso_date(week_start_raw)
     if week_start is None:
-        flash("Invalid week start date.", "error")
+        flash(t("msg_invalid_week_start_date"), "error")
         return redirect(url_for("roster"))
 
     try:
         added, unfilled, ran = auto_schedule_week(week_start)
     except IntegrityError:
         db.session.rollback()
-        flash("Auto-schedule failed due duplicate roster assignments for this week.", "error")
+        flash(t("msg_auto_schedule_duplicate"), "error")
         return redirect(url_for("roster", roster_date=week_start.isoformat()))
     if ran == 0:
-        flash("Need at least one active staff and one shift template before auto-scheduling.", "error")
+        flash(t("msg_auto_schedule_requirements"), "error")
     else:
         flash(
-            f"Auto-schedule completed for week of {week_start.strftime('%d-%m')}: added {added} assignments, {unfilled} slots unfilled.",
+            t("msg_auto_schedule_completed").format(
+                week_start=week_start.strftime("%d-%m"),
+                added=added,
+                unfilled=unfilled,
+            ),
             "success",
         )
     return redirect(url_for("roster", roster_date=week_start.isoformat()))
@@ -1439,7 +1217,7 @@ def confirm_roster_version(version_id: int) -> Any:
         if version is None:
             if request.is_json or request.args.get("format") == "json":
                 return jsonify({"error": "Roster version not found."}), 404
-            flash("Roster version not found.", "error")
+            flash(t("msg_roster_version_not_found"), "error")
             return redirect(url_for("roster", roster_date=roster_date or date.today().isoformat()))
 
         other_confirmed_versions = (
@@ -1471,14 +1249,14 @@ def confirm_roster_version(version_id: int) -> Any:
         if request.is_json or request.args.get("format") == "json":
             return jsonify(payload), 200
 
-        flash("Roster confirmed.", "success")
+        flash(t("msg_roster_confirmed"), "success")
         target_date = roster_date or version.week_start.isoformat()
         return redirect(url_for("roster", roster_date=target_date))
     except IntegrityError:
         db.session.rollback()
         if request.is_json or request.args.get("format") == "json":
             return jsonify({"error": "Unable to confirm roster version."}), 409
-        flash("Unable to confirm roster version.", "error")
+        flash(t("msg_roster_confirm_failed"), "error")
         return redirect(url_for("roster", roster_date=roster_date or date.today().isoformat()))
 
 
@@ -1530,7 +1308,7 @@ def delete_assignment(assignment_id: int) -> Any:
     target_date = roster_date or assignment.version.week_start.isoformat()
     db.session.delete(assignment)
     db.session.commit()
-    flash("Assignment removed.", "success")
+    flash(t("msg_assignment_removed"), "success")
     return redirect(url_for("roster", roster_date=target_date))
 
 
@@ -1547,10 +1325,10 @@ def payroll() -> str | Response:
     start_obj = parse_iso_date(start_raw) if start_raw else default_start_obj
     end_obj = parse_iso_date(end_raw) if end_raw else default_end_obj
     if start_obj is None or end_obj is None:
-        flash("Invalid payroll date range.", "error")
+        flash(t("msg_invalid_payroll_date_range"), "error")
         start_obj, end_obj = default_start_obj, default_end_obj
     if end_obj < start_obj:
-        flash("End date must be on or after start date.", "error")
+        flash(t("msg_end_date_on_or_after_start"), "error")
         end_obj = start_obj
 
     start_date = start_obj.isoformat()
@@ -1563,7 +1341,7 @@ def payroll() -> str | Response:
         try:
             selected_staff_id = int(selected_staff_raw)
         except ValueError:
-            flash("Invalid staff filter.", "error")
+            flash(t("msg_invalid_staff_filter"), "error")
 
     department_rows = (
         db.session.query(Staff.department)
@@ -1579,7 +1357,7 @@ def payroll() -> str | Response:
     departments = [str(row.department) for row in department_rows if row.department]
     selected_department = request.args.get("department", "").strip()
     if selected_department and selected_department not in departments:
-        flash("Invalid department filter.", "error")
+        flash(t("msg_invalid_department_filter"), "error")
         selected_department = ""
 
     staff_options_query = Staff.query.filter(Staff.org_id == org_id)
@@ -1733,7 +1511,7 @@ def export_dataset(dataset: str) -> Response:
         end_date_raw = request.args.get("end_date", "").strip()
         version_type = (request.args.get("version_type", "confirmed") or "confirmed").strip().lower()
         if version_type not in {"confirmed", "draft"}:
-            flash("Invalid version type for roster export.", "error")
+            flash(t("msg_invalid_roster_export_version_type"), "error")
             return redirect(url_for("data_page"))
 
         if start_date_raw and end_date_raw:
@@ -1746,10 +1524,10 @@ def export_dataset(dataset: str) -> Response:
             end_date_raw = end_obj.isoformat()
 
         if not start_obj or not end_obj:
-            flash("Invalid export date range.", "error")
+            flash(t("msg_invalid_export_date_range"), "error")
             return redirect(url_for("data_page"))
         if end_obj < start_obj:
-            flash("End date must be on or after start date.", "error")
+            flash(t("msg_end_date_on_or_after_start"), "error")
             return redirect(url_for("data_page"))
 
         status_filter = ["confirmed"] if version_type == "confirmed" else ["draft"]
@@ -1876,10 +1654,10 @@ def export_dataset(dataset: str) -> Response:
             start_obj = monday_for(date.today())
             end_obj = start_obj + timedelta(days=6)
         if not start_obj or not end_obj:
-            flash("Invalid export date range.", "error")
+            flash(t("msg_invalid_export_date_range"), "error")
             return redirect(url_for("data_page"))
         if end_obj < start_obj:
-            flash("End date must be on or after start date.", "error")
+            flash(t("msg_end_date_on_or_after_start"), "error")
             return redirect(url_for("data_page"))
 
         rows = [
@@ -1917,7 +1695,7 @@ def export_dataset(dataset: str) -> Response:
             rows,
         )
 
-    flash("Unknown dataset.", "error")
+    flash(t("msg_unknown_dataset"), "error")
     return redirect(url_for("data_page"))
 
 
@@ -1931,20 +1709,20 @@ def import_dataset() -> Any:
     file_obj = request.files.get("csv_file")
 
     if not file_obj or not file_obj.filename:
-        flash("Choose a CSV file to import.", "error")
+        flash(t("msg_choose_csv_file"), "error")
         return redirect(url_for("data_page"))
 
     try:
         content = file_obj.stream.read().decode("utf-8-sig")
     except UnicodeDecodeError:
-        flash("CSV must be UTF-8 encoded.", "error")
+        flash(t("msg_csv_utf8_required"), "error")
         return redirect(url_for("data_page"))
 
     reader = csv.DictReader(io.StringIO(content))
     rows = list(reader)
 
     if not rows:
-        flash("CSV file has no data rows.", "error")
+        flash(t("msg_csv_no_data_rows"), "error")
         return redirect(url_for("data_page"))
 
     try:
@@ -2125,14 +1903,14 @@ def import_dataset() -> Any:
                     skipped += 1
 
         else:
-            flash("Unknown dataset.", "error")
+            flash(t("msg_unknown_dataset"), "error")
             return redirect(url_for("data_page"))
 
         db.session.commit()
-        flash(f"Import finished: {added} rows added, {skipped} rows skipped.", "success")
+        flash(t("msg_import_finished").format(added=added, skipped=skipped), "success")
     except IntegrityError:
         db.session.rollback()
-        flash("Import failed because rows reference missing records or duplicate unique fields.", "error")
+        flash(t("msg_import_failed_reference_or_duplicate"), "error")
 
     if dataset == "assignments" and roster_redirect_date:
         return redirect(url_for("roster", roster_date=roster_redirect_date))
@@ -2192,3 +1970,6 @@ with app.app_context():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
+

@@ -12,7 +12,7 @@
         <div class="brand">
           <span class="brand-badge">RM</span>
           <div>
-            <p class="brand-name">RosMan</p>
+            <p class="brand-name">{{ t('brand_name') }}</p>
             <p class="brand-sub">{{ t('brand_sub') }}</p>
           </div>
         </div>
@@ -22,15 +22,15 @@
           <a class="{{ 'active' if request.path.startswith('/shifts') else '' }}" href="{{ url_for('shifts') }}">{{ t('nav_shifts') }}</a>
           <a class="{{ 'active' if request.path.startswith('/availability') else '' }}" href="{{ url_for('availability') }}">{{ t('nav_availability') }}</a>
           <a class="{{ 'active' if request.path.startswith('/roster') else '' }}" href="{{ url_for('roster') }}">{{ t('nav_roster') }}</a>
-          <a class="{{ 'active' if request.path.startswith('/payroll') else '' }}" href="{{ url_for('payroll') }}">Payroll</a>
+          <a class="{{ 'active' if request.path.startswith('/payroll') else '' }}" href="{{ url_for('payroll') }}">{{ t('nav_payroll') }}</a>
           <a class="{{ 'active' if request.path.startswith('/data') else '' }}" href="{{ url_for('data_page') }}">{{ t('nav_data_io') }}</a>
         </nav>
         <div class="sidebar-footer">
-          <form method="post" action="{{ url_for('set_language') }}" class="lang-form">
+          <form method="post" action="{{ url_for('set_language') }}" class="lang-form" style="display:flex;gap:0.4rem;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}" />
-            <input type="hidden" name="lang" value="{{ 'vi' if lang == 'en' else 'en' }}" />
-            <button type="submit">{{ t('lang_toggle') }}</button>
+            <button type="submit" name="lang" value="en" class="{{ '' if lang == 'en' else 'btn-secondary' }}" style="min-height:30px;padding:0.25rem 0.55rem;">EN</button>
+            <button type="submit" name="lang" value="vi" class="{{ '' if lang == 'vi' else 'btn-secondary' }}" style="min-height:30px;padding:0.25rem 0.55rem;">VI</button>
           </form>
           <form method="post" action="{{ url_for('logout') }}" class="logout-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -50,7 +50,7 @@
         {% elif request.path.startswith('/roster') %}
           {% set page_name = t('page_roster') %}
         {% elif request.path.startswith('/payroll') %}
-          {% set page_name = 'Payroll' %}
+          {% set page_name = t('page_payroll') %}
         {% elif request.path.startswith('/data') %}
           {% set page_name = t('page_data') %}
         {% endif %}
@@ -66,7 +66,7 @@
             {% if messages %}
               <ul class="alerts">
                 {% for category, msg in messages %}
-                  <li class="{{ category }}">{{ msg }}</li>
+                  <li class="{{ category }}">{{ t(msg) }}</li>
                 {% endfor %}
               </ul>
             {% endif %}

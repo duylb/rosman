@@ -1,37 +1,37 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel">
-  <h2 style="margin-bottom:0.3rem;">Payroll</h2>
-  <p class="hint">Payroll is calculated based on confirmed roster only.</p>
+  <h2 style="margin-bottom:0.3rem;">{{ t('payroll') }}</h2>
+  <p class="hint">{{ t('payroll_note_confirmed_only') }}</p>
   <form method="get" class="inline-form">
-    <label>Start Date <input type="date" name="start_date" value="{{ start_date }}" required /></label>
-    <label>End Date <input type="date" name="end_date" value="{{ end_date }}" required /></label>
-    <label>Department
+    <label>{{ t('start_date') }} <input type="date" name="start_date" value="{{ start_date }}" required /></label>
+    <label>{{ t('end_date') }} <input type="date" name="end_date" value="{{ end_date }}" required /></label>
+    <label>{{ t('department') }}
       <select name="department">
-        <option value="">All Departments</option>
+        <option value="">{{ t('all_departments') }}</option>
         {% for dept in departments %}
         <option value="{{ dept }}" {% if selected_department == dept %}selected{% endif %}>{{ dept }}</option>
         {% endfor %}
       </select>
     </label>
-    <label>Staff
+    <label>{{ t('staff') }}
       <select name="staff_id">
-        <option value="">All Staff</option>
+        <option value="">{{ t('all_staff') }}</option>
         {% for row in staff_options %}
         <option value="{{ row.id }}" {% if selected_staff_id == row.id %}selected{% endif %}>{{ row.name }} ({{ row.role }})</option>
         {% endfor %}
       </select>
     </label>
-    <button type="submit">Load</button>
+    <button type="submit">{{ t('load') }}</button>
     <a
       class="button-link btn-secondary"
       href="{{ url_for('payroll', start_date=start_date, end_date=end_date, department=selected_department or '', staff_id=selected_staff_id or '', export='csv') }}"
     >
-      Export Payroll CSV
+      {{ t('export_payroll_csv') }}
     </a>
   </form>
   <p class="hint" style="margin-top:0.4rem;">
-    Viewing: {{ selected_department if selected_department else 'All Departments' }}
+    {{ t('viewing_filter') }} {{ selected_department if selected_department else t('all_departments') }}
   </p>
 </section>
 
@@ -39,14 +39,14 @@
   <table class="payroll-table">
     <thead>
       <tr>
-        <th>Staff Name</th>
-        <th>Role</th>
+        <th>{{ t('staff_name') }}</th>
+        <th>{{ t('role') }}</th>
         {% for date_key in date_columns %}
         <th>{{ date_key|ddmm }}</th>
         {% endfor %}
-        <th>Total Hours</th>
-        <th>Hourly Wage</th>
-        <th>Total Salary</th>
+        <th>{{ t('total_hours') }}</th>
+        <th>{{ t('hourly_wage') }}</th>
+        <th>{{ t('total_salary') }}</th>
       </tr>
     </thead>
     <tbody>
@@ -61,7 +61,7 @@
         <td>
           {{ row.hourly_wage|money }}
           {% if row.wage_missing %}
-          <span title="Hourly wage is empty. Treated as 0.00" style="color:#b42318;font-weight:700;">*</span>
+          <span title="{{ t('wage_missing_hint') }}" style="color:#b42318;font-weight:700;">*</span>
           {% endif %}
         </td>
         <td>{{ row.total_salary|money }}</td>
@@ -71,9 +71,9 @@
       <tr>
         <td colspan="{{ 5 + date_columns|length }}">
           {% if selected_department %}
-          No staff found in department "{{ selected_department }}".
+          {{ t('no_staff_found_in_department').format(department=selected_department) }}
           {% else %}
-          No staff found for the selected filter.
+          {{ t('no_staff_found_for_filter') }}
           {% endif %}
         </td>
       </tr>
@@ -81,7 +81,7 @@
     </tbody>
     <tfoot>
       <tr class="totals-row">
-        <th>Total</th>
+        <th>{{ t('total') }}</th>
         <th>-</th>
         {% for date_key in date_columns %}
         <th>{{ totals_row.hours_by_date[date_key]|money }}</th>
