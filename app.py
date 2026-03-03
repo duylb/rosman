@@ -1103,6 +1103,7 @@ def roster() -> str:
         for offset in range(7)
     ]
     week_dates = [item["date"] for item in week_columns]
+    week_range_label = f"{week_start_obj.strftime('%d %b')} - {(week_start_obj + timedelta(days=6)).strftime('%d %b')}"
     assignments: list[dict[str, Any]] = []
     if current_version is not None:
         assignments = [
@@ -1153,6 +1154,7 @@ def roster() -> str:
         week_start=week_start_obj.isoformat(),
         week_columns=week_columns,
         week_dates=week_dates,
+        week_range_label=week_range_label,
         current_version=current_version,
         staff_rows=staff_rows,
         shift_rows=shift_rows,

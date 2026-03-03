@@ -1,8 +1,39 @@
 ﻿{% extends "base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>{{ t('roster') }}</h2>
-  <form method="get" class="inline-form">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.8rem;flex-wrap:wrap;">
+    <div>
+      <h2 style="margin-bottom:0.22rem;">Weekly Roster</h2>
+      <p class="hint" style="margin:0;">{{ week_range_label }}</p>
+    </div>
+    <div class="action-group">
+      {% if current_version and current_version.status == "confirmed" %}
+        <div>
+          <span class="meta-chip">Confirmed</span>
+          {% if current_version.confirmed_at %}
+          <div class="hint" style="margin-top:0.3rem;">Confirmed at {{ current_version.confirmed_at.strftime("%Y-%m-%d %H:%M") }}</div>
+          {% endif %}
+        </div>
+      {% elif current_version and current_version.status == "draft" %}
+        <span class="meta-chip" style="background:#fff8e6;border-color:#efd9a6;color:#8a5a00;">Draft</span>
+        <form method="post" action="{{ url_for('confirm_roster_version', version_id=current_version.id) }}" onsubmit="return confirm('Are you sure you want to confirm this roster?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <input type="hidden" name="roster_date" value="{{ selected_date }}" />
+          <button type="submit" class="btn-danger-lite">Confirm Roster</button>
+        </form>
+      {% else %}
+        <span class="hint">No roster version for this week yet.</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if current_version and current_version.status == "draft" %}
+  <p class="hint" style="margin-top:0.72rem;padding:0.56rem 0.72rem;background:#fffaf0;border:1px solid #f2e3bc;border-left:4px solid #e1b651;border-radius:8px;">
+    This roster is a draft and has not been confirmed.
+  </p>
+  {% endif %}
+
+  <form method="get" class="inline-form" style="margin-top:0.72rem;">
     <label>{{ t('date') }} <input type="date" name="roster_date" value="{{ selected_date }}" /></label>
     <button type="submit">{{ t('load') }}</button>
   </form>
@@ -32,20 +63,6 @@
     <label>{{ t('notes') }} <input name="notes" /></label>
     <button type="submit">{{ t('assign') }}</button>
   </form>
-  <div class="action-group">
-    {% if current_version and current_version.status == "draft" %}
-      <span class="meta-chip">Draft — Not Confirmed</span>
-      <form method="post" action="{{ url_for('confirm_roster_version', version_id=current_version.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-        <input type="hidden" name="roster_date" value="{{ selected_date }}" />
-        <button type="submit" class="btn-danger-lite">Confirm Roster</button>
-      </form>
-    {% elif current_version and current_version.status == "confirmed" %}
-      <span class="meta-chip">Confirmed</span>
-    {% else %}
-      <span class="hint">No roster version for this week yet.</span>
-    {% endif %}
-  </div>
 </section>
 
 <section class="panel">
@@ -60,7 +77,7 @@
   <p class="hint">{{ t('auto_schedule_rule') }}</p>
 </section>
 
-<section class="panel">
+<section class="panel"{% if current_version and current_version.status == "draft" %} style="border-left:4px solid #e1b651;"{% endif %}>
   <h2>{{ t('roster') }}: {{ week_dates[0] }} to {{ week_dates[-1] }}</h2>
   <table>
     <thead>
