@@ -51,14 +51,13 @@
             <button type="submit" name="lang" value="en" class="lang-toggle-btn {{ 'active' if lang == 'en' else '' }}">EN</button>
             <button type="submit" name="lang" value="vi" class="lang-toggle-btn {{ 'active' if lang == 'vi' else '' }}">VI</button>
           </form>
-          <form method="post" action="{{ url_for('logout') }}" class="logout-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <button type="submit" class="btn-secondary">{{ t('logout') }}</button>
-          </form>
         </div>
       </aside>
 
       <div class="main-content">
+        {% set page_title_block %}{% block page_title %}{% endblock %}{% endset %}
+        {% set page_title = page_title_block|trim %}
+        {% if not page_title %}
         {% set page_name = t('page_dashboard') %}
         {% if request.path.startswith('/staff') %}
           {% set page_name = t('page_staff') %}
@@ -75,22 +74,21 @@
         {% elif request.path.startswith('/data') %}
           {% set page_name = t('page_data') %}
         {% endif %}
+          {% set page_title = page_name %}
+        {% endif %}
         <header class="top-nav">
-          <form class="top-nav-search" method="get" action="{{ request.path }}">
-            <input type="search" name="q" class="app-input" placeholder="{{ t('search_placeholder') }}" />
-          </form>
-          <div class="top-nav-actions">
-            <button type="button" class="icon-btn" aria-label="{{ t('notifications') }}">N</button>
-            <button type="button" class="btn-primary btn-with-icon" aria-label="{{ t('quick_add') }}"><span>+</span><span>{{ t('quick_add') }}</span></button>
-            <div class="user-pill" aria-label="{{ t('account') }}">
-              <span class="avatar">{{ (g.user.email[0]|upper) if g.user and g.user.email else 'U' }}</span>
-              <span class="user-text">{{ g.user.email if g.user else 'User' }}</span>
-            </div>
+          <div class="nav-left">
+            <span class="workspace-label">{{ t('workspace') }}</span>
+            <span class="nav-separator" aria-hidden="true">&mdash;</span>
+            <h1 class="page-title">{{ page_title }}</h1>
           </div>
-        </header>
-        <header class="workspace-bar">
-          <p class="eyebrow">{{ t('workspace') }}</p>
-          <h1>{{ page_name }}</h1>
+          <div class="nav-right">
+            <span class="account-name" aria-label="{{ t('account') }}">{{ g.user.email if g.user else 'User' }}</span>
+            <form method="post" action="{{ url_for('logout') }}" class="logout-form top-nav-logout">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <button type="submit" class="btn-secondary">{{ t('logout') }}</button>
+            </form>
+          </div>
         </header>
 
         <main class="page-content">
