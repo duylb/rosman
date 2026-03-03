@@ -87,22 +87,13 @@ def create_duy_blueprint(
         email = (request.form.get("email", "") or "").strip().lower()
         password = request.form.get("password", "") or ""
         org_id_raw = (request.form.get("org_id", "") or "").strip()
+        org_name_raw = (request.form.get("org_name", "") or "").strip()
+        use_existing_org = request.form.get("use_existing_org") == "1"
         expires_at_raw = (request.form.get("expires_at", "") or "").strip()
         owner_requested = request.form.get("is_owner") == "1"
 
-        if not email or not password or not org_id_raw:
-            flash("msg_duy_create_required", "error")
-            return redirect(url_for("duy.panel"))
-
-        try:
-            org_id = int(org_id_raw)
-        except ValueError:
-            flash("msg_duy_invalid_org", "error")
-            return redirect(url_for("duy.panel"))
-
-        org = Organization.query.filter_by(id=org_id).first()
-        if org is None:
-            flash("msg_duy_invalid_org", "error")
+        if not email or not password:
+            flash("msg_duy_create_required_base", "error")
             return redirect(url_for("duy.panel"))
 
         if User.query.filter(func.lower(User.email) == email).first() is not None:
@@ -122,10 +113,35 @@ def create_duy_blueprint(
         )
         is_owner = owner_requested or not owner_exists
 
+        if use_existing_org:
+            if not org_id_raw:
+                flash("msg_duy_invalid_org", "error")
+                return redirect(url_for("duy.panel"))
+            try:
+                org_id = int(org_id_raw)
+            except ValueError:
+                flash("msg_duy_invalid_org", "error")
+                return redirect(url_for("duy.panel"))
+
+            org = Organization.query.filter_by(id=org_id).first()
+            if org is None:
+                flash("msg_duy_invalid_org", "error")
+                return redirect(url_for("duy.panel"))
+        else:
+            org_name = org_name_raw or f"{email.split('@')[0]}'s Organization"
+            org = Organization(name=org_name)
+            db.session.add(org)
+            try:
+                db.session.flush()
+            except IntegrityError:
+                db.session.rollback()
+                flash("msg_duy_org_name_exists", "error")
+                return redirect(url_for("duy.panel"))
+
         user = User(
             email=email,
             password_hash=generate_password_hash(password),
-            org_id=org_id,
+            org_id=org.id,
             role="owner" if is_owner else "manager",
             is_owner=is_owner,
             is_active=True,

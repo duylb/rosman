@@ -223,5 +223,13 @@
   "msg_duy_expiration_updated": "Da cap nhat het han.",
   "msg_duy_no_users": "Khong co nguoi dung.",
   "msg_account_expired_contact_admin": "Tai khoan da het han. Hay lien he quan tri vien.",
-  "msg_account_locked_contact_admin": "Tai khoan da bi khoa. Hay lien he quan tri vien."
+  "msg_account_locked_contact_admin": "Tai khoan da bi khoa. Hay lien he quan tri vien.",
+  "msg_duy_create_required_base": "Email va mat khau la bat buoc.",
+  "msg_duy_org_name_exists": "Ten to chuc da ton tai.",
+  "org_create_mode": "Gan to chuc",
+  "org_mode_new_default": "Tao to chuc moi (Mac dinh)",
+  "org_mode_existing": "Gan vao to chuc co san",
+  "org_name": "Ten to chuc",
+  "org_name_placeholder": "Bo trong neu he thong tu dat ten",
+  "select_organization_optional": "Chon to chuc (chi dung cho che do to chuc co san)"
 }

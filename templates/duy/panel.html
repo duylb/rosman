@@ -6,9 +6,16 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label>{{ t('email') }} <input type="email" name="email" required /></label>
     <label>{{ t('password') }} <input type="password" name="password" required /></label>
+    <label>{{ t('org_create_mode') }}
+      <select name="use_existing_org">
+        <option value="0">{{ t('org_mode_new_default') }}</option>
+        <option value="1">{{ t('org_mode_existing') }}</option>
+      </select>
+    </label>
+    <label>{{ t('org_name') }} <input name="org_name" placeholder="{{ t('org_name_placeholder') }}" /></label>
     <label>{{ t('organization') }}
-      <select name="org_id" required>
-        <option value="">{{ t('select_organization') }}</option>
+      <select name="org_id">
+        <option value="">{{ t('select_organization_optional') }}</option>
         {% for org in organizations %}
         <option value="{{ org.id }}">{{ org.name }}</option>
         {% endfor %}

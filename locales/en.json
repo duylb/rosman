@@ -223,5 +223,13 @@
   "msg_duy_expiration_updated": "Expiration updated.",
   "msg_duy_no_users": "No users found.",
   "msg_account_expired_contact_admin": "Account expired. Contact administrator.",
-  "msg_account_locked_contact_admin": "Account locked. Contact administrator."
+  "msg_account_locked_contact_admin": "Account locked. Contact administrator.",
+  "msg_duy_create_required_base": "Email and password are required.",
+  "msg_duy_org_name_exists": "Organization name already exists.",
+  "org_create_mode": "Organization Assignment",
+  "org_mode_new_default": "Create new organization (Default)",
+  "org_mode_existing": "Assign existing organization",
+  "org_name": "Organization Name",
+  "org_name_placeholder": "Optional when creating new organization",
+  "select_organization_optional": "Select organization (only for existing-org mode)"
 }
