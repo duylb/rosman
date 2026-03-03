@@ -1190,28 +1190,28 @@ def confirm_roster_version(version_id: int) -> Any:
     roster_date = request.form.get("roster_date", "").strip()
 
     try:
-        with db.session.begin():
-            version = RosterVersion.query.filter_by(id=version_id, org_id=org_id).first()
-            if version is None:
-                if request.is_json or request.args.get("format") == "json":
-                    return jsonify({"error": "Roster version not found."}), 404
-                flash("Roster version not found.", "error")
-                return redirect(url_for("roster", roster_date=roster_date or date.today().isoformat()))
+        version = RosterVersion.query.filter_by(id=version_id, org_id=org_id).first()
+        if version is None:
+            if request.is_json or request.args.get("format") == "json":
+                return jsonify({"error": "Roster version not found."}), 404
+            flash("Roster version not found.", "error")
+            return redirect(url_for("roster", roster_date=roster_date or date.today().isoformat()))
 
-            other_confirmed_versions = (
-                RosterVersion.query.filter(
-                    RosterVersion.org_id == org_id,
-                    RosterVersion.week_start == version.week_start,
-                    RosterVersion.status == "confirmed",
-                    RosterVersion.id != version.id,
-                ).all()
-            )
-            deleted_version_ids = [row.id for row in other_confirmed_versions]
-            for row in other_confirmed_versions:
-                db.session.delete(row)
+        other_confirmed_versions = (
+            RosterVersion.query.filter(
+                RosterVersion.org_id == org_id,
+                RosterVersion.week_start == version.week_start,
+                RosterVersion.status == "confirmed",
+                RosterVersion.id != version.id,
+            ).all()
+        )
+        deleted_version_ids = [row.id for row in other_confirmed_versions]
+        for row in other_confirmed_versions:
+            db.session.delete(row)
 
-            version.status = "confirmed"
-            version.confirmed_at = now_utc
+        version.status = "confirmed"
+        version.confirmed_at = now_utc
+        db.session.commit()
 
         payload = {
             "version": {
