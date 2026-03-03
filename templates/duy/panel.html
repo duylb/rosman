@@ -34,7 +34,7 @@
 
 <section class="panel">
   <h2>{{ t('duy_users_title') }}</h2>
-  <table>
+  <table class="app-table">
     <thead>
       <tr>
         <th>{{ t('email') }}</th>
@@ -67,7 +67,7 @@
               <button type="submit" class="btn-secondary">{{ t('unlock') if not row.is_active else t('lock') }}</button>
               {% endif %}
             </form>
-            <form method="post" action="{{ url_for('duy.extend_expiration', user_id=row.id) }}" class="inline-form" style="margin:0;">
+            <form method="post" action="{{ url_for('duy.extend_expiration', user_id=row.id) }}" class="inline-form inline-form-compact">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
               <input type="datetime-local" name="expires_at" required />
               <button type="submit">{{ t('extend') }}</button>

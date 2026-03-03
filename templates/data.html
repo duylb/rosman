@@ -12,7 +12,7 @@
 <section class="panel">
   <h2>{{ t('export_roster_availability') }}</h2>
   <p class="hint">{{ t('export_roster_availability_hint') }}</p>
-  <form method="get" action="{{ url_for('export_dataset', dataset='assignments') }}" class="inline-form" style="margin-top:0.8rem;">
+  <form method="get" action="{{ url_for('export_dataset', dataset='assignments') }}" class="inline-form inline-form-top">
     <label>{{ t('start_date') }}
       <input type="date" name="start_date" value="{{ export_start_date }}" required />
     </label>

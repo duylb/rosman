@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel">
-  <h2 style="margin-bottom:0.3rem;">{{ t('payroll') }}</h2>
+  <h2 class="section-title">{{ t('payroll') }}</h2>
   <p class="hint">{{ t('payroll_note_confirmed_only') }}</p>
   <form method="get" class="inline-form">
     <label>{{ t('start_date') }} <input type="date" name="start_date" value="{{ start_date }}" required /></label>
@@ -30,13 +30,13 @@
       {{ t('export_payroll_csv') }}
     </a>
   </form>
-  <p class="hint" style="margin-top:0.4rem;">
+  <p class="hint hint-top">
     {{ t('viewing_filter') }} {{ selected_department if selected_department else t('all_departments') }}
   </p>
 </section>
 
 <section class="panel">
-  <table class="payroll-table">
+  <table class="app-table payroll-table">
     <thead>
       <tr>
         <th>{{ t('staff_name') }}</th>
@@ -61,7 +61,7 @@
         <td>
           {{ row.hourly_wage|money }}
           {% if row.wage_missing %}
-          <span title="{{ t('wage_missing_hint') }}" style="color:#b42318;font-weight:700;">*</span>
+          <span title="{{ t('wage_missing_hint') }}" class="wage-warning">*</span>
           {% endif %}
         </td>
         <td>{{ row.total_salary|money }}</td>

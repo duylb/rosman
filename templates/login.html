@@ -30,11 +30,11 @@
           <label>{{ t('password') }} <input type="password" name="password" required /></label>
           <button type="submit">{{ t('btn_login') }}</button>
         </form>
-        <form method="post" action="{{ url_for('set_language') }}" class="lang-form auth-lang-form" style="display:flex;gap:0.4rem;">
+        <form method="post" action="{{ url_for('set_language') }}" class="lang-form auth-lang-form lang-toggle">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}" />
-          <button type="submit" name="lang" value="en" class="{{ '' if lang == 'en' else 'btn-secondary' }}">EN</button>
-          <button type="submit" name="lang" value="vi" class="{{ '' if lang == 'vi' else 'btn-secondary' }}">VI</button>
+          <button type="submit" name="lang" value="en" class="lang-toggle-btn {{ 'active' if lang == 'en' else '' }}">EN</button>
+          <button type="submit" name="lang" value="vi" class="lang-toggle-btn {{ 'active' if lang == 'vi' else '' }}">VI</button>
         </form>
       </section>
     </main>
