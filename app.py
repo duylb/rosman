@@ -1368,7 +1368,14 @@ def delete_assignment(assignment_id: int) -> Any:
 @app.route("/data")
 @login_required
 def data_page() -> str:
-    return render_template("data.html")
+    today_obj = date.today()
+    start_obj = monday_for(today_obj)
+    end_obj = start_obj + timedelta(days=6)
+    return render_template(
+        "data.html",
+        export_start_date=start_obj.isoformat(),
+        export_end_date=end_obj.isoformat(),
+    )
 
 
 @app.route("/data/export/<dataset>")
@@ -1376,6 +1383,30 @@ def data_page() -> str:
 def export_dataset(dataset: str) -> Response:
     org_id = current_org_id()
     if dataset == "assignments":
+        start_date_raw = request.args.get("start_date", "").strip()
+        end_date_raw = request.args.get("end_date", "").strip()
+        version_type = (request.args.get("version_type", "confirmed") or "confirmed").strip().lower()
+        if version_type not in {"confirmed", "draft"}:
+            flash("Invalid version type for roster export.", "error")
+            return redirect(url_for("data_page"))
+
+        if start_date_raw and end_date_raw:
+            start_obj = parse_iso_date(start_date_raw)
+            end_obj = parse_iso_date(end_date_raw)
+        else:
+            start_obj = monday_for(date.today())
+            end_obj = start_obj + timedelta(days=6)
+            start_date_raw = start_obj.isoformat()
+            end_date_raw = end_obj.isoformat()
+
+        if not start_obj or not end_obj:
+            flash("Invalid export date range.", "error")
+            return redirect(url_for("data_page"))
+        if end_obj < start_obj:
+            flash("End date must be on or after start date.", "error")
+            return redirect(url_for("data_page"))
+
+        status_filter = ["confirmed"] if version_type == "confirmed" else ["draft"]
         rows = [
             {
                 "roster_date": row.roster_date,
@@ -1386,11 +1417,15 @@ def export_dataset(dataset: str) -> Response:
                 "start_time": row.shift_template.start_time,
             }
             for row in (
-                RosterAssignment.query.join(Staff).join(ShiftTemplate)
+                RosterAssignment.query.join(Staff).join(ShiftTemplate).join(RosterVersion)
                 .filter(
                     RosterAssignment.org_id == org_id,
+                    RosterAssignment.roster_date.between(start_obj.isoformat(), end_obj.isoformat()),
                     Staff.org_id == org_id,
                     ShiftTemplate.org_id == org_id,
+                    RosterVersion.org_id == org_id,
+                    RosterVersion.id == RosterAssignment.version_id,
+                    RosterVersion.status.in_(status_filter),
                 )
                 .order_by(RosterAssignment.roster_date, Staff.name, ShiftTemplate.start_time)
                 .all()
@@ -1398,10 +1433,11 @@ def export_dataset(dataset: str) -> Response:
         ]
 
         if not rows:
+            filename = f"roster_{start_obj.strftime('%d%m%Y')}_{end_obj.strftime('%d%m%Y')}.csv"
             return Response(
                 "staff_name,role\n",
                 mimetype="text/csv",
-                headers={"Content-Disposition": "attachment; filename=roster_empty.csv"},
+                headers={"Content-Disposition": f"attachment; filename={filename}"},
             )
 
         date_columns = sorted({row["roster_date"] for row in rows})
@@ -1437,12 +1473,7 @@ def export_dataset(dataset: str) -> Response:
                     row_values.append(str(shifts))
             writer.writerow(row_values)
 
-        start_obj = parse_iso_date(date_columns[0])
-        end_obj = parse_iso_date(date_columns[-1])
-        if start_obj and end_obj:
-            filename = f"roster_{start_obj.strftime('%d%m')}_{end_obj.strftime('%d%m')}.csv"
-        else:
-            filename = "roster.csv"
+        filename = f"roster_{start_obj.strftime('%d%m%Y')}_{end_obj.strftime('%d%m%Y')}.csv"
 
         return Response(
             buffer.getvalue(),
