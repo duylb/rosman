@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import click
-from flask import Flask, Response, flash, g, redirect, render_template, request, session, url_for
+from flask import Flask, Response, flash, g, jsonify, redirect, render_template, request, session, url_for
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -38,6 +38,7 @@ _models_spec.loader.exec_module(_models_module)
 Staff = _models_module.Staff
 ShiftTemplate = _models_module.ShiftTemplate
 RosterAssignment = _models_module.RosterAssignment
+RosterVersion = _models_module.RosterVersion
 StaffAvailability = _models_module.StaffAvailability
 StaffShiftPreference = _models_module.StaffShiftPreference
 User = _models_module.User
@@ -401,12 +402,30 @@ def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
     week_start_str = week_start.isoformat()
     week_end_str = week_end.isoformat()
 
+    existing_drafts = (
+        RosterVersion.query.filter_by(org_id=org_id, week_start=week_start, status="draft")
+        .order_by(RosterVersion.id.desc())
+        .all()
+    )
+    for draft in existing_drafts:
+        db.session.delete(draft)
+    db.session.flush()
+
+    draft_version = RosterVersion(
+        org_id=org_id,
+        week_start=week_start,
+        status="draft",
+    )
+    db.session.add(draft_version)
+    db.session.flush()
+
     recent_counts = {
         staff_id: count
         for staff_id, count in (
             db.session.query(RosterAssignment.staff_id, func.count(RosterAssignment.id))
             .filter(
                 RosterAssignment.org_id == org_id,
+                RosterAssignment.version_id == draft_version.id,
                 RosterAssignment.roster_date.between(
                     recent_start.isoformat(), week_end.isoformat()
                 )
@@ -454,7 +473,12 @@ def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
                 ShiftTemplate.end_time,
             )
             .join(ShiftTemplate, ShiftTemplate.id == RosterAssignment.shift_id)
-            .filter(RosterAssignment.org_id == org_id, ShiftTemplate.org_id == org_id, RosterAssignment.roster_date == day_str)
+            .filter(
+                RosterAssignment.org_id == org_id,
+                RosterAssignment.version_id == draft_version.id,
+                ShiftTemplate.org_id == org_id,
+                RosterAssignment.roster_date == day_str,
+            )
             .all()
         ):
             assigned_ranges.setdefault(staff_id, []).append((start_time, end_time))
@@ -463,7 +487,11 @@ def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
             shift_id: count
             for shift_id, count in (
                 db.session.query(RosterAssignment.shift_id, func.count(RosterAssignment.id))
-                .filter(RosterAssignment.org_id == org_id, RosterAssignment.roster_date == day_str)
+                .filter(
+                    RosterAssignment.org_id == org_id,
+                    RosterAssignment.version_id == draft_version.id,
+                    RosterAssignment.roster_date == day_str,
+                )
                 .group_by(RosterAssignment.shift_id)
                 .all()
             )
@@ -508,6 +536,7 @@ def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
                 db.session.add(
                     RosterAssignment(
                         org_id=org_id,
+                        version_id=draft_version.id,
                         roster_date=day_str,
                         staff_id=chosen.id,
                         shift_id=shift.id,
@@ -883,6 +912,19 @@ def roster() -> str:
     org_id = current_org_id()
     selected_date = request.values.get("roster_date", date.today().isoformat())
     selected_obj = parse_iso_date(selected_date) or date.today()
+    week_start_obj = monday_for(selected_obj)
+
+    draft_version = (
+        RosterVersion.query.filter_by(org_id=org_id, week_start=week_start_obj, status="draft")
+        .order_by(RosterVersion.id.desc())
+        .first()
+    )
+    confirmed_version = (
+        RosterVersion.query.filter_by(org_id=org_id, week_start=week_start_obj, status="confirmed")
+        .order_by(RosterVersion.id.desc())
+        .first()
+    )
+    current_version = draft_version or confirmed_version
 
     if request.method == "POST":
         staff_id = request.form.get("staff_id", "").strip()
@@ -922,11 +964,21 @@ def roster() -> str:
             if blocked:
                 flash("Staff member is unavailable on this date.", "error")
             else:
+                if current_version is None or current_version.status != "draft":
+                    current_version = RosterVersion(
+                        org_id=org_id,
+                        week_start=week_start_obj,
+                        status="draft",
+                    )
+                    db.session.add(current_version)
+                    db.session.flush()
+
                 overlap = (
                     db.session.query(RosterAssignment.id)
                     .join(ShiftTemplate, ShiftTemplate.id == RosterAssignment.shift_id)
                     .filter(
                         RosterAssignment.org_id == org_id,
+                        RosterAssignment.version_id == current_version.id,
                         ShiftTemplate.org_id == org_id,
                         RosterAssignment.staff_id == staff_id_int,
                         RosterAssignment.roster_date == selected_date,
@@ -943,6 +995,7 @@ def roster() -> str:
                     db.session.add(
                         RosterAssignment(
                             org_id=org_id,
+                            version_id=current_version.id,
                             roster_date=selected_date,
                             staff_id=staff_id_int,
                             shift_id=shift_id_int,
@@ -959,6 +1012,14 @@ def roster() -> str:
     staff_rows = Staff.query.filter_by(org_id=org_id, active=1).order_by(Staff.name).all()
     shift_rows = ShiftTemplate.query.filter_by(org_id=org_id).order_by(ShiftTemplate.start_time).all()
 
+    week_columns = [
+        {
+            "date": (week_start_obj + timedelta(days=offset)).isoformat(),
+            "weekday": (week_start_obj + timedelta(days=offset)).strftime("%A"),
+        }
+        for offset in range(7)
+    ]
+    week_dates = [item["date"] for item in week_columns]
     assignments = [
         {
             "id": row.id,
@@ -974,22 +1035,39 @@ def roster() -> str:
             RosterAssignment.query.join(Staff).join(ShiftTemplate)
             .filter(
                 RosterAssignment.org_id == org_id,
+                RosterAssignment.version_id == current_version.id if current_version else False,
                 Staff.org_id == org_id,
                 ShiftTemplate.org_id == org_id,
-                RosterAssignment.roster_date == selected_date,
+                RosterAssignment.roster_date.between(week_dates[0], week_dates[-1]),
             )
-            .order_by(ShiftTemplate.start_time, Staff.name)
+            .order_by(RosterAssignment.roster_date, ShiftTemplate.start_time, Staff.name)
             .all()
         )
     ]
 
+    assignments_by_staff_and_day: dict[int, dict[str, list[dict[str, Any]]]] = {
+        row.id: {day_value: [] for day_value in week_dates}
+        for row in staff_rows
+    }
+    for row in assignments:
+        staff_entry = assignments_by_staff_and_day.get(row["staff_id"])
+        if staff_entry is None:
+            continue
+        if row["roster_date"] not in staff_entry:
+            continue
+        staff_entry[row["roster_date"]].append(row)
+
     return render_template(
         "roster.html",
         selected_date=selected_date,
-        week_start=monday_for(selected_obj).isoformat(),
+        week_start=week_start_obj.isoformat(),
+        week_columns=week_columns,
+        week_dates=week_dates,
+        current_version=current_version,
         staff_rows=staff_rows,
         shift_rows=shift_rows,
         assignments=assignments,
+        assignments_by_staff_and_day=assignments_by_staff_and_day,
     )
 
 
@@ -1013,15 +1091,89 @@ def auto_schedule() -> Any:
     return redirect(url_for("roster", roster_date=week_start.isoformat()))
 
 
+@app.post("/roster/confirm/<int:version_id>")
+@login_required
+def confirm_roster_version(version_id: int) -> Any:
+    org_id = current_org_id()
+    deleted_version_ids: list[int] = []
+    now_utc = datetime.utcnow()
+    roster_date = request.form.get("roster_date", "").strip()
+
+    try:
+        with db.session.begin():
+            version = RosterVersion.query.filter_by(id=version_id, org_id=org_id).first()
+            if version is None:
+                if request.is_json or request.args.get("format") == "json":
+                    return jsonify({"error": "Roster version not found."}), 404
+                flash("Roster version not found.", "error")
+                return redirect(url_for("roster", roster_date=roster_date or date.today().isoformat()))
+
+            other_confirmed_versions = (
+                RosterVersion.query.filter(
+                    RosterVersion.org_id == org_id,
+                    RosterVersion.week_start == version.week_start,
+                    RosterVersion.status == "confirmed",
+                    RosterVersion.id != version.id,
+                ).all()
+            )
+            deleted_version_ids = [row.id for row in other_confirmed_versions]
+            for row in other_confirmed_versions:
+                db.session.delete(row)
+
+            version.status = "confirmed"
+            version.confirmed_at = now_utc
+
+        payload = {
+            "version": {
+                "id": version.id,
+                "org_id": version.org_id,
+                "week_start": version.week_start.isoformat(),
+                "status": version.status,
+                "confirmed_at": version.confirmed_at.isoformat() if version.confirmed_at else None,
+            },
+            "deleted_version_ids": deleted_version_ids,
+        }
+        if request.is_json or request.args.get("format") == "json":
+            return jsonify(payload), 200
+
+        flash("Roster confirmed.", "success")
+        target_date = roster_date or version.week_start.isoformat()
+        return redirect(url_for("roster", roster_date=target_date))
+    except IntegrityError:
+        db.session.rollback()
+        if request.is_json or request.args.get("format") == "json":
+            return jsonify({"error": "Unable to confirm roster version."}), 409
+        flash("Unable to confirm roster version.", "error")
+        return redirect(url_for("roster", roster_date=roster_date or date.today().isoformat()))
+
+
 @app.post("/roster/<int:assignment_id>/delete")
 @login_required
 def delete_assignment(assignment_id: int) -> Any:
     roster_date = request.form.get("roster_date", date.today().isoformat())
-    assignment = RosterAssignment.query.filter_by(id=assignment_id, org_id=current_org_id()).first()
+    selected_obj = parse_iso_date(roster_date) or date.today()
+    week_start_obj = monday_for(selected_obj)
+    org_id = current_org_id()
+    draft_version = (
+        RosterVersion.query.filter_by(org_id=org_id, week_start=week_start_obj, status="draft")
+        .order_by(RosterVersion.id.desc())
+        .first()
+    )
+    if draft_version is None:
+        flash("Confirmed roster is read-only. Create or load a draft version to edit.", "error")
+        return redirect(url_for("roster", roster_date=roster_date))
+
+    assignment = RosterAssignment.query.filter_by(
+        id=assignment_id,
+        org_id=org_id,
+        version_id=draft_version.id,
+    ).first()
     if assignment is not None:
         db.session.delete(assignment)
         db.session.commit()
-    flash("Assignment removed.", "success")
+        flash("Assignment removed.", "success")
+    else:
+        flash("Confirmed roster is read-only. Only draft assignments can be removed.", "error")
     return redirect(url_for("roster", roster_date=roster_date))
 
 
@@ -1173,6 +1325,7 @@ def import_dataset() -> Any:
     org_id = current_org_id()
     dataset = request.form.get("dataset", "")
     replace_existing = request.form.get("replace_existing") == "1"
+    roster_redirect_date: str | None = None
     file_obj = request.files.get("csv_file")
 
     if not file_obj or not file_obj.filename:
@@ -1243,16 +1396,16 @@ def import_dataset() -> Any:
                     skipped += 1
 
         elif dataset == "assignments":
-            if replace_existing:
-                for item in RosterAssignment.query.filter_by(org_id=org_id).all():
-                    db.session.delete(item)
             added, skipped = 0, 0
+            import_week_start: date | None = None
+            parsed_rows: list[dict[str, Any]] = []
             for row in rows:
                 roster_date = (row.get("roster_date") or "").strip()
                 staff_id_raw = (row.get("staff_id") or "").strip()
                 shift_id_raw = (row.get("shift_id") or "").strip()
                 notes = (row.get("notes") or "").strip()
-                if not parse_iso_date(roster_date):
+                roster_date_obj = parse_iso_date(roster_date)
+                if not roster_date_obj:
                     skipped += 1
                     continue
                 try:
@@ -1267,20 +1420,65 @@ def import_dataset() -> Any:
                     if not staff_exists or not shift_exists:
                         skipped += 1
                         continue
-                    with db.session.begin_nested():
-                        db.session.add(
-                            RosterAssignment(
-                                org_id=org_id,
-                                roster_date=roster_date,
-                                staff_id=staff_id,
-                                shift_id=shift_id,
-                                notes=notes or None,
-                            )
-                        )
-                        db.session.flush()
-                    added += 1
+
+                    row_week_start = monday_for(roster_date_obj)
+                    if import_week_start is None:
+                        import_week_start = row_week_start
+                    elif row_week_start != import_week_start:
+                        skipped += 1
+                        continue
+
+                    parsed_rows.append(
+                        {
+                            "roster_date": roster_date,
+                            "staff_id": staff_id,
+                            "shift_id": shift_id,
+                            "notes": notes or None,
+                        }
+                    )
                 except (ValueError, IntegrityError):
                     skipped += 1
+
+            if import_week_start is not None:
+                if replace_existing:
+                    existing_drafts = (
+                        RosterVersion.query.filter_by(
+                            org_id=org_id,
+                            week_start=import_week_start,
+                            status="draft",
+                        ).all()
+                    )
+                    for draft in existing_drafts:
+                        db.session.delete(draft)
+                    db.session.flush()
+
+                draft_version = RosterVersion(
+                    org_id=org_id,
+                    week_start=import_week_start,
+                    status="draft",
+                )
+                db.session.add(draft_version)
+                db.session.flush()
+
+                for parsed in parsed_rows:
+                    try:
+                        with db.session.begin_nested():
+                            db.session.add(
+                                RosterAssignment(
+                                    org_id=org_id,
+                                    version_id=draft_version.id,
+                                    roster_date=parsed["roster_date"],
+                                    staff_id=parsed["staff_id"],
+                                    shift_id=parsed["shift_id"],
+                                    notes=parsed["notes"],
+                                )
+                            )
+                            db.session.flush()
+                        added += 1
+                    except IntegrityError:
+                        skipped += 1
+
+                roster_redirect_date = import_week_start.isoformat()
 
         elif dataset == "availability":
             if replace_existing:
@@ -1334,6 +1532,8 @@ def import_dataset() -> Any:
         db.session.rollback()
         flash("Import failed because rows reference missing records or duplicate unique fields.", "error")
 
+    if dataset == "assignments" and roster_redirect_date:
+        return redirect(url_for("roster", roster_date=roster_redirect_date))
     return redirect(url_for("data_page"))
 
 
@@ -1384,4 +1584,3 @@ with app.app_context():
 
 if __name__ == "__main__":
     app.run(debug=True)
-

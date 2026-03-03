@@ -11,6 +11,7 @@ class Organization(db.Model):
     users = db.relationship("User", back_populates="organization")
     staff_members = db.relationship("Staff", back_populates="organization")
     shift_templates = db.relationship("ShiftTemplate", back_populates="organization")
+    roster_versions = db.relationship("RosterVersion", back_populates="organization")
     roster_assignments = db.relationship("RosterAssignment", back_populates="organization")
     staff_availability_entries = db.relationship("StaffAvailability", back_populates="organization")
     staff_shift_preferences = db.relationship("StaffShiftPreference", back_populates="organization")
@@ -102,16 +103,60 @@ class ShiftTemplate(db.Model):
     organization = db.relationship("Organization", back_populates="shift_templates")
 
 
-class RosterAssignment(db.Model):
-    __tablename__ = "roster_assignments"
+class RosterVersion(db.Model):
+    __tablename__ = "roster_versions"
     __table_args__ = (
-        db.UniqueConstraint("org_id", "roster_date", "staff_id", "shift_id", name="uq_roster_org_date_staff_shift"),
+        db.CheckConstraint(
+            db.column("status").in_(["draft", "confirmed"]),
+            name="ck_roster_versions_status",
+        ),
+        db.Index(
+            "uq_roster_versions_org_week_confirmed",
+            "org_id",
+            "week_start",
+            unique=True,
+            sqlite_where=(db.column("status") == "confirmed"),
+            postgresql_where=(db.column("status") == "confirmed"),
+        ),
     )
 
     id = db.Column(db.Integer, primary_key=True)
     org_id = db.Column(
         db.Integer,
         db.ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    week_start = db.Column(db.Date, nullable=False, index=True)
+    status = db.Column(db.String(20), nullable=False, default="draft")
+    created_at = db.Column(db.DateTime, nullable=False, default=db.func.now())
+    confirmed_at = db.Column(db.DateTime, nullable=True)
+
+    organization = db.relationship("Organization", back_populates="roster_versions")
+    roster_assignments = db.relationship(
+        "RosterAssignment",
+        back_populates="version",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class RosterAssignment(db.Model):
+    __tablename__ = "roster_assignments"
+    __table_args__ = (
+        db.UniqueConstraint("version_id", "roster_date", "staff_id", "shift_id", name="uq_roster_version_date_staff_shift"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    org_id = db.Column(
+        db.Integer,
+        db.ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    version_id = db.Column(
+        db.Integer,
+        db.ForeignKey("roster_versions.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -127,6 +172,7 @@ class RosterAssignment(db.Model):
     staff = db.relationship("Staff", back_populates="roster_assignments")
     shift_template = db.relationship("ShiftTemplate", back_populates="roster_assignments")
     organization = db.relationship("Organization", back_populates="roster_assignments")
+    version = db.relationship("RosterVersion", back_populates="roster_assignments")
 
 
 class StaffAvailability(db.Model):

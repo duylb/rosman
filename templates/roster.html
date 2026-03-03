@@ -6,7 +6,24 @@
     <label>{{ t('date') }} <input type="date" name="roster_date" value="{{ selected_date }}" /></label>
     <button type="submit">{{ t('load') }}</button>
   </form>
+  <div class="action-group">
+    {% if current_version and current_version.status == "draft" %}
+      <span class="meta-chip">Draft — Not Confirmed</span>
+      <form method="post" action="{{ url_for('confirm_roster_version', version_id=current_version.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <input type="hidden" name="roster_date" value="{{ selected_date }}" />
+        <button type="submit">Confirm Roster</button>
+      </form>
+    {% elif current_version and current_version.status == "confirmed" %}
+      <span class="meta-chip">Confirmed</span>
+    {% else %}
+      <span class="hint">No roster version for this week yet.</span>
+    {% endif %}
+  </div>
+</section>
 
+<section class="panel">
+  <h2>{{ t('assignments_for') }} {{ selected_date }}</h2>
   <form method="post" class="grid-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <input type="hidden" name="roster_date" value="{{ selected_date }}" />
@@ -44,36 +61,47 @@
 </section>
 
 <section class="panel">
-  <h2>{{ t('assignments_for') }} {{ selected_date }}</h2>
+  <h2>{{ t('roster') }}: {{ week_dates[0] }} to {{ week_dates[-1] }}</h2>
   <table>
     <thead>
       <tr>
         <th>{{ t('staff') }}</th>
         <th>{{ t('role') }}</th>
-        <th>{{ t('shift') }}</th>
-        <th>{{ t('notes') }}</th>
-        <th>{{ t('action') }}</th>
+        {% for col in week_columns %}
+        <th>{{ col.weekday }}<br>{{ col.date }}</th>
+        {% endfor %}
       </tr>
     </thead>
     <tbody>
-      {% for row in assignments %}
+      {% for staff in staff_rows %}
       <tr>
-        <td>{{ row.staff_name }}</td>
-        <td>{{ row.staff_role }}</td>
-        <td>{{ row.shift_name }} ({{ row.start_time }} - {{ row.end_time }})</td>
-        <td>{{ row.notes or '-' }}</td>
+        <td>{{ staff.name }}</td>
+        <td>{{ staff.role }}</td>
+        {% for col in week_columns %}
         <td>
-          <form method="post" action="{{ url_for('delete_assignment', assignment_id=row.id) }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <input type="hidden" name="roster_date" value="{{ selected_date }}" />
-            <button type="submit">{{ t('remove') }}</button>
-          </form>
+          {% set day_assignments = assignments_by_staff_and_day[staff.id][col.date] %}
+          {% if day_assignments %}
+            {% for row in day_assignments %}
+              <div>{{ row.shift_name }} ({{ row.start_time }} - {{ row.end_time }})</div>
+              {% if row.notes %}
+              <div class="hint">{{ row.notes }}</div>
+              {% endif %}
+              <form method="post" action="{{ url_for('delete_assignment', assignment_id=row.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input type="hidden" name="roster_date" value="{{ selected_date }}" />
+                <button type="submit" class="btn-danger-lite">{{ t('remove') }}</button>
+              </form>
+            {% endfor %}
+          {% else %}
+            <span class="hint">-</span>
+          {% endif %}
         </td>
+        {% endfor %}
       </tr>
       {% endfor %}
-      {% if not assignments %}
+      {% if not staff_rows %}
       <tr>
-        <td colspan="5">{{ t('no_assignments_for_date') }}</td>
+        <td colspan="{{ 2 + week_columns|length }}">{{ t('no_assignments_for_date') }}</td>
       </tr>
       {% endif %}
     </tbody>
