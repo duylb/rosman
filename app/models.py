@@ -48,6 +48,7 @@ class Staff(db.Model):
     name = db.Column(db.Text, nullable=False)
     role = db.Column(db.Text, nullable=False)
     email = db.Column(db.Text)
+    hourly_wage = db.Column(db.Numeric(10, 2), nullable=True)
     active = db.Column(db.Integer, nullable=False, server_default=db.text("1"))
     created_at = db.Column(db.Text, nullable=False, server_default=db.text("CURRENT_TIMESTAMP"))
 

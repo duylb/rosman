@@ -7,6 +7,7 @@ import os
 import sys
 from functools import wraps
 from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +54,7 @@ db.init_app(app)
 csrf.init_app(app)
 migrate.init_app(app, db)
 app.jinja_env.filters["ddmm"] = lambda value: format_ddmm(value)
+app.jinja_env.filters["money"] = lambda value: format_money(value)
 SUPPORTED_LANGS = {"en", "vi"}
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "en": {
@@ -63,6 +65,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "nav_shifts": "Shifts",
         "nav_availability": "Availability",
         "nav_roster": "Roster",
+        "nav_payroll": "Payroll",
         "nav_data_io": "Data I/O",
         "logout": "Logout",
         "workspace": "Workspace",
@@ -71,6 +74,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "page_shifts": "Shifts",
         "page_availability": "Availability",
         "page_roster": "Roster",
+        "page_payroll": "Payroll",
         "page_data": "Data Import / Export",
         "lang_toggle": "Tiếng Việt",
         "login_title": "Login",
@@ -156,6 +160,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "append_mode": "Append to existing data",
         "replace_mode": "Replace existing dataset",
         "import_csv": "Import CSV",
+        "show_wages": "Show Wages",
+        "hourly_wage": "Hourly Wage",
         "invalid_login": "Invalid username or password.",
     },
     "vi": {
@@ -274,6 +280,38 @@ def t(key: str) -> str:
     return TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)
 
 
+def format_money(value: Any) -> str:
+    amount = Decimal(str(value or 0))
+    return f"{amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP):.2f}"
+
+
+def parse_non_negative_decimal(raw: str) -> Decimal | None:
+    if raw == "":
+        return None
+    try:
+        value = Decimal(raw)
+    except (InvalidOperation, ValueError):
+        return None
+    if value < 0:
+        return None
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def has_payroll_access() -> bool:
+    role = (getattr(g, "user", None).role if getattr(g, "user", None) else "") or ""
+    return role.lower() in {"owner", "manager"}
+
+
+def payroll_access_required(func: Any) -> Any:
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if has_payroll_access():
+            return func(*args, **kwargs)
+        abort(403)
+
+    return wrapper
+
+
 @app.before_request
 def load_current_user() -> None:
     user_id = session.get("user_id")
@@ -335,6 +373,33 @@ def monday_for(day: date) -> date:
 def to_minutes(hhmm: str) -> int:
     hour, minute = hhmm.split(":")
     return int(hour) * 60 + int(minute)
+
+
+def shift_duration_hours(start_hhmm: str, end_hhmm: str) -> Decimal:
+    try:
+        start_minutes = to_minutes(start_hhmm)
+        end_minutes = to_minutes(end_hhmm)
+    except (ValueError, AttributeError):
+        return Decimal("0.00")
+    if end_minutes <= start_minutes:
+        end_minutes += 24 * 60
+    duration_minutes = end_minutes - start_minutes
+    duration_hours = Decimal(duration_minutes) / Decimal(60)
+    return duration_hours.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def each_date(start_obj: date, end_obj: date) -> list[str]:
+    total_days = (end_obj - start_obj).days + 1
+    return [(start_obj + timedelta(days=offset)).isoformat() for offset in range(total_days)]
+
+
+def month_bounds(day: date) -> tuple[date, date]:
+    start_obj = day.replace(day=1)
+    if start_obj.month == 12:
+        next_month = start_obj.replace(year=start_obj.year + 1, month=1, day=1)
+    else:
+        next_month = start_obj.replace(month=start_obj.month + 1, day=1)
+    return start_obj, next_month - timedelta(days=1)
 
 
 def ranges_overlap(start_a: str, end_a: str, start_b: str, end_b: str) -> bool:
@@ -437,6 +502,16 @@ def ensure_roster_schema_compatibility() -> None:
         )
 
     db.session.commit()
+
+
+def ensure_staff_schema_compatibility() -> None:
+    inspector = inspect(db.engine)
+    if not inspector.has_table("staff"):
+        return
+    staff_columns = {col["name"] for col in inspector.get_columns("staff")}
+    if "hourly_wage" not in staff_columns:
+        db.session.execute(text("ALTER TABLE staff ADD COLUMN hourly_wage NUMERIC"))
+        db.session.commit()
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -734,11 +809,23 @@ def staff() -> str:
         name = request.form.get("name", "").strip()
         role = request.form.get("role", "").strip()
         email = request.form.get("email", "").strip()
+        hourly_wage_raw = request.form.get("hourly_wage", "").strip()
+        hourly_wage = parse_non_negative_decimal(hourly_wage_raw)
 
         if not name or not role:
             flash("Name and role are required.", "error")
+        elif hourly_wage_raw and hourly_wage is None:
+            flash("Hourly wage must be a non-negative number.", "error")
         else:
-            db.session.add(Staff(org_id=org_id, name=name, role=role, email=email or None))
+            db.session.add(
+                Staff(
+                    org_id=org_id,
+                    name=name,
+                    role=role,
+                    email=email or None,
+                    hourly_wage=hourly_wage,
+                )
+            )
             db.session.commit()
             flash("Staff member added.", "success")
             return redirect(url_for("staff"))
@@ -771,14 +858,20 @@ def edit_staff(staff_id: int) -> Any:
     name = request.form.get("name", "").strip()
     role = request.form.get("role", "").strip()
     email = request.form.get("email", "").strip()
+    hourly_wage_raw = request.form.get("hourly_wage", "").strip()
+    hourly_wage = parse_non_negative_decimal(hourly_wage_raw)
 
     if not name or not role:
         flash("Name and role are required.", "error")
+        return redirect(url_for("staff"))
+    if hourly_wage_raw and hourly_wage is None:
+        flash("Hourly wage must be a non-negative number.", "error")
         return redirect(url_for("staff"))
 
     row.name = name
     row.role = role
     row.email = email or None
+    row.hourly_wage = hourly_wage
     db.session.commit()
     flash("Staff information updated.", "success")
     return redirect(url_for("staff"))
@@ -1432,6 +1525,153 @@ def delete_assignment(assignment_id: int) -> Any:
     return redirect(url_for("roster", roster_date=target_date))
 
 
+@app.route("/payroll")
+@login_required
+@payroll_access_required
+def payroll() -> str | Response:
+    org_id = current_org_id()
+    today_obj = date.today()
+    default_start_obj, default_end_obj = month_bounds(today_obj)
+
+    start_raw = request.args.get("start_date", "").strip()
+    end_raw = request.args.get("end_date", "").strip()
+    start_obj = parse_iso_date(start_raw) if start_raw else default_start_obj
+    end_obj = parse_iso_date(end_raw) if end_raw else default_end_obj
+    if start_obj is None or end_obj is None:
+        flash("Invalid payroll date range.", "error")
+        start_obj, end_obj = default_start_obj, default_end_obj
+    if end_obj < start_obj:
+        flash("End date must be on or after start date.", "error")
+        end_obj = start_obj
+
+    start_date = start_obj.isoformat()
+    end_date = end_obj.isoformat()
+    date_columns = each_date(start_obj, end_obj)
+
+    selected_staff_raw = request.args.get("staff_id", "").strip()
+    selected_staff_id: int | None = None
+    if selected_staff_raw:
+        try:
+            selected_staff_id = int(selected_staff_raw)
+        except ValueError:
+            flash("Invalid staff filter.", "error")
+
+    staff_options = Staff.query.filter_by(org_id=org_id).order_by(Staff.name).all()
+    staff_query = Staff.query.filter(Staff.org_id == org_id)
+    if selected_staff_id is not None:
+        staff_query = staff_query.filter(Staff.id == selected_staff_id)
+    staff_rows = staff_query.order_by(Staff.name).all()
+    staff_ids = [row.id for row in staff_rows]
+
+    payroll_rows: dict[int, dict[str, Any]] = {}
+    total_by_date = {date_key: Decimal("0.00") for date_key in date_columns}
+    grand_total_hours = Decimal("0.00")
+    grand_total_salary = Decimal("0.00")
+
+    for staff_row in staff_rows:
+        wage_value = (
+            Decimal(str(staff_row.hourly_wage)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if staff_row.hourly_wage is not None
+            else Decimal("0.00")
+        )
+        payroll_rows[staff_row.id] = {
+            "staff_id": staff_row.id,
+            "staff_name": staff_row.name,
+            "role": staff_row.role,
+            "hours_by_date": {date_key: Decimal("0.00") for date_key in date_columns},
+            "total_hours": Decimal("0.00"),
+            "hourly_wage": wage_value,
+            "wage_missing": staff_row.hourly_wage is None,
+            "total_salary": Decimal("0.00"),
+        }
+
+    if staff_ids:
+        assignment_rows = (
+            db.session.query(
+                RosterAssignment.staff_id,
+                RosterAssignment.roster_date,
+                ShiftTemplate.start_time,
+                ShiftTemplate.end_time,
+            )
+            .join(RosterVersion, RosterVersion.id == RosterAssignment.version_id)
+            .join(ShiftTemplate, ShiftTemplate.id == RosterAssignment.shift_id)
+            .join(Staff, Staff.id == RosterAssignment.staff_id)
+            .filter(
+                RosterAssignment.org_id == org_id,
+                RosterVersion.org_id == org_id,
+                ShiftTemplate.org_id == org_id,
+                Staff.org_id == org_id,
+                RosterVersion.status == "confirmed",
+                RosterAssignment.roster_date.between(start_date, end_date),
+                RosterAssignment.staff_id.in_(staff_ids),
+            )
+            .order_by(RosterAssignment.roster_date, RosterAssignment.staff_id, ShiftTemplate.start_time)
+            .all()
+        )
+
+        for row in assignment_rows:
+            entry = payroll_rows.get(row.staff_id)
+            if entry is None:
+                continue
+            duration = shift_duration_hours(str(row.start_time), str(row.end_time))
+            roster_date = str(row.roster_date)
+            if roster_date in entry["hours_by_date"]:
+                entry["hours_by_date"][roster_date] += duration
+            entry["total_hours"] += duration
+
+    ordered_rows = []
+    for _, entry in sorted(payroll_rows.items(), key=lambda item: item[1]["staff_name"].lower()):
+        for date_key in date_columns:
+            entry["hours_by_date"][date_key] = entry["hours_by_date"][date_key].quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP,
+            )
+            total_by_date[date_key] += entry["hours_by_date"][date_key]
+        entry["total_hours"] = entry["total_hours"].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        entry["total_salary"] = (entry["total_hours"] * entry["hourly_wage"]).quantize(
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP,
+        )
+        grand_total_hours += entry["total_hours"]
+        grand_total_salary += entry["total_salary"]
+        ordered_rows.append(entry)
+
+    grand_total_hours = grand_total_hours.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    grand_total_salary = grand_total_salary.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    if request.args.get("export", "").strip().lower() == "csv":
+        headers = ["staff_name", "role", *date_columns, "total_hours", "hourly_wage", "total_salary"]
+        csv_rows: list[dict[str, Any]] = []
+        for entry in ordered_rows:
+            line: dict[str, Any] = {
+                "staff_name": entry["staff_name"],
+                "role": entry["role"],
+                "total_hours": format_money(entry["total_hours"]),
+                "hourly_wage": format_money(entry["hourly_wage"]),
+                "total_salary": format_money(entry["total_salary"]),
+            }
+            for date_key in date_columns:
+                line[date_key] = format_money(entry["hours_by_date"][date_key])
+            csv_rows.append(line)
+        filename = f"payroll_{start_obj.strftime('%d%m%Y')}_{end_obj.strftime('%d%m%Y')}.csv"
+        return csv_response(filename, headers, csv_rows)
+
+    return render_template(
+        "payroll.html",
+        start_date=start_date,
+        end_date=end_date,
+        date_columns=date_columns,
+        payroll_rows=ordered_rows,
+        staff_options=staff_options,
+        selected_staff_id=selected_staff_id,
+        totals_row={
+            "hours_by_date": total_by_date,
+            "total_hours": grand_total_hours,
+            "total_salary": grand_total_salary,
+        },
+    )
+
+
 @app.route("/data")
 @login_required
 def data_page() -> str:
@@ -1904,6 +2144,7 @@ def create_admin() -> None:
 with app.app_context():
     db.create_all()
     try:
+        ensure_staff_schema_compatibility()
         ensure_roster_schema_compatibility()
     except SQLAlchemyError:
         db.session.rollback()

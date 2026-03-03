@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2 style="margin-bottom:0.3rem;">Payroll</h2>
+  <p class="hint">Payroll is calculated based on confirmed roster only.</p>
+  <form method="get" class="inline-form">
+    <label>Start Date <input type="date" name="start_date" value="{{ start_date }}" required /></label>
+    <label>End Date <input type="date" name="end_date" value="{{ end_date }}" required /></label>
+    <label>Staff
+      <select name="staff_id">
+        <option value="">All Staff</option>
+        {% for row in staff_options %}
+        <option value="{{ row.id }}" {% if selected_staff_id == row.id %}selected{% endif %}>{{ row.name }} ({{ row.role }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Load</button>
+    <a
+      class="button-link btn-secondary"
+      href="{{ url_for('payroll', start_date=start_date, end_date=end_date, staff_id=selected_staff_id or '', export='csv') }}"
+    >
+      Export Payroll CSV
+    </a>
+  </form>
+</section>
+
+<section class="panel">
+  <table class="payroll-table">
+    <thead>
+      <tr>
+        <th>Staff Name</th>
+        <th>Role</th>
+        {% for date_key in date_columns %}
+        <th>{{ date_key|ddmm }}</th>
+        {% endfor %}
+        <th>Total Hours</th>
+        <th>Hourly Wage</th>
+        <th>Total Salary</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in payroll_rows %}
+      <tr>
+        <td>{{ row.staff_name }}</td>
+        <td>{{ row.role }}</td>
+        {% for date_key in date_columns %}
+        <td>{{ row.hours_by_date[date_key]|money }}</td>
+        {% endfor %}
+        <td>{{ row.total_hours|money }}</td>
+        <td>
+          {{ row.hourly_wage|money }}
+          {% if row.wage_missing %}
+          <span title="Hourly wage is empty. Treated as 0.00" style="color:#b42318;font-weight:700;">*</span>
+          {% endif %}
+        </td>
+        <td>{{ row.total_salary|money }}</td>
+      </tr>
+      {% endfor %}
+      {% if not payroll_rows %}
+      <tr>
+        <td colspan="{{ 5 + date_columns|length }}">No staff found for the selected filter.</td>
+      </tr>
+      {% endif %}
+    </tbody>
+    <tfoot>
+      <tr class="totals-row">
+        <th>Total</th>
+        <th>-</th>
+        {% for date_key in date_columns %}
+        <th>{{ totals_row.hours_by_date[date_key]|money }}</th>
+        {% endfor %}
+        <th>{{ totals_row.total_hours|money }}</th>
+        <th>-</th>
+        <th>{{ totals_row.total_salary|money }}</th>
+      </tr>
+    </tfoot>
+  </table>
+</section>
+{% endblock %}

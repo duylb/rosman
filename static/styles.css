@@ -23,6 +23,10 @@
 
 * { box-sizing: border-box; }
 
+.hidden {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: "Plus Jakarta Sans", "Segoe UI", "Tahoma", sans-serif;
@@ -430,6 +434,18 @@ tbody tr:last-child td {
   vertical-align: middle;
 }
 
+.payroll-table th:nth-child(n + 3),
+.payroll-table td:nth-child(n + 3) {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.totals-row th,
+.totals-row td {
+  background: #f2f6fb;
+  font-weight: 700;
+}
+
 .panel {
   overflow-x: auto;
 }
@@ -460,10 +476,6 @@ tbody tr:last-child td {
   z-index: 40;
   display: grid;
   place-items: center;
-}
-
-.modal.hidden {
-  display: none;
 }
 
 .modal-backdrop {

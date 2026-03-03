@@ -7,6 +7,7 @@
     <label>{{ t('name') }} <input name="name" required /></label>
     <label>{{ t('role') }} <input name="role" required /></label>
     <label>{{ t('email') }} <input type="email" name="email" /></label>
+    <label>Hourly Wage <input type="number" name="hourly_wage" min="0" step="0.01" inputmode="decimal" /></label>
     <button type="submit">{{ t('add') }}</button>
   </form>
 </section>
@@ -22,13 +23,17 @@
 </section>
 
 <section class="panel">
-  <h2>{{ t('staff_list') }}</h2>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+    <h2 style="margin:0;">{{ t('staff_list') }}</h2>
+    <button type="button" id="toggle-wages" class="btn-secondary">Show Wages</button>
+  </div>
   <table>
     <thead>
       <tr>
         <th>{{ t('name') }}</th>
         <th>{{ t('role') }}</th>
         <th>{{ t('email') }}</th>
+        <th class="wage-col hidden" id="wage-header">Hourly Wage</th>
         <th>{{ t('status') }}</th>
         <th>{{ t('action') }}</th>
       </tr>
@@ -39,6 +44,7 @@
         <td>{{ row.name }}</td>
         <td>{{ row.role }}</td>
         <td>{{ row.email or '-' }}</td>
+        <td class="wage-col hidden js-wage-cell">{{ row.hourly_wage|money if row.hourly_wage is not none else '-' }}</td>
         <td>{{ t('active') if row.active else t('inactive') }}</td>
         <td>
           <div class="action-group">
@@ -49,6 +55,7 @@
               data-name="{{ row.name|e }}"
               data-role="{{ row.role|e }}"
               data-email="{{ (row.email or '')|e }}"
+              data-hourly-wage="{{ row.hourly_wage|money if row.hourly_wage is not none else '' }}"
             >
               {{ t('edit') }}
             </button>
@@ -73,6 +80,7 @@
       <label>{{ t('name') }} <input id="edit-name" name="name" required /></label>
       <label>{{ t('role') }} <input id="edit-role" name="role" required /></label>
       <label>{{ t('email') }} <input id="edit-email" type="email" name="email" /></label>
+      <label>Hourly Wage <input id="edit-hourly-wage" type="number" name="hourly_wage" min="0" step="0.01" inputmode="decimal" /></label>
       <div class="action-group">
         <button type="submit">{{ t('save') }}</button>
         <button type="button" class="btn-secondary js-close-modal">{{ t('cancel') }}</button>
@@ -88,8 +96,13 @@
     const inputName = document.getElementById("edit-name");
     const inputRole = document.getElementById("edit-role");
     const inputEmail = document.getElementById("edit-email");
+    const inputHourlyWage = document.getElementById("edit-hourly-wage");
+    const wageToggleButton = document.getElementById("toggle-wages");
+    const wageHeader = document.getElementById("wage-header");
+    const wageCells = document.querySelectorAll(".js-wage-cell");
+    let wagesVisible = false;
 
-    if (!modal || !form || !inputName || !inputRole || !inputEmail) return;
+    if (!modal || !form || !inputName || !inputRole || !inputEmail || !inputHourlyWage) return;
 
     const openModal = (button) => {
       const staffId = button.dataset.id;
@@ -97,6 +110,7 @@
       inputName.value = button.dataset.name || "";
       inputRole.value = button.dataset.role || "";
       inputEmail.value = button.dataset.email || "";
+      inputHourlyWage.value = button.dataset.hourlyWage || "";
       modal.classList.remove("hidden");
       modal.setAttribute("aria-hidden", "false");
       inputName.focus();
@@ -120,6 +134,15 @@
         closeModal();
       }
     });
+
+    if (wageToggleButton && wageHeader) {
+      wageToggleButton.addEventListener("click", () => {
+        wagesVisible = !wagesVisible;
+        wageToggleButton.textContent = wagesVisible ? "Hide Wages" : "Show Wages";
+        wageHeader.classList.toggle("hidden", !wagesVisible);
+        wageCells.forEach((cell) => cell.classList.toggle("hidden", !wagesVisible));
+      });
+    }
   })();
 </script>
 {% endblock %}

@@ -22,6 +22,7 @@
           <a class="{{ 'active' if request.path.startswith('/shifts') else '' }}" href="{{ url_for('shifts') }}">{{ t('nav_shifts') }}</a>
           <a class="{{ 'active' if request.path.startswith('/availability') else '' }}" href="{{ url_for('availability') }}">{{ t('nav_availability') }}</a>
           <a class="{{ 'active' if request.path.startswith('/roster') else '' }}" href="{{ url_for('roster') }}">{{ t('nav_roster') }}</a>
+          <a class="{{ 'active' if request.path.startswith('/payroll') else '' }}" href="{{ url_for('payroll') }}">Payroll</a>
           <a class="{{ 'active' if request.path.startswith('/data') else '' }}" href="{{ url_for('data_page') }}">{{ t('nav_data_io') }}</a>
         </nav>
         <div class="sidebar-footer">
@@ -48,6 +49,8 @@
           {% set page_name = t('page_availability') %}
         {% elif request.path.startswith('/roster') %}
           {% set page_name = t('page_roster') %}
+        {% elif request.path.startswith('/payroll') %}
+          {% set page_name = 'Payroll' %}
         {% elif request.path.startswith('/data') %}
           {% set page_name = t('page_data') %}
         {% endif %}
