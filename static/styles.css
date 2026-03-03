@@ -64,16 +64,13 @@ body {
   border-bottom: 1px solid rgba(176, 196, 226, 0.16);
 }
 
-.brand-badge {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  font-size: 0.84rem;
-  font-weight: 800;
-  background: #dcf6ef;
-  color: #0f5f52;
+.brand-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  margin-right: 0.08rem;
+  border-radius: 6px;
 }
 
 .brand-name {
@@ -129,6 +126,36 @@ body {
 .lang-form,
 .logout-form {
   margin: 0;
+}
+
+.lang-form.lang-toggle {
+  display: flex;
+  gap: 0.36rem;
+}
+
+.lang-form.lang-toggle .lang-toggle-btn {
+  width: auto;
+  min-height: 28px;
+  padding: 0.2rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(176, 196, 226, 0.34);
+  background: transparent;
+  color: var(--sidebar-muted);
+}
+
+.lang-form.lang-toggle .lang-toggle-btn:hover {
+  background: rgba(185, 212, 246, 0.12);
+  border-color: rgba(185, 212, 246, 0.48);
+  color: #e7f0ff;
+}
+
+.lang-form.lang-toggle .lang-toggle-btn.active {
+  background: #1d2b41;
+  border-color: #2c4668;
+  color: #ffffff;
 }
 
 .lang-form button,

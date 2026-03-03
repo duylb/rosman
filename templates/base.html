@@ -4,13 +4,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ title or t('app_title') }}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar">
         <div class="brand">
-          <span class="brand-badge">RM</span>
+          <img
+            src="{{ url_for('static', filename='img/logo.png') }}"
+            alt="{{ t('brand_name') }}"
+            class="brand-logo"
+            width="26"
+            height="26"
+          />
           <div>
             <p class="brand-name">{{ t('brand_name') }}</p>
             <p class="brand-sub">{{ t('brand_sub') }}</p>
@@ -36,11 +43,11 @@
               {{ app_version }}
             </p>
           </div>
-          <form method="post" action="{{ url_for('set_language') }}" class="lang-form" style="display:flex;gap:0.4rem;">
+          <form method="post" action="{{ url_for('set_language') }}" class="lang-form lang-toggle">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}" />
-            <button type="submit" name="lang" value="en" class="{{ '' if lang == 'en' else 'btn-secondary' }}" style="min-height:30px;padding:0.25rem 0.55rem;">EN</button>
-            <button type="submit" name="lang" value="vi" class="{{ '' if lang == 'vi' else 'btn-secondary' }}" style="min-height:30px;padding:0.25rem 0.55rem;">VI</button>
+            <button type="submit" name="lang" value="en" class="lang-toggle-btn {{ 'active' if lang == 'en' else '' }}">EN</button>
+            <button type="submit" name="lang" value="vi" class="lang-toggle-btn {{ 'active' if lang == 'vi' else '' }}">VI</button>
           </form>
           <form method="post" action="{{ url_for('logout') }}" class="logout-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
