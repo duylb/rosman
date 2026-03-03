@@ -70,7 +70,7 @@
         <td>{{ row.staff_name }}</td>
         <td>{{ row.staff_role }}</td>
         <td>{{ row.shift_name }} ({{ row.start_time }} - {{ row.end_time }})</td>
-        <td>{{ row.start_date }} {{ t('to') }} {{ row.end_date }}</td>
+        <td>{{ row.start_date|ddmm }} {{ t('to') }} {{ row.end_date|ddmm }}</td>
         <td>{{ row.notes or '-' }}</td>
         <td>
           <form method="post" action="{{ url_for('delete_shift_preference', preference_id=row.id) }}">
@@ -107,7 +107,7 @@
       <tr>
         <td>{{ row.staff_name }}</td>
         <td>{{ row.staff_role }}</td>
-        <td>{{ row.start_date }} {{ t('to') }} {{ row.end_date }}</td>
+        <td>{{ row.start_date|ddmm }} {{ t('to') }} {{ row.end_date|ddmm }}</td>
         <td>{{ t(row.status) }}</td>
         <td>{{ row.notes or '-' }}</td>
         <td>

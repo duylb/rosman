@@ -424,6 +424,12 @@ tbody tr:last-child td {
   border-bottom: none;
 }
 
+.roster-table th:nth-child(n + 3),
+.roster-table td:nth-child(n + 3) {
+  text-align: center;
+  vertical-align: middle;
+}
+
 .panel {
   overflow-x: auto;
 }

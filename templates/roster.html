@@ -7,11 +7,45 @@
       <p class="hint" style="margin:0;">{{ week_range_label }}</p>
     </div>
     <div class="action-group">
+      {% if version_list %}
+      <details style="position:relative;">
+        <summary class="button-link btn-secondary" style="list-style:none;cursor:pointer;">
+          {% if current_version and current_version.status == "confirmed" %}
+            Confirmed - {{ (current_version.confirmed_at or current_version.created_at)|ddmm }}
+          {% elif current_version and current_version.status == "draft" %}
+            Draft - {{ current_version.created_at|ddmm }}
+          {% else %}
+            Version History
+          {% endif %}
+        </summary>
+        <div style="position:absolute;right:0;z-index:20;margin-top:0.4rem;min-width:300px;border:1px solid var(--line);border-radius:10px;background:#fff;box-shadow:var(--shadow-2);padding:0.45rem;">
+          {% for version in version_list %}
+          <a
+            href="{{ url_for('roster', roster_date=week_start, version_id=version.id) }}"
+            style="display:flex;justify-content:space-between;align-items:center;gap:0.6rem;padding:0.45rem 0.52rem;border-radius:8px;text-decoration:none;color:var(--text);"
+          >
+            <span>
+              {% if version.status == "confirmed" %}
+                <span class="meta-chip">Confirmed</span>
+                <span class="hint">{{ (version.confirmed_at or version.created_at)|ddmm }}</span>
+              {% else %}
+                <span class="meta-chip" style="background:#fff8e6;border-color:#efd9a6;color:#8a5a00;">Draft</span>
+                <span class="hint">{{ version.created_at|ddmm }}</span>
+              {% endif %}
+            </span>
+            {% if current_version and current_version.id == version.id %}
+            <span class="hint">Viewing</span>
+            {% endif %}
+          </a>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
       {% if current_version and current_version.status == "confirmed" %}
         <div>
           <span class="meta-chip">Confirmed</span>
           {% if current_version.confirmed_at %}
-          <div class="hint" style="margin-top:0.3rem;">Confirmed at {{ current_version.confirmed_at.strftime("%Y-%m-%d %H:%M") }}</div>
+          <div class="hint" style="margin-top:0.3rem;">Confirmed at {{ current_version.confirmed_at|ddmm }}</div>
           {% endif %}
         </div>
       {% elif current_version and current_version.status == "draft" %}
@@ -43,8 +77,9 @@
   </form>
 </section>
 
+{% if not current_version or current_version.status == "draft" %}
 <section class="panel">
-  <h2>{{ t('assignments_for') }} {{ selected_date }}</h2>
+  <h2>{{ t('assignments_for') }} {{ selected_date|ddmm }}</h2>
   <form method="post" class="grid-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <input type="hidden" name="roster_date" value="{{ selected_date }}" />
@@ -80,16 +115,21 @@
   </form>
   <p class="hint">{{ t('auto_schedule_rule') }}</p>
 </section>
+{% else %}
+<section class="panel">
+  <p class="hint">Viewing confirmed version (read-only).</p>
+</section>
+{% endif %}
 
 <section class="panel"{% if current_version and current_version.status == "draft" %} style="border-left:4px solid #e1b651;"{% endif %}>
-  <h2>{{ t('roster') }}: {{ week_dates[0] }} to {{ week_dates[-1] }}</h2>
-  <table>
+  <h2>{{ t('roster') }}: {{ week_dates[0]|ddmm }} to {{ week_dates[-1]|ddmm }}</h2>
+  <table class="roster-table">
     <thead>
       <tr>
         <th>{{ t('staff') }}</th>
         <th>{{ t('role') }}</th>
         {% for col in week_columns %}
-        <th>{{ col.weekday }}<br>{{ col.date }}</th>
+        <th>{{ col.weekday }}<br>{{ col.date|ddmm }}</th>
         {% endfor %}
       </tr>
     </thead>
@@ -119,5 +159,8 @@
       {% endif %}
     </tbody>
   </table>
+  {% if is_historical_view %}
+  <p class="hint" style="margin-top:0.65rem;">Viewing historical version.</p>
+  {% endif %}
 </section>
 {% endblock %}

@@ -52,6 +52,7 @@ if not app.config.get("SQLALCHEMY_DATABASE_URI"):
 db.init_app(app)
 csrf.init_app(app)
 migrate.init_app(app, db)
+app.jinja_env.filters["ddmm"] = lambda value: format_ddmm(value)
 SUPPORTED_LANGS = {"en", "vi"}
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "en": {
@@ -308,6 +309,23 @@ def parse_iso_date(raw: str) -> date | None:
         return datetime.strptime(raw, "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def format_ddmm(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.strftime("%d-%m")
+    if isinstance(value, date):
+        return value.strftime("%d-%m")
+    if isinstance(value, str):
+        raw = value.strip()
+        if len(raw) >= 10 and raw[4:5] == "-" and raw[7:8] == "-":
+            parsed = parse_iso_date(raw[:10])
+            if parsed is not None:
+                return parsed.strftime("%d-%m")
+        return value
+    return str(value)
 
 
 def monday_for(day: date) -> date:
@@ -993,20 +1011,48 @@ def roster() -> str:
     selected_date = request.values.get("roster_date", date.today().isoformat())
     selected_obj = parse_iso_date(selected_date) or date.today()
     week_start_obj = monday_for(selected_obj)
+    version_id_raw = request.args.get("version_id", "").strip()
 
-    confirmed_version = (
+    confirmed_versions = (
         RosterVersion.query.filter_by(org_id=org_id, week_start=week_start_obj, status="confirmed")
-        .order_by(RosterVersion.id.desc())
-        .first()
+        .order_by(RosterVersion.confirmed_at.desc(), RosterVersion.id.desc())
+        .all()
     )
-    draft_version = (
+    draft_versions = (
         RosterVersion.query.filter_by(org_id=org_id, week_start=week_start_obj, status="draft")
-        .order_by(RosterVersion.id.desc())
-        .first()
+        .order_by(RosterVersion.created_at.desc(), RosterVersion.id.desc())
+        .all()
     )
-    current_version = confirmed_version or draft_version
+    version_list = [*confirmed_versions, *draft_versions]
+
+    default_version = (confirmed_versions[0] if confirmed_versions else None) or (
+        draft_versions[0] if draft_versions else None
+    )
+    current_version = default_version
+    if version_id_raw:
+        try:
+            selected_version_id = int(version_id_raw)
+        except ValueError:
+            abort(404)
+        current_version = RosterVersion.query.filter_by(
+            id=selected_version_id,
+            org_id=org_id,
+            week_start=week_start_obj,
+        ).first()
+        if current_version is None:
+            abort(404)
 
     if request.method == "POST":
+        if current_version is not None and current_version.status == "confirmed":
+            flash("Confirmed versions are read-only. Switch to a draft version to edit.", "error")
+            return redirect(
+                url_for(
+                    "roster",
+                    roster_date=week_start_obj.isoformat(),
+                    version_id=current_version.id,
+                )
+            )
+
         staff_id = request.form.get("staff_id", "").strip()
         shift_id = request.form.get("shift_id", "").strip()
         notes = request.form.get("notes", "").strip()
@@ -1103,7 +1149,12 @@ def roster() -> str:
         for offset in range(7)
     ]
     week_dates = [item["date"] for item in week_columns]
-    week_range_label = f"{week_start_obj.strftime('%d %b')} - {(week_start_obj + timedelta(days=6)).strftime('%d %b')}"
+    week_range_label = f"{week_start_obj.strftime('%d-%m')} - {(week_start_obj + timedelta(days=6)).strftime('%d-%m')}"
+    is_historical_view = (
+        current_version is not None
+        and default_version is not None
+        and current_version.id != default_version.id
+    )
     assignments: list[dict[str, Any]] = []
     if current_version is not None:
         assignments = [
@@ -1156,6 +1207,8 @@ def roster() -> str:
         week_dates=week_dates,
         week_range_label=week_range_label,
         current_version=current_version,
+        version_list=version_list,
+        is_historical_view=is_historical_view,
         staff_rows=staff_rows,
         shift_rows=shift_rows,
         assignments=assignments,
@@ -1177,7 +1230,7 @@ def auto_schedule() -> Any:
         flash("Need at least one active staff and one shift template before auto-scheduling.", "error")
     else:
         flash(
-            f"Auto-schedule completed for week of {week_start.isoformat()}: added {added} assignments, {unfilled} slots unfilled.",
+            f"Auto-schedule completed for week of {week_start.strftime('%d-%m')}: added {added} assignments, {unfilled} slots unfilled.",
             "success",
         )
     return redirect(url_for("roster", roster_date=week_start.isoformat()))
