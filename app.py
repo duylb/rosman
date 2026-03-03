@@ -500,22 +500,20 @@ def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
     week_start_str = week_start.isoformat()
     week_end_str = week_end.isoformat()
 
-    existing_drafts = (
+    existing_draft = (
         RosterVersion.query.filter_by(org_id=org_id, week_start=week_start, status="draft")
         .order_by(RosterVersion.id.desc())
-        .all()
+        .first()
     )
-    for draft in existing_drafts:
-        db.session.delete(draft)
-    db.session.flush()
-
-    draft_version = RosterVersion(
-        org_id=org_id,
-        week_start=week_start,
-        status="draft",
-    )
-    db.session.add(draft_version)
-    db.session.flush()
+    draft_version = existing_draft
+    if draft_version is None:
+        draft_version = RosterVersion(
+            org_id=org_id,
+            week_start=week_start,
+            status="draft",
+        )
+        db.session.add(draft_version)
+        db.session.flush()
 
     recent_counts = {
         staff_id: count
@@ -532,7 +530,21 @@ def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
             .all()
         )
     }
-    week_counts: dict[int, int] = {row.id: 0 for row in staff_rows}
+    week_counts = {
+        staff_id: count
+        for staff_id, count in (
+            db.session.query(RosterAssignment.staff_id, func.count(RosterAssignment.id))
+            .filter(
+                RosterAssignment.org_id == org_id,
+                RosterAssignment.version_id == draft_version.id,
+                RosterAssignment.roster_date.between(week_start.isoformat(), week_end.isoformat()),
+            )
+            .group_by(RosterAssignment.staff_id)
+            .all()
+        )
+    }
+    for row in staff_rows:
+        week_counts.setdefault(row.id, 0)
     preference_rows = (
         StaffShiftPreference.query.filter(
             StaffShiftPreference.org_id == org_id,
@@ -555,6 +567,20 @@ def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
                     RosterAssignment.org_id == org_id,
                     RosterAssignment.roster_date == day_str,
                 )
+                .all()
+            )
+        }
+        manual_assigned_staff = {
+            staff_id
+            for (staff_id,) in (
+                db.session.query(RosterAssignment.staff_id)
+                .filter(
+                    RosterAssignment.org_id == org_id,
+                    RosterAssignment.version_id == draft_version.id,
+                    RosterAssignment.roster_date == day_str,
+                    (RosterAssignment.notes.is_(None)) | (RosterAssignment.notes != "Auto-scheduled"),
+                )
+                .distinct()
                 .all()
             )
         }
@@ -607,7 +633,11 @@ def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
         }
 
         for shift in shift_rows:
-            open_slots = max(0, shift.required_staff - shift_fill.get(shift.id, 0))
+            # Existing assignments in this draft (manual + auto) always take priority.
+            current_fill = shift_fill.get(shift.id, 0)
+            if current_fill >= shift.required_staff:
+                continue
+            open_slots = shift.required_staff - current_fill
             preferred_for_shift = {
                 pref.staff_id
                 for pref in preference_rows
@@ -618,6 +648,7 @@ def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
                     s
                     for s in staff_rows
                     if s.id not in blocked
+                    and s.id not in manual_assigned_staff
                     and (s.id, shift.id) not in existing_staff_shift_pairs
                     and all(
                         not ranges_overlap(
@@ -1339,30 +1370,27 @@ def discard_roster_version(version_id: int) -> Any:
 @login_required
 def delete_assignment(assignment_id: int) -> Any:
     roster_date = request.form.get("roster_date", date.today().isoformat())
-    selected_obj = parse_iso_date(roster_date) or date.today()
-    week_start_obj = monday_for(selected_obj)
     org_id = current_org_id()
-    draft_version = (
-        RosterVersion.query.filter_by(org_id=org_id, week_start=week_start_obj, status="draft")
-        .order_by(RosterVersion.id.desc())
+    assignment = (
+        RosterAssignment.query.join(RosterVersion, RosterVersion.id == RosterAssignment.version_id)
+        .filter(
+            RosterAssignment.id == assignment_id,
+            RosterAssignment.org_id == org_id,
+            RosterVersion.org_id == org_id,
+        )
         .first()
     )
-    if draft_version is None:
-        flash("Confirmed roster is read-only. Create or load a draft version to edit.", "error")
-        return redirect(url_for("roster", roster_date=roster_date))
+    if assignment is None:
+        abort(404)
 
-    assignment = RosterAssignment.query.filter_by(
-        id=assignment_id,
-        org_id=org_id,
-        version_id=draft_version.id,
-    ).first()
-    if assignment is not None:
-        db.session.delete(assignment)
-        db.session.commit()
-        flash("Assignment removed.", "success")
-    else:
-        flash("Confirmed roster is read-only. Only draft assignments can be removed.", "error")
-    return redirect(url_for("roster", roster_date=roster_date))
+    if assignment.version.status != "draft":
+        abort(403)
+
+    target_date = roster_date or assignment.version.week_start.isoformat()
+    db.session.delete(assignment)
+    db.session.commit()
+    flash("Assignment removed.", "success")
+    return redirect(url_for("roster", roster_date=target_date))
 
 
 @app.route("/data")

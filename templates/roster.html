@@ -143,7 +143,19 @@
           {% set day_assignments = assignments_by_staff_and_day[staff.id][col.date] %}
           {% if day_assignments %}
             {% for row in day_assignments %}
-              <div>{{ row.shift_name }}</div>
+              <div style="display:flex;align-items:center;justify-content:center;gap:0.35rem;">
+                <span>{{ row.shift_name }}</span>
+                {% if current_version and current_version.status == "draft" %}
+                <form method="post" action="{{ url_for('delete_assignment', assignment_id=row.id) }}" onsubmit="return confirm('Remove this shift assignment?');" style="margin:0;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                  <input type="hidden" name="roster_date" value="{{ selected_date }}" />
+                  <button type="submit" class="btn-danger-lite" style="min-height:22px;padding:0.05rem 0.35rem;line-height:1;">&times;</button>
+                </form>
+                {% endif %}
+                {% if current_version and current_version.status == "draft" and row.notes != "Auto-scheduled" %}
+                <span class="hint" style="margin:0;">M</span>
+                {% endif %}
+              </div>
             {% endfor %}
           {% else %}
             <span class="hint">-</span>
