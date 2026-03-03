@@ -920,11 +920,20 @@ def availability() -> str:
             "end_date": row.end_date,
             "status": row.status,
             "notes": row.notes,
-            "staff_name": row.staff.name,
-            "staff_role": row.staff.role,
+            "staff_name": row.staff_name,
+            "staff_role": row.staff_role,
         }
         for row in (
-            StaffAvailability.query.join(Staff)
+            db.session.query(
+                StaffAvailability.id,
+                StaffAvailability.start_date,
+                StaffAvailability.end_date,
+                StaffAvailability.status,
+                StaffAvailability.notes,
+                Staff.name.label("staff_name"),
+                Staff.role.label("staff_role"),
+            )
+            .join(Staff, Staff.id == StaffAvailability.staff_id)
             .filter(StaffAvailability.org_id == org_id, Staff.org_id == org_id)
             .order_by(StaffAvailability.start_date.desc(), Staff.name)
             .all()
@@ -937,14 +946,26 @@ def availability() -> str:
             "start_date": row.start_date,
             "end_date": row.end_date,
             "notes": row.notes,
-            "staff_name": row.staff.name,
-            "staff_role": row.staff.role,
-            "shift_name": row.shift_template.name,
-            "start_time": row.shift_template.start_time,
-            "end_time": row.shift_template.end_time,
+            "staff_name": row.staff_name,
+            "staff_role": row.staff_role,
+            "shift_name": row.shift_name,
+            "start_time": row.start_time,
+            "end_time": row.end_time,
         }
         for row in (
-            StaffShiftPreference.query.join(Staff).join(ShiftTemplate)
+            db.session.query(
+                StaffShiftPreference.id,
+                StaffShiftPreference.start_date,
+                StaffShiftPreference.end_date,
+                StaffShiftPreference.notes,
+                Staff.name.label("staff_name"),
+                Staff.role.label("staff_role"),
+                ShiftTemplate.name.label("shift_name"),
+                ShiftTemplate.start_time,
+                ShiftTemplate.end_time,
+            )
+            .join(Staff, Staff.id == StaffShiftPreference.staff_id)
+            .join(ShiftTemplate, ShiftTemplate.id == StaffShiftPreference.shift_id)
             .filter(
                 StaffShiftPreference.org_id == org_id,
                 Staff.org_id == org_id,
@@ -1087,7 +1108,13 @@ def roster() -> str:
             abort(404)
 
     if request.method == "POST":
-        if current_version is not None and current_version.status == "confirmed":
+        # If user explicitly selected a confirmed version, keep it read-only.
+        # Otherwise (default view), allow creating/filling a draft for manual edits.
+        if (
+            version_id_raw
+            and current_version is not None
+            and current_version.status == "confirmed"
+        ):
             flash("Confirmed versions are read-only. Switch to a draft version to edit.", "error")
             return redirect(
                 url_for(
@@ -1201,34 +1228,46 @@ def roster() -> str:
     )
     assignments: list[dict[str, Any]] = []
     if current_version is not None:
+        assignment_rows = (
+            db.session.query(
+                RosterAssignment.id,
+                RosterAssignment.roster_date,
+                RosterAssignment.staff_id,
+                RosterAssignment.notes,
+                Staff.name.label("staff_name"),
+                Staff.role.label("staff_role"),
+                ShiftTemplate.name.label("shift_name"),
+                ShiftTemplate.start_time,
+                ShiftTemplate.end_time,
+            )
+            .join(RosterVersion, RosterVersion.id == RosterAssignment.version_id)
+            .join(Staff, Staff.id == RosterAssignment.staff_id)
+            .join(ShiftTemplate, ShiftTemplate.id == RosterAssignment.shift_id)
+            .filter(
+                RosterAssignment.org_id == org_id,
+                RosterVersion.org_id == org_id,
+                RosterVersion.week_start == week_start_obj,
+                RosterAssignment.version_id == current_version.id,
+                Staff.org_id == org_id,
+                ShiftTemplate.org_id == org_id,
+                RosterAssignment.roster_date.between(week_dates[0], week_dates[-1]),
+            )
+            .order_by(RosterAssignment.roster_date, ShiftTemplate.start_time, Staff.name)
+            .all()
+        )
         assignments = [
             {
                 "id": row.id,
                 "roster_date": row.roster_date,
-                "staff_id": row.staff.id,
+                "staff_id": row.staff_id,
                 "notes": row.notes,
-                "staff_name": row.staff.name,
-                "staff_role": row.staff.role,
-                "shift_name": row.shift_template.name,
-                "start_time": row.shift_template.start_time,
-                "end_time": row.shift_template.end_time,
+                "staff_name": row.staff_name,
+                "staff_role": row.staff_role,
+                "shift_name": row.shift_name,
+                "start_time": row.start_time,
+                "end_time": row.end_time,
             }
-            for row in (
-                RosterAssignment.query.join(RosterVersion, RosterVersion.id == RosterAssignment.version_id)
-                .join(Staff)
-                .join(ShiftTemplate)
-                .filter(
-                    RosterAssignment.org_id == org_id,
-                    RosterVersion.org_id == org_id,
-                    RosterVersion.week_start == week_start_obj,
-                    RosterAssignment.version_id == current_version.id,
-                    Staff.org_id == org_id,
-                    ShiftTemplate.org_id == org_id,
-                    RosterAssignment.roster_date.between(week_dates[0], week_dates[-1]),
-                )
-                .order_by(RosterAssignment.roster_date, ShiftTemplate.start_time, Staff.name)
-                .all()
-            )
+            for row in assignment_rows
         ]
 
     assignments_by_staff_and_day: dict[int, dict[str, list[dict[str, Any]]]] = {
@@ -1438,21 +1477,30 @@ def export_dataset(dataset: str) -> Response:
         rows = [
             {
                 "roster_date": row.roster_date,
-                "staff_id": row.staff.id,
-                "staff_name": row.staff.name,
-                "staff_role": row.staff.role,
-                "shift_name": row.shift_template.name,
-                "start_time": row.shift_template.start_time,
+                "staff_id": row.staff_id,
+                "staff_name": row.staff_name,
+                "staff_role": row.staff_role,
+                "shift_name": row.shift_name,
+                "start_time": row.start_time,
             }
             for row in (
-                RosterAssignment.query.join(Staff).join(ShiftTemplate).join(RosterVersion)
+                db.session.query(
+                    RosterAssignment.roster_date,
+                    Staff.id.label("staff_id"),
+                    Staff.name.label("staff_name"),
+                    Staff.role.label("staff_role"),
+                    ShiftTemplate.name.label("shift_name"),
+                    ShiftTemplate.start_time,
+                )
+                .join(Staff, Staff.id == RosterAssignment.staff_id)
+                .join(ShiftTemplate, ShiftTemplate.id == RosterAssignment.shift_id)
+                .join(RosterVersion, RosterVersion.id == RosterAssignment.version_id)
                 .filter(
                     RosterAssignment.org_id == org_id,
                     RosterAssignment.roster_date.between(start_obj.isoformat(), end_obj.isoformat()),
                     Staff.org_id == org_id,
                     ShiftTemplate.org_id == org_id,
                     RosterVersion.org_id == org_id,
-                    RosterVersion.id == RosterAssignment.version_id,
                     RosterVersion.status.in_(status_filter),
                 )
                 .order_by(RosterAssignment.roster_date, Staff.name, ShiftTemplate.start_time)
@@ -1558,14 +1606,22 @@ def export_dataset(dataset: str) -> Response:
         rows = [
             {
                 "id": row.id,
-                "staff_name": row.staff.name,
+                "staff_name": row.staff_name,
                 "start_date": row.start_date,
                 "end_date": row.end_date,
                 "status": row.status,
                 "notes": row.notes,
             }
             for row in (
-                StaffAvailability.query.join(Staff)
+                db.session.query(
+                    StaffAvailability.id,
+                    Staff.name.label("staff_name"),
+                    StaffAvailability.start_date,
+                    StaffAvailability.end_date,
+                    StaffAvailability.status,
+                    StaffAvailability.notes,
+                )
+                .join(Staff, Staff.id == StaffAvailability.staff_id)
                 .filter(
                     StaffAvailability.org_id == org_id,
                     Staff.org_id == org_id,
