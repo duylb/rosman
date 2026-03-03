@@ -14,24 +14,26 @@
 
 <section class="panel">
   <h2>{{ t('shift_templates') }}</h2>
-  <table class="data-table app-table">
-    <thead>
-      <tr>
-        <th>{{ t('name') }}</th>
-        <th>{{ t('time') }}</th>
-        <th>{{ t('required_staff') }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in shifts %}
-      <tr>
-        <td>{{ row.name }}</td>
-        <td>{{ row.start_time }} - {{ row.end_time }}</td>
-        <td>{{ row.required_staff }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-wrapper">
+    <table class="data-table app-table">
+      <thead>
+        <tr>
+          <th>{{ t('name') }}</th>
+          <th>{{ t('time') }}</th>
+          <th>{{ t('required_staff') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in shifts %}
+        <tr>
+          <td>{{ row.name }}</td>
+          <td>{{ row.start_time }} - {{ row.end_time }}</td>
+          <td>{{ row.required_staff }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 {% endblock %}
 

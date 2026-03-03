@@ -123,54 +123,56 @@
 
 <section class="panel{% if current_version and current_version.status == "draft" %} panel-draft{% endif %}">
   <h2>{{ t('roster') }}: {{ week_dates[0]|datefmt }} {{ t('to') }} {{ week_dates[-1]|datefmt }}</h2>
-  <table class="data-table app-table roster-table">
-    <thead>
-      <tr>
-        <th>{{ t('staff') }}</th>
-        <th>{{ t('role') }}</th>
-        {% for col in week_columns %}
-        <th>{{ col.weekday }}<br>{{ col.date|datefmt(false) }}</th>
+  <div class="table-wrapper">
+    <table class="data-table app-table roster-table">
+      <thead>
+        <tr>
+          <th>{{ t('staff') }}</th>
+          <th>{{ t('role') }}</th>
+          {% for col in week_columns %}
+          <th>{{ col.weekday }}<br>{{ col.date|datefmt(false) }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for staff in staff_rows %}
+        <tr>
+          <td>{{ staff.name }}</td>
+          <td>{{ staff.role }}</td>
+          {% for col in week_columns %}
+          <td>
+            {% set day_assignments = assignments_by_staff_and_day[staff.id][col.date] %}
+            {% if day_assignments %}
+              {% for row in day_assignments %}
+                <div class="roster-cell-row">
+                  <span>{{ row.shift_name }}</span>
+                  {% if current_version and current_version.status == "draft" %}
+                  <form method="post" action="{{ url_for('delete_assignment', assignment_id=row.id) }}" onsubmit="return confirm('{{ t('remove_shift_assignment_prompt') }}');" class="form-inline-zero">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <input type="hidden" name="roster_date" value="{{ selected_date }}" />
+                    <button type="submit" class="btn-danger btn-icon-danger">&times;</button>
+                  </form>
+                  {% endif %}
+                  {% if current_version and current_version.status == "draft" and row.notes != "Auto-scheduled" %}
+                  <span class="hint hint-no-margin">{{ t('manual_assignment_short') }}</span>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            {% else %}
+              <span class="hint">-</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
         {% endfor %}
-      </tr>
-    </thead>
-    <tbody>
-      {% for staff in staff_rows %}
-      <tr>
-        <td>{{ staff.name }}</td>
-        <td>{{ staff.role }}</td>
-        {% for col in week_columns %}
-        <td>
-          {% set day_assignments = assignments_by_staff_and_day[staff.id][col.date] %}
-          {% if day_assignments %}
-            {% for row in day_assignments %}
-              <div class="roster-cell-row">
-                <span>{{ row.shift_name }}</span>
-                {% if current_version and current_version.status == "draft" %}
-                <form method="post" action="{{ url_for('delete_assignment', assignment_id=row.id) }}" onsubmit="return confirm('{{ t('remove_shift_assignment_prompt') }}');" class="form-inline-zero">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                  <input type="hidden" name="roster_date" value="{{ selected_date }}" />
-                  <button type="submit" class="btn-danger btn-icon-danger">&times;</button>
-                </form>
-                {% endif %}
-                {% if current_version and current_version.status == "draft" and row.notes != "Auto-scheduled" %}
-                <span class="hint hint-no-margin">{{ t('manual_assignment_short') }}</span>
-                {% endif %}
-              </div>
-            {% endfor %}
-          {% else %}
-            <span class="hint">-</span>
-          {% endif %}
-        </td>
-        {% endfor %}
-      </tr>
-      {% endfor %}
-      {% if not staff_rows %}
-      <tr>
-        <td colspan="{{ 2 + week_columns|length }}">{{ t('no_assignments_for_date') }}</td>
-      </tr>
-      {% endif %}
-    </tbody>
-  </table>
+        {% if not staff_rows %}
+        <tr>
+          <td colspan="{{ 2 + week_columns|length }}">{{ t('no_assignments_for_date') }}</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
   {% if is_historical_view %}
   <p class="hint hint-top">{{ t('viewing_historical_version') }}</p>
   {% endif %}

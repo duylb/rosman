@@ -36,62 +36,64 @@
 </section>
 
 <section class="panel">
-  <table class="data-table app-table payroll-table">
-    <thead>
-      <tr>
-        <th>{{ t('staff_name') }}</th>
-        <th>{{ t('role') }}</th>
-        {% for date_key in date_columns %}
-        <th>{{ date_key|datefmt }}</th>
+  <div class="table-wrapper">
+    <table class="data-table app-table payroll-table">
+      <thead>
+        <tr>
+          <th>{{ t('staff_name') }}</th>
+          <th>{{ t('role') }}</th>
+          {% for date_key in date_columns %}
+          <th>{{ date_key|datefmt }}</th>
+          {% endfor %}
+          <th>{{ t('total_hours') }}</th>
+          <th>{{ t('hourly_wage') }}</th>
+          <th>{{ t('total_salary') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in payroll_rows %}
+        <tr>
+          <td>{{ row.staff_name }}</td>
+          <td>{{ row.role }}</td>
+          {% for date_key in date_columns %}
+          <td>{{ row.hours_by_date[date_key]|money }}</td>
+          {% endfor %}
+          <td>{{ row.total_hours|money }}</td>
+          <td>
+            {{ row.hourly_wage|money }}
+            {% if row.wage_missing %}
+            <span title="{{ t('wage_missing_hint') }}" class="wage-warning">*</span>
+            {% endif %}
+          </td>
+          <td>{{ row.total_salary|money }}</td>
+        </tr>
         {% endfor %}
-        <th>{{ t('total_hours') }}</th>
-        <th>{{ t('hourly_wage') }}</th>
-        <th>{{ t('total_salary') }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in payroll_rows %}
-      <tr>
-        <td>{{ row.staff_name }}</td>
-        <td>{{ row.role }}</td>
-        {% for date_key in date_columns %}
-        <td>{{ row.hours_by_date[date_key]|money }}</td>
-        {% endfor %}
-        <td>{{ row.total_hours|money }}</td>
-        <td>
-          {{ row.hourly_wage|money }}
-          {% if row.wage_missing %}
-          <span title="{{ t('wage_missing_hint') }}" class="wage-warning">*</span>
-          {% endif %}
-        </td>
-        <td>{{ row.total_salary|money }}</td>
-      </tr>
-      {% endfor %}
-      {% if not payroll_rows %}
-      <tr>
-        <td colspan="{{ 5 + date_columns|length }}">
-          {% if selected_department %}
-          {{ t('no_staff_found_in_department').format(department=selected_department) }}
-          {% else %}
-          {{ t('no_staff_found_for_filter') }}
-          {% endif %}
-        </td>
-      </tr>
-      {% endif %}
-    </tbody>
-    <tfoot>
-      <tr class="totals-row">
-        <th>{{ t('total') }}</th>
-        <th>-</th>
-        {% for date_key in date_columns %}
-        <th>{{ totals_row.hours_by_date[date_key]|money }}</th>
-        {% endfor %}
-        <th>{{ totals_row.total_hours|money }}</th>
-        <th>-</th>
-        <th>{{ totals_row.total_salary|money }}</th>
-      </tr>
-    </tfoot>
-  </table>
+        {% if not payroll_rows %}
+        <tr>
+          <td colspan="{{ 5 + date_columns|length }}">
+            {% if selected_department %}
+            {{ t('no_staff_found_in_department').format(department=selected_department) }}
+            {% else %}
+            {{ t('no_staff_found_for_filter') }}
+            {% endif %}
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
+      <tfoot>
+        <tr class="totals-row">
+          <th>{{ t('total') }}</th>
+          <th>-</th>
+          {% for date_key in date_columns %}
+          <th>{{ totals_row.hours_by_date[date_key]|money }}</th>
+          {% endfor %}
+          <th>{{ totals_row.total_hours|money }}</th>
+          <th>-</th>
+          <th>{{ totals_row.total_salary|money }}</th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
 </section>
 {% endblock %}
 

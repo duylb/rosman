@@ -35,51 +35,53 @@
       <button type="button" id="toggle-wages" class="btn-secondary">{{ t('show_wages') }}</button>
     </div>
   </div>
-  <table class="data-table app-table">
-    <thead>
-      <tr>
-        <th>{{ t('name') }}</th>
-        <th>{{ t('role') }}</th>
-        <th>{{ t('department') }}</th>
-        <th>{{ t('email') }}</th>
-        <th class="wage-col hidden" id="wage-header">{{ t('hourly_wage') }}</th>
-        <th>{{ t('status') }}</th>
-        <th>{{ t('action') }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in staff %}
-      <tr>
-        <td>{{ row.name }}</td>
-        <td>{{ row.role }}</td>
-        <td>{{ row.department or '-' }}</td>
-        <td>{{ row.email or '-' }}</td>
-        <td class="wage-col hidden js-wage-cell">{{ row.hourly_wage|money if row.hourly_wage is not none else '-' }}</td>
-        <td>{{ t('active') if row.active else t('inactive') }}</td>
-        <td>
-          <div class="action-group">
-            <button
-              type="button"
-              class="btn-secondary js-edit-staff"
-              data-id="{{ row.id }}"
-              data-name="{{ row.name|e }}"
-              data-role="{{ row.role|e }}"
-              data-department="{{ (row.department or '')|e }}"
-              data-email="{{ (row.email or '')|e }}"
-              data-hourly-wage="{{ row.hourly_wage|money if row.hourly_wage is not none else '' }}"
-            >
-              {{ t('edit') }}
-            </button>
-            <form method="post" action="{{ url_for('toggle_staff', staff_id=row.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-              <button type="submit" class="{{ 'btn-danger' if row.active else 'btn-secondary' }}">{{ t('disable') if row.active else t('enable') }}</button>
-            </form>
-          </div>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-wrapper">
+    <table class="data-table app-table">
+      <thead>
+        <tr>
+          <th>{{ t('name') }}</th>
+          <th>{{ t('role') }}</th>
+          <th>{{ t('department') }}</th>
+          <th>{{ t('email') }}</th>
+          <th class="wage-col hidden" id="wage-header">{{ t('hourly_wage') }}</th>
+          <th>{{ t('status') }}</th>
+          <th>{{ t('action') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in staff %}
+        <tr>
+          <td>{{ row.name }}</td>
+          <td>{{ row.role }}</td>
+          <td>{{ row.department or '-' }}</td>
+          <td>{{ row.email or '-' }}</td>
+          <td class="wage-col hidden js-wage-cell">{{ row.hourly_wage|money if row.hourly_wage is not none else '-' }}</td>
+          <td>{{ t('active') if row.active else t('inactive') }}</td>
+          <td>
+            <div class="action-group">
+              <button
+                type="button"
+                class="btn-secondary js-edit-staff"
+                data-id="{{ row.id }}"
+                data-name="{{ row.name|e }}"
+                data-role="{{ row.role|e }}"
+                data-department="{{ (row.department or '')|e }}"
+                data-email="{{ (row.email or '')|e }}"
+                data-hourly-wage="{{ row.hourly_wage|money if row.hourly_wage is not none else '' }}"
+              >
+                {{ t('edit') }}
+              </button>
+              <form method="post" action="{{ url_for('toggle_staff', staff_id=row.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <button type="submit" class="{{ 'btn-danger' if row.active else 'btn-secondary' }}">{{ t('disable') if row.active else t('enable') }}</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 
 <div id="staff-edit-modal" class="modal hidden" aria-hidden="true">

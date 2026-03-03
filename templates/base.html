@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   </head>
   <body>
-    <div class="app-shell">
+    <div class="app-layout">
       <aside class="sidebar">
         <div class="brand">
           <div class="brand-logo-box">
@@ -26,15 +26,15 @@
           </div>
         </div>
         <nav class="side-nav">
-          <a class="{{ 'active' if request.path == url_for('dashboard') else '' }}" href="{{ url_for('dashboard') }}"><span class="nav-icon">◧</span><span class="nav-label">{{ t('nav_dashboard') }}</span></a>
-          <a class="{{ 'active' if request.path.startswith('/staff') else '' }}" href="{{ url_for('staff') }}"><span class="nav-icon">◉</span><span class="nav-label">{{ t('nav_staff') }}</span></a>
-          <a class="{{ 'active' if request.path.startswith('/shifts') else '' }}" href="{{ url_for('shifts') }}"><span class="nav-icon">◷</span><span class="nav-label">{{ t('nav_shifts') }}</span></a>
-          <a class="{{ 'active' if request.path.startswith('/availability') else '' }}" href="{{ url_for('availability') }}"><span class="nav-icon">◌</span><span class="nav-label">{{ t('nav_availability') }}</span></a>
-          <a class="{{ 'active' if request.path.startswith('/roster') else '' }}" href="{{ url_for('roster') }}"><span class="nav-icon">▦</span><span class="nav-label">{{ t('nav_roster') }}</span></a>
-          <a class="{{ 'active' if request.path.startswith('/payroll') else '' }}" href="{{ url_for('payroll') }}"><span class="nav-icon">◎</span><span class="nav-label">{{ t('nav_payroll') }}</span></a>
-          <a class="{{ 'active' if request.path.startswith('/data') else '' }}" href="{{ url_for('data_page') }}"><span class="nav-icon">⇅</span><span class="nav-label">{{ t('nav_data_io') }}</span></a>
+          <a class="{{ 'active' if request.path == url_for('dashboard') else '' }}" href="{{ url_for('dashboard') }}"><span class="nav-icon">DB</span><span class="nav-label">{{ t('nav_dashboard') }}</span></a>
+          <a class="{{ 'active' if request.path.startswith('/staff') else '' }}" href="{{ url_for('staff') }}"><span class="nav-icon">ST</span><span class="nav-label">{{ t('nav_staff') }}</span></a>
+          <a class="{{ 'active' if request.path.startswith('/shifts') else '' }}" href="{{ url_for('shifts') }}"><span class="nav-icon">SH</span><span class="nav-label">{{ t('nav_shifts') }}</span></a>
+          <a class="{{ 'active' if request.path.startswith('/availability') else '' }}" href="{{ url_for('availability') }}"><span class="nav-icon">AV</span><span class="nav-label">{{ t('nav_availability') }}</span></a>
+          <a class="{{ 'active' if request.path.startswith('/roster') else '' }}" href="{{ url_for('roster') }}"><span class="nav-icon">RO</span><span class="nav-label">{{ t('nav_roster') }}</span></a>
+          <a class="{{ 'active' if request.path.startswith('/payroll') else '' }}" href="{{ url_for('payroll') }}"><span class="nav-icon">PY</span><span class="nav-label">{{ t('nav_payroll') }}</span></a>
+          <a class="{{ 'active' if request.path.startswith('/data') else '' }}" href="{{ url_for('data_page') }}"><span class="nav-icon">IO</span><span class="nav-label">{{ t('nav_data_io') }}</span></a>
           {% if g.user and (g.user.is_owner or g.user.role == 'owner') %}
-          <a class="{{ 'active' if request.path.startswith('/duy') else '' }}" href="{{ url_for('duy.panel') }}"><span class="nav-icon">◈</span><span class="nav-label">{{ t('nav_duy') }}</span></a>
+          <a class="{{ 'active' if request.path.startswith('/duy') else '' }}" href="{{ url_for('duy.panel') }}"><span class="nav-icon">CP</span><span class="nav-label">{{ t('nav_duy') }}</span></a>
           {% endif %}
         </nav>
         <div class="sidebar-footer">
@@ -58,7 +58,7 @@
         </div>
       </aside>
 
-      <div class="workspace">
+      <div class="main-content">
         {% set page_name = t('page_dashboard') %}
         {% if request.path.startswith('/staff') %}
           {% set page_name = t('page_staff') %}
@@ -80,8 +80,8 @@
             <input type="search" name="q" class="app-input" placeholder="{{ t('search_placeholder') }}" />
           </form>
           <div class="top-nav-actions">
-            <button type="button" class="icon-btn" aria-label="{{ t('notifications') }}">◌</button>
-            <button type="button" class="btn-primary btn-with-icon" aria-label="{{ t('quick_add') }}"><span>＋</span><span>{{ t('quick_add') }}</span></button>
+            <button type="button" class="icon-btn" aria-label="{{ t('notifications') }}">N</button>
+            <button type="button" class="btn-primary btn-with-icon" aria-label="{{ t('quick_add') }}"><span>+</span><span>{{ t('quick_add') }}</span></button>
             <div class="user-pill" aria-label="{{ t('account') }}">
               <span class="avatar">{{ (g.user.email[0]|upper) if g.user and g.user.email else 'U' }}</span>
               <span class="user-text">{{ g.user.email if g.user else 'User' }}</span>
@@ -93,7 +93,7 @@
           <h1>{{ page_name }}</h1>
         </header>
 
-        <main class="container">
+        <main class="page-content">
           {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
               <ul class="alerts">
