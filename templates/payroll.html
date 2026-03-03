@@ -6,6 +6,14 @@
   <form method="get" class="inline-form">
     <label>Start Date <input type="date" name="start_date" value="{{ start_date }}" required /></label>
     <label>End Date <input type="date" name="end_date" value="{{ end_date }}" required /></label>
+    <label>Department
+      <select name="department">
+        <option value="">All Departments</option>
+        {% for dept in departments %}
+        <option value="{{ dept }}" {% if selected_department == dept %}selected{% endif %}>{{ dept }}</option>
+        {% endfor %}
+      </select>
+    </label>
     <label>Staff
       <select name="staff_id">
         <option value="">All Staff</option>
@@ -17,11 +25,14 @@
     <button type="submit">Load</button>
     <a
       class="button-link btn-secondary"
-      href="{{ url_for('payroll', start_date=start_date, end_date=end_date, staff_id=selected_staff_id or '', export='csv') }}"
+      href="{{ url_for('payroll', start_date=start_date, end_date=end_date, department=selected_department or '', staff_id=selected_staff_id or '', export='csv') }}"
     >
       Export Payroll CSV
     </a>
   </form>
+  <p class="hint" style="margin-top:0.4rem;">
+    Viewing: {{ selected_department if selected_department else 'All Departments' }}
+  </p>
 </section>
 
 <section class="panel">
@@ -58,7 +69,13 @@
       {% endfor %}
       {% if not payroll_rows %}
       <tr>
-        <td colspan="{{ 5 + date_columns|length }}">No staff found for the selected filter.</td>
+        <td colspan="{{ 5 + date_columns|length }}">
+          {% if selected_department %}
+          No staff found in department "{{ selected_department }}".
+          {% else %}
+          No staff found for the selected filter.
+          {% endif %}
+        </td>
       </tr>
       {% endif %}
     </tbody>

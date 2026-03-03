@@ -6,6 +6,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label>{{ t('name') }} <input name="name" required /></label>
     <label>{{ t('role') }} <input name="role" required /></label>
+    <label>Department <input name="department" /></label>
     <label>{{ t('email') }} <input type="email" name="email" /></label>
     <label>Hourly Wage <input type="number" name="hourly_wage" min="0" step="0.01" inputmode="decimal" /></label>
     <button type="submit">{{ t('add') }}</button>
@@ -32,6 +33,7 @@
       <tr>
         <th>{{ t('name') }}</th>
         <th>{{ t('role') }}</th>
+        <th>Department</th>
         <th>{{ t('email') }}</th>
         <th class="wage-col hidden" id="wage-header">Hourly Wage</th>
         <th>{{ t('status') }}</th>
@@ -43,6 +45,7 @@
       <tr>
         <td>{{ row.name }}</td>
         <td>{{ row.role }}</td>
+        <td>{{ row.department or '-' }}</td>
         <td>{{ row.email or '-' }}</td>
         <td class="wage-col hidden js-wage-cell">{{ row.hourly_wage|money if row.hourly_wage is not none else '-' }}</td>
         <td>{{ t('active') if row.active else t('inactive') }}</td>
@@ -54,6 +57,7 @@
               data-id="{{ row.id }}"
               data-name="{{ row.name|e }}"
               data-role="{{ row.role|e }}"
+              data-department="{{ (row.department or '')|e }}"
               data-email="{{ (row.email or '')|e }}"
               data-hourly-wage="{{ row.hourly_wage|money if row.hourly_wage is not none else '' }}"
             >
@@ -79,6 +83,7 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <label>{{ t('name') }} <input id="edit-name" name="name" required /></label>
       <label>{{ t('role') }} <input id="edit-role" name="role" required /></label>
+      <label>Department <input id="edit-department" name="department" /></label>
       <label>{{ t('email') }} <input id="edit-email" type="email" name="email" /></label>
       <label>Hourly Wage <input id="edit-hourly-wage" type="number" name="hourly_wage" min="0" step="0.01" inputmode="decimal" /></label>
       <div class="action-group">
@@ -95,6 +100,7 @@
     const form = document.getElementById("staff-edit-form");
     const inputName = document.getElementById("edit-name");
     const inputRole = document.getElementById("edit-role");
+    const inputDepartment = document.getElementById("edit-department");
     const inputEmail = document.getElementById("edit-email");
     const inputHourlyWage = document.getElementById("edit-hourly-wage");
     const wageToggleButton = document.getElementById("toggle-wages");
@@ -102,13 +108,14 @@
     const wageCells = document.querySelectorAll(".js-wage-cell");
     let wagesVisible = false;
 
-    if (!modal || !form || !inputName || !inputRole || !inputEmail || !inputHourlyWage) return;
+    if (!modal || !form || !inputName || !inputRole || !inputDepartment || !inputEmail || !inputHourlyWage) return;
 
     const openModal = (button) => {
       const staffId = button.dataset.id;
       form.action = `/staff/${staffId}/edit`;
       inputName.value = button.dataset.name || "";
       inputRole.value = button.dataset.role || "";
+      inputDepartment.value = button.dataset.department || "";
       inputEmail.value = button.dataset.email || "";
       inputHourlyWage.value = button.dataset.hourlyWage || "";
       modal.classList.remove("hidden");

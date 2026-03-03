@@ -511,7 +511,12 @@ def ensure_staff_schema_compatibility() -> None:
     staff_columns = {col["name"] for col in inspector.get_columns("staff")}
     if "hourly_wage" not in staff_columns:
         db.session.execute(text("ALTER TABLE staff ADD COLUMN hourly_wage NUMERIC"))
-        db.session.commit()
+    if "department" not in staff_columns:
+        db.session.execute(text("ALTER TABLE staff ADD COLUMN department VARCHAR(120)"))
+    db.session.execute(
+        text("CREATE INDEX IF NOT EXISTS ix_staff_org_department ON staff (org_id, department)")
+    )
+    db.session.commit()
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -809,6 +814,7 @@ def staff() -> str:
         name = request.form.get("name", "").strip()
         role = request.form.get("role", "").strip()
         email = request.form.get("email", "").strip()
+        department = request.form.get("department", "").strip()
         hourly_wage_raw = request.form.get("hourly_wage", "").strip()
         hourly_wage = parse_non_negative_decimal(hourly_wage_raw)
 
@@ -823,6 +829,7 @@ def staff() -> str:
                     name=name,
                     role=role,
                     email=email or None,
+                    department=department or None,
                     hourly_wage=hourly_wage,
                 )
             )
@@ -858,6 +865,7 @@ def edit_staff(staff_id: int) -> Any:
     name = request.form.get("name", "").strip()
     role = request.form.get("role", "").strip()
     email = request.form.get("email", "").strip()
+    department = request.form.get("department", "").strip()
     hourly_wage_raw = request.form.get("hourly_wage", "").strip()
     hourly_wage = parse_non_negative_decimal(hourly_wage_raw)
 
@@ -871,6 +879,7 @@ def edit_staff(staff_id: int) -> Any:
     row.name = name
     row.role = role
     row.email = email or None
+    row.department = department or None
     row.hourly_wage = hourly_wage
     db.session.commit()
     flash("Staff information updated.", "success")
@@ -1556,8 +1565,31 @@ def payroll() -> str | Response:
         except ValueError:
             flash("Invalid staff filter.", "error")
 
-    staff_options = Staff.query.filter_by(org_id=org_id).order_by(Staff.name).all()
+    department_rows = (
+        db.session.query(Staff.department)
+        .filter(
+            Staff.org_id == org_id,
+            Staff.department.isnot(None),
+            Staff.department != "",
+        )
+        .distinct()
+        .order_by(Staff.department.asc())
+        .all()
+    )
+    departments = [str(row.department) for row in department_rows if row.department]
+    selected_department = request.args.get("department", "").strip()
+    if selected_department and selected_department not in departments:
+        flash("Invalid department filter.", "error")
+        selected_department = ""
+
+    staff_options_query = Staff.query.filter(Staff.org_id == org_id)
+    if selected_department:
+        staff_options_query = staff_options_query.filter(Staff.department == selected_department)
+    staff_options = staff_options_query.order_by(Staff.name).all()
+
     staff_query = Staff.query.filter(Staff.org_id == org_id)
+    if selected_department:
+        staff_query = staff_query.filter(Staff.department == selected_department)
     if selected_staff_id is not None:
         staff_query = staff_query.filter(Staff.id == selected_staff_id)
     staff_rows = staff_query.order_by(Staff.name).all()
@@ -1586,7 +1618,7 @@ def payroll() -> str | Response:
         }
 
     if staff_ids:
-        assignment_rows = (
+        assignment_query = (
             db.session.query(
                 RosterAssignment.staff_id,
                 RosterAssignment.roster_date,
@@ -1605,9 +1637,14 @@ def payroll() -> str | Response:
                 RosterAssignment.roster_date.between(start_date, end_date),
                 RosterAssignment.staff_id.in_(staff_ids),
             )
-            .order_by(RosterAssignment.roster_date, RosterAssignment.staff_id, ShiftTemplate.start_time)
-            .all()
         )
+        if selected_department:
+            assignment_query = assignment_query.filter(Staff.department == selected_department)
+        assignment_rows = assignment_query.order_by(
+            RosterAssignment.roster_date,
+            RosterAssignment.staff_id,
+            ShiftTemplate.start_time,
+        ).all()
 
         for row in assignment_rows:
             entry = payroll_rows.get(row.staff_id)
@@ -1664,6 +1701,8 @@ def payroll() -> str | Response:
         payroll_rows=ordered_rows,
         staff_options=staff_options,
         selected_staff_id=selected_staff_id,
+        departments=departments,
+        selected_department=selected_department,
         totals_row={
             "hours_by_date": total_by_date,
             "total_hours": grand_total_hours,
