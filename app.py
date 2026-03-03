@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import DevelopmentConfig, ProductionConfig
+from duy import create_duy_blueprint
 from utils.i18n import get_lang, set_lang, t
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -74,8 +75,9 @@ def parse_non_negative_decimal(raw: str) -> Decimal | None:
 
 
 def has_payroll_access() -> bool:
-    role = (getattr(g, "user", None).role if getattr(g, "user", None) else "") or ""
-    return role.lower() in {"owner", "manager"}
+    user = getattr(g, "user", None)
+    role = (user.role if user else "") or ""
+    return bool(getattr(user, "is_owner", False)) or role.lower() in {"owner", "manager"}
 
 
 def payroll_access_required(func: Any) -> Any:
@@ -94,6 +96,21 @@ def load_current_user() -> None:
     g.user = User.query.get(user_id) if user_id else None
     if user_id and g.user is None:
         session.clear()
+        return
+    if g.user is None:
+        return
+    if is_user_denied(g.user):
+        session.clear()
+        if is_account_expired(g.user):
+            flash("msg_account_expired_contact_admin", "error")
+        else:
+            flash("msg_account_locked_contact_admin", "error")
+        if request.endpoint not in {"login", "set_language", "static"}:
+            g.user = None
+            next_url = request.full_path if request.query_string else request.path
+            if not next_url.startswith("/"):
+                next_url = url_for("dashboard")
+            return redirect(url_for("login", next=next_url))
 
 
 def current_org_id() -> int:
@@ -115,7 +132,12 @@ def login_required(func: Any) -> Any:
 
 @app.context_processor
 def inject_translation_helpers() -> dict[str, Any]:
-    return {"t": t, "lang": get_lang()}
+    return {
+        "t": t,
+        "lang": get_lang(),
+        "app_version": app.config.get("APP_VERSION", ""),
+        "app_author": app.config.get("APP_AUTHOR", ""),
+    }
 
 
 def parse_iso_date(raw: str) -> date | None:
@@ -123,6 +145,34 @@ def parse_iso_date(raw: str) -> date | None:
         return datetime.strptime(raw, "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def parse_iso_datetime(raw: str) -> datetime | None:
+    raw_value = (raw or "").strip()
+    if not raw_value:
+        return None
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(raw_value, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def is_account_expired(user: Any, now_utc: datetime | None = None) -> bool:
+    expires_at = getattr(user, "expires_at", None)
+    if expires_at is None:
+        return False
+    now_value = now_utc or datetime.utcnow()
+    return expires_at <= now_value
+
+
+def is_user_denied(user: Any, now_utc: datetime | None = None) -> bool:
+    if getattr(user, "is_owner", False):
+        return is_account_expired(user, now_utc=now_utc)
+    if not bool(getattr(user, "is_active", True)):
+        return True
+    return is_account_expired(user, now_utc=now_utc)
 
 
 def format_ddmm(value: Any) -> str:
@@ -295,6 +345,35 @@ def ensure_staff_schema_compatibility() -> None:
     db.session.commit()
 
 
+def ensure_user_schema_compatibility() -> None:
+    inspector = inspect(db.engine)
+    if not inspector.has_table("users"):
+        return
+    user_columns = {col["name"] for col in inspector.get_columns("users")}
+    if "is_active" not in user_columns:
+        db.session.execute(text("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1"))
+    if "expires_at" not in user_columns:
+        db.session.execute(text("ALTER TABLE users ADD COLUMN expires_at DATETIME"))
+    if "is_owner" not in user_columns:
+        db.session.execute(text("ALTER TABLE users ADD COLUMN is_owner INTEGER NOT NULL DEFAULT 0"))
+
+    # Keep legacy owner role semantics while introducing explicit owner flag.
+    db.session.execute(text("UPDATE users SET is_owner = 1 WHERE role = 'owner'"))
+    db.session.execute(text("UPDATE users SET is_active = 1 WHERE is_owner = 1"))
+
+    owner_count = db.session.execute(
+        text("SELECT COUNT(1) FROM users WHERE is_owner = 1")
+    ).scalar_one()
+    if int(owner_count or 0) == 0:
+        first_user_id = db.session.execute(text("SELECT id FROM users ORDER BY id ASC LIMIT 1")).scalar_one_or_none()
+        if first_user_id is not None:
+            db.session.execute(
+                text("UPDATE users SET is_owner = 1, is_active = 1 WHERE id = :user_id"),
+                {"user_id": int(first_user_id)},
+            )
+    db.session.commit()
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login() -> str | Any:
     if session.get("user_id"):
@@ -312,6 +391,13 @@ def login() -> str | Any:
             next_url = next_form
 
         user = User.query.filter(func.lower(User.email) == email).first()
+        if user and is_user_denied(user):
+            if is_account_expired(user):
+                flash("msg_account_expired_contact_admin", "error")
+            else:
+                flash("msg_account_locked_contact_admin", "error")
+            return render_template("login.html", next_url=next_url)
+
         if user and check_password_hash(user.password_hash, password):
             session["user_id"] = user.id
             session["role"] = user.role
@@ -339,6 +425,17 @@ def set_language() -> Any:
 def logout() -> Any:
     session.clear()
     return redirect(url_for("login"))
+
+
+app.register_blueprint(
+    create_duy_blueprint(
+        db=db,
+        User=User,
+        Organization=Organization,
+        login_required=login_required,
+        parse_iso_datetime=parse_iso_datetime,
+    )
+)
 
 
 def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
@@ -1952,15 +2049,69 @@ def create_admin() -> None:
         password_hash=generate_password_hash(password),
         role="owner",
         org_id=organization.id,
+        is_owner=True,
+        is_active=True,
+        expires_at=None,
     )
     db.session.add(user)
     db.session.commit()
     click.echo(f"Admin user created: {email} (org: {org_name})")
 
 
+@app.cli.command("create-owner")
+def create_owner() -> None:
+    email = click.prompt("Owner email").strip().lower()
+    while not email:
+        click.echo("Email is required.")
+        email = click.prompt("Owner email").strip().lower()
+
+    if User.query.filter(func.lower(User.email) == email).first():
+        click.echo("A user with that email already exists.")
+        return
+
+    password = click.prompt("Password", hide_input=True, confirmation_prompt=True)
+    while not password:
+        click.echo("Password is required.")
+        password = click.prompt("Password", hide_input=True, confirmation_prompt=True)
+
+    org_rows = Organization.query.order_by(Organization.id.asc()).all()
+    if not org_rows:
+        default_org_name = f"{email.split('@')[0]}'s Organization"
+        org_name = click.prompt("Organization name", default=default_org_name).strip()
+        while not org_name:
+            click.echo("Organization name is required.")
+            org_name = click.prompt("Organization name", default=default_org_name).strip()
+        org = Organization(name=org_name)
+        db.session.add(org)
+        db.session.flush()
+    else:
+        click.echo("Available organizations:")
+        for org in org_rows:
+            click.echo(f"- {org.id}: {org.name}")
+        org_id = click.prompt("Organization ID", type=int)
+        org = Organization.query.filter_by(id=org_id).first()
+        if org is None:
+            click.echo("Organization not found.")
+            return
+
+    user = User(
+        email=email,
+        password_hash=generate_password_hash(password),
+        role="owner",
+        org_id=org.id,
+        is_owner=True,
+        is_active=True,
+        expires_at=None,
+    )
+    db.session.add(user)
+    db.session.commit()
+    click.echo(f"Owner user created: {email} (org: {org.name})")
+
+
 with app.app_context():
     db.create_all()
     try:
+        ensure_user_schema_compatibility()
         ensure_staff_schema_compatibility()
         ensure_roster_schema_compatibility()
     except SQLAlchemyError:

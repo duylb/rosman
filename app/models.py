@@ -23,6 +23,9 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.Text, nullable=False, unique=True)
     password_hash = db.Column(db.Text, nullable=False)
+    is_active = db.Column(db.Boolean, nullable=False, server_default=db.text("1"), default=True)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    is_owner = db.Column(db.Boolean, nullable=False, server_default=db.text("0"), default=False)
     role = db.Column(db.Text, nullable=False, server_default=db.text("'owner'"))
     org_id = db.Column(
         db.Integer,

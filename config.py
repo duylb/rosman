@@ -9,6 +9,8 @@ class BaseConfig:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SECURE = True
     REMEMBER_COOKIE_SECURE = True
+    APP_VERSION = "v26.02"
+    APP_AUTHOR = "DuyLB"
 
 
 class DevelopmentConfig(BaseConfig):
