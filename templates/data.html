@@ -1,14 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
 <section class="panel">
-  <h2>{{ t('csv_export') }}</h2>
-  <p class="hint">{{ t('export_one_dataset') }}</p>
+  <h2>Export Static Data</h2>
+  <p class="hint">Infrequent exports that do not require a date range.</p>
   <div class="button-row">
     <a class="button-link" href="{{ url_for('export_dataset', dataset='staff') }}">{{ t('export_staff') }}</a>
     <a class="button-link" href="{{ url_for('export_dataset', dataset='shifts') }}">{{ t('export_shifts') }}</a>
-    <a class="button-link" href="{{ url_for('export_dataset', dataset='assignments') }}">{{ t('export_roster') }}</a>
-    <a class="button-link" href="{{ url_for('export_dataset', dataset='availability') }}">{{ t('export_availability') }}</a>
   </div>
+</section>
+
+<section class="panel">
+  <h2>Export Roster & Availability</h2>
+  <p class="hint">Date range applies to both Roster and Availability export.</p>
   <form method="get" action="{{ url_for('export_dataset', dataset='assignments') }}" class="inline-form" style="margin-top:0.8rem;">
     <label>Start Date
       <input type="date" name="start_date" value="{{ export_start_date }}" required />
@@ -16,7 +19,8 @@
     <label>End Date
       <input type="date" name="end_date" value="{{ export_end_date }}" required />
     </label>
-    <button type="submit">{{ t('export_roster') }}</button>
+    <button type="submit" formaction="{{ url_for('export_dataset', dataset='assignments') }}">{{ t('export_roster') }}</button>
+    <button type="submit" class="btn-secondary" formaction="{{ url_for('export_dataset', dataset='availability') }}">{{ t('export_availability') }}</button>
   </form>
   <p class="hint">Only confirmed rosters are exported by default.</p>
 </section>

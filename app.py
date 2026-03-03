@@ -1512,6 +1512,21 @@ def export_dataset(dataset: str) -> Response:
         )
 
     if dataset == "availability":
+        start_date_raw = request.args.get("start_date", "").strip()
+        end_date_raw = request.args.get("end_date", "").strip()
+        if start_date_raw and end_date_raw:
+            start_obj = parse_iso_date(start_date_raw)
+            end_obj = parse_iso_date(end_date_raw)
+        else:
+            start_obj = monday_for(date.today())
+            end_obj = start_obj + timedelta(days=6)
+        if not start_obj or not end_obj:
+            flash("Invalid export date range.", "error")
+            return redirect(url_for("data_page"))
+        if end_obj < start_obj:
+            flash("End date must be on or after start date.", "error")
+            return redirect(url_for("data_page"))
+
         rows = [
             {
                 "id": row.id,
@@ -1523,7 +1538,12 @@ def export_dataset(dataset: str) -> Response:
             }
             for row in (
                 StaffAvailability.query.join(Staff)
-                .filter(StaffAvailability.org_id == org_id, Staff.org_id == org_id)
+                .filter(
+                    StaffAvailability.org_id == org_id,
+                    Staff.org_id == org_id,
+                    StaffAvailability.start_date <= end_obj.isoformat(),
+                    StaffAvailability.end_date >= start_obj.isoformat(),
+                )
                 .order_by(StaffAvailability.start_date, StaffAvailability.id)
                 .all()
             )
