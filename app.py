@@ -547,6 +547,17 @@ def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
     for offset in range(7):
         day_value = week_start + timedelta(days=offset)
         day_str = day_value.isoformat()
+        existing_staff_shift_pairs = {
+            (staff_id, shift_id)
+            for staff_id, shift_id in (
+                db.session.query(RosterAssignment.staff_id, RosterAssignment.shift_id)
+                .filter(
+                    RosterAssignment.org_id == org_id,
+                    RosterAssignment.roster_date == day_str,
+                )
+                .all()
+            )
+        }
 
         blocked = {
             staff_id
@@ -607,6 +618,7 @@ def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
                     s
                     for s in staff_rows
                     if s.id not in blocked
+                    and (s.id, shift.id) not in existing_staff_shift_pairs
                     and all(
                         not ranges_overlap(
                             shift.start_time,
@@ -642,6 +654,7 @@ def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
                     )
                 )
                 assigned_ranges.setdefault(chosen.id, []).append((shift.start_time, shift.end_time))
+                existing_staff_shift_pairs.add((chosen.id, shift.id))
                 week_counts[chosen.id] = week_counts.get(chosen.id, 0) + 1
                 recent_counts[chosen.id] = recent_counts.get(chosen.id, 0) + 1
                 shift_fill[shift.id] = shift_fill.get(shift.id, 0) + 1
@@ -1225,7 +1238,12 @@ def auto_schedule() -> Any:
         flash("Invalid week start date.", "error")
         return redirect(url_for("roster"))
 
-    added, unfilled, ran = auto_schedule_week(week_start)
+    try:
+        added, unfilled, ran = auto_schedule_week(week_start)
+    except IntegrityError:
+        db.session.rollback()
+        flash("Auto-schedule failed due duplicate roster assignments for this week.", "error")
+        return redirect(url_for("roster", roster_date=week_start.isoformat()))
     if ran == 0:
         flash("Need at least one active staff and one shift template before auto-scheduling.", "error")
     else:
