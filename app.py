@@ -12,8 +12,8 @@ from typing import Any
 
 import click
 from flask import Flask, Response, flash, g, jsonify, redirect, render_template, request, session, url_for
-from sqlalchemy import func
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, inspect, text
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import DevelopmentConfig, ProductionConfig
@@ -339,6 +339,86 @@ def csv_response(filename: str, headers: list[str], rows: list[dict[str, Any]]) 
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
+
+
+def ensure_roster_schema_compatibility() -> None:
+    """Bring older databases forward for roster versioning without full Alembic migrations."""
+    inspector = inspect(db.engine)
+    if not inspector.has_table("roster_assignments"):
+        return
+
+    if not inspector.has_table("roster_versions"):
+        RosterVersion.__table__.create(bind=db.engine, checkfirst=True)
+
+    inspector = inspect(db.engine)
+    assignment_columns = {col["name"] for col in inspector.get_columns("roster_assignments")}
+    if "version_id" not in assignment_columns:
+        db.session.execute(text("ALTER TABLE roster_assignments ADD COLUMN version_id INTEGER"))
+        db.session.commit()
+
+    # Backfill version_id for legacy assignment rows that predate roster versioning.
+    legacy_rows = db.session.execute(
+        text(
+            """
+            SELECT DISTINCT org_id, roster_date
+            FROM roster_assignments
+            WHERE version_id IS NULL
+            """
+        )
+    ).all()
+    if not legacy_rows:
+        return
+
+    week_version_map: dict[tuple[int, date], int] = {}
+    for org_id_raw, roster_date_raw in legacy_rows:
+        roster_obj = parse_iso_date(str(roster_date_raw))
+        if roster_obj is None:
+            continue
+        week_start_obj = monday_for(roster_obj)
+        map_key = (int(org_id_raw), week_start_obj)
+        if map_key in week_version_map:
+            continue
+
+        existing = (
+            RosterVersion.query.filter_by(
+                org_id=int(org_id_raw),
+                week_start=week_start_obj,
+                status="draft",
+            )
+            .order_by(RosterVersion.id.desc())
+            .first()
+        )
+        if existing is None:
+            existing = RosterVersion(
+                org_id=int(org_id_raw),
+                week_start=week_start_obj,
+                status="draft",
+            )
+            db.session.add(existing)
+            db.session.flush()
+        week_version_map[map_key] = existing.id
+
+    for (org_id_value, week_start_obj), version_id_value in week_version_map.items():
+        week_end_obj = week_start_obj + timedelta(days=6)
+        db.session.execute(
+            text(
+                """
+                UPDATE roster_assignments
+                SET version_id = :version_id
+                WHERE org_id = :org_id
+                  AND version_id IS NULL
+                  AND roster_date BETWEEN :week_start AND :week_end
+                """
+            ),
+            {
+                "version_id": version_id_value,
+                "org_id": org_id_value,
+                "week_start": week_start_obj.isoformat(),
+                "week_end": week_end_obj.isoformat(),
+            },
+        )
+
+    db.session.commit()
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -1590,6 +1670,11 @@ def create_admin() -> None:
 
 with app.app_context():
     db.create_all()
+    try:
+        ensure_roster_schema_compatibility()
+    except SQLAlchemyError:
+        db.session.rollback()
+        raise
 
 
 if __name__ == "__main__":
