@@ -117,7 +117,7 @@
             {% set button_type = 'button' %}
             {% set classes = 'js-edit-staff' %}
             {% set icon = '' %}
-            {% set attrs = 'data-id="' ~ row.id ~ '" data-name="' ~ (row.name|e) ~ '" data-role="' ~ (row.role|e) ~ '" data-department="' ~ ((row.department or '')|e) ~ '" data-email="' ~ ((row.email or '')|e) ~ '" data-hourly-wage="' ~ (row.hourly_wage|money if row.hourly_wage is not none else '') ~ '" data-edit-url="' ~ url_for('edit_staff', staff_id=row.id) ~ '" data-delete-url="' ~ url_for('delete_staff', staff_id=row.id) ~ '"' %}
+            {% set attrs = 'data-id="' ~ row.id ~ '" data-name="' ~ (row.name|e) ~ '" data-role="' ~ (row.role|e) ~ '" data-department="' ~ ((row.department or '')|e) ~ '" data-email="' ~ ((row.email or '')|e) ~ '" data-hourly-wage="' ~ (row.hourly_wage|money if row.hourly_wage is not none else '') ~ '" data-edit-url="' ~ url_for('edit_staff', staff_id=row.id) ~ '" data-delete-url="' ~ url_for('delete_staff', staff_id=row.id) ~ '" onclick="(function(btn){const modal=document.getElementById(&quot;staff-edit-modal&quot;);const form=document.getElementById(&quot;staff-edit-form&quot;);const deleteForm=document.getElementById(&quot;staff-delete-form&quot;);const inputName=document.getElementById(&quot;edit-name&quot;);const inputRole=document.getElementById(&quot;edit-role&quot;);const inputDepartment=document.getElementById(&quot;edit-department&quot;);const inputEmail=document.getElementById(&quot;edit-email&quot;);const inputHourlyWage=document.getElementById(&quot;edit-hourly-wage&quot;);if(!modal||!form||!deleteForm||!inputName||!inputRole||!inputDepartment||!inputEmail||!inputHourlyWage){return;}const id=btn.dataset.id||&quot;&quot;;form.action=btn.dataset.editUrl||(&quot;/staff/&quot;+id+&quot;/edit&quot;);deleteForm.action=btn.dataset.deleteUrl||(&quot;/staff/&quot;+id+&quot;/delete&quot;);inputName.value=btn.dataset.name||&quot;&quot;;inputRole.value=btn.dataset.role||&quot;&quot;;inputDepartment.value=btn.dataset.department||&quot;&quot;;inputEmail.value=btn.dataset.email||&quot;&quot;;inputHourlyWage.value=btn.dataset.hourlyWage||&quot;&quot;;modal.classList.remove(&quot;hidden&quot;);modal.setAttribute(&quot;aria-hidden&quot;,&quot;false&quot;);})(this);return false;"' %}
             {% include "components/button.html" %}
             <form method="post" action="{{ url_for('toggle_staff', staff_id=row.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -216,14 +216,6 @@
 
 <script>
   (() => {
-    const modal = document.getElementById("staff-edit-modal");
-    const form = document.getElementById("staff-edit-form");
-    const inputName = document.getElementById("edit-name");
-    const inputRole = document.getElementById("edit-role");
-    const inputDepartment = document.getElementById("edit-department");
-    const inputEmail = document.getElementById("edit-email");
-    const inputHourlyWage = document.getElementById("edit-hourly-wage");
-    const deleteForm = document.getElementById("staff-delete-form");
     const wageToggleButton = document.getElementById("toggle-wages");
     const wageHeader = document.getElementById("wage-header");
     const wageCells = document.querySelectorAll(".js-wage-cell");
@@ -231,19 +223,34 @@
     const staffRows = Array.from(document.querySelectorAll(".js-staff-row"));
     let currentStaffName = "";
     let wagesVisible = false;
-    const canUseModal = Boolean(
-      modal &&
-      form &&
-      inputName &&
-      inputRole &&
-      inputDepartment &&
-      inputEmail &&
-      inputHourlyWage &&
-      deleteForm
-    );
+
+    const getModalRefs = () => ({
+      modal: document.getElementById("staff-edit-modal"),
+      form: document.getElementById("staff-edit-form"),
+      inputName: document.getElementById("edit-name"),
+      inputRole: document.getElementById("edit-role"),
+      inputDepartment: document.getElementById("edit-department"),
+      inputEmail: document.getElementById("edit-email"),
+      inputHourlyWage: document.getElementById("edit-hourly-wage"),
+      deleteForm: document.getElementById("staff-delete-form"),
+    });
 
     const openModal = (button) => {
-      if (!canUseModal || !button) return;
+      if (!button) return;
+      const refs = getModalRefs();
+      const {
+        modal,
+        form,
+        inputName,
+        inputRole,
+        inputDepartment,
+        inputEmail,
+        inputHourlyWage,
+        deleteForm,
+      } = refs;
+      if (!modal || !form || !inputName || !inputRole || !inputDepartment || !inputEmail || !inputHourlyWage || !deleteForm) {
+        return;
+      }
       const staffId = button.dataset.id;
       currentStaffName = button.dataset.name || "";
       form.action = button.dataset.editUrl || `/staff/${staffId}/edit`;
@@ -265,15 +272,18 @@
       }
     };
 
-    if (!canUseModal) return;
-
     const closeModal = () => {
+      const { modal } = getModalRefs();
+      if (!modal) return;
       modal.classList.add("hidden");
       modal.setAttribute("aria-hidden", "true");
     };
 
-    document.querySelectorAll(".js-edit-staff").forEach((button) => {
-      button.addEventListener("click", () => openModal(button));
+    document.addEventListener("click", (event) => {
+      const editButton = event.target.closest(".js-edit-staff");
+      if (!editButton) return;
+      event.preventDefault();
+      openModal(editButton);
     });
 
     document.querySelectorAll(".js-close-modal").forEach((el) => {
@@ -281,17 +291,22 @@
     });
 
     document.addEventListener("keydown", (event) => {
+      const { modal } = getModalRefs();
+      if (!modal) return;
       if (event.key === "Escape" && !modal.classList.contains("hidden")) {
         closeModal();
       }
     });
 
-    deleteForm.addEventListener("submit", (event) => {
-      const confirmMessage = `Are you sure you want to delete this staff member?\n${currentStaffName || ""}`;
-      if (!window.confirm(confirmMessage)) {
-        event.preventDefault();
-      }
-    });
+    const { deleteForm } = getModalRefs();
+    if (deleteForm) {
+      deleteForm.addEventListener("submit", (event) => {
+        const confirmMessage = `Are you sure you want to delete this staff member?\n${currentStaffName || ""}`;
+        if (!window.confirm(confirmMessage)) {
+          event.preventDefault();
+        }
+      });
+    }
 
     if (wageToggleButton && wageHeader) {
       wageToggleButton.addEventListener("click", () => {
