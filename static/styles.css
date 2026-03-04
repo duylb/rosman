@@ -103,7 +103,8 @@
 
 .ui-table-wrap,
 .table-wrapper {
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: visible;
   max-height: none;
   height: auto;
 }

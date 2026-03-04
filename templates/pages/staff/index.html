@@ -117,7 +117,7 @@
             {% set button_type = 'button' %}
             {% set classes = 'js-edit-staff' %}
             {% set icon = '' %}
-            {% set attrs = 'data-id="' ~ row.id ~ '" data-name="' ~ (row.name|e) ~ '" data-role="' ~ (row.role|e) ~ '" data-department="' ~ ((row.department or '')|e) ~ '" data-email="' ~ ((row.email or '')|e) ~ '" data-hourly-wage="' ~ (row.hourly_wage|money if row.hourly_wage is not none else '') ~ '" data-edit-url="' ~ url_for('edit_staff', staff_id=row.id) ~ '" data-delete-url="' ~ url_for('delete_staff', staff_id=row.id) ~ '" onclick="openEditStaffModal(' ~ row.id ~ ')"' %}
+            {% set attrs = 'data-id="' ~ row.id ~ '" data-name="' ~ (row.name|e) ~ '" data-role="' ~ (row.role|e) ~ '" data-department="' ~ ((row.department or '')|e) ~ '" data-email="' ~ ((row.email or '')|e) ~ '" data-hourly-wage="' ~ (row.hourly_wage|money if row.hourly_wage is not none else '') ~ '" data-edit-url="' ~ url_for('edit_staff', staff_id=row.id) ~ '" data-delete-url="' ~ url_for('delete_staff', staff_id=row.id) ~ '"' %}
             {% include "components/button.html" %}
             <form method="post" action="{{ url_for('toggle_staff', staff_id=row.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -271,6 +271,10 @@
       modal.classList.add("hidden");
       modal.setAttribute("aria-hidden", "true");
     };
+
+    document.querySelectorAll(".js-edit-staff").forEach((button) => {
+      button.addEventListener("click", () => openModal(button));
+    });
 
     document.querySelectorAll(".js-close-modal").forEach((el) => {
       el.addEventListener("click", closeModal);
