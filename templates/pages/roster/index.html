@@ -83,15 +83,6 @@
     {% set button_type = 'submit' %}
     {% include "components/button.html" %}
   </form>
-  <form method="post" action="{{ url_for('ai_generate_roster_preview') }}" class="inline-form">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-    <input type="hidden" name="start_date" value="{{ week_start }}" />
-    <input type="hidden" name="end_date" value="{{ week_dates[-1] }}" />
-    {% set type = 'secondary' %}
-    {% set label = 'Generate Smart Roster' %}
-    {% set button_type = 'submit' %}
-    {% include "components/button.html" %}
-  </form>
   <p class="hint">{{ t('auto_schedule_rule') }}</p>
 </section>
 {% else %}
