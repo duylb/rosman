@@ -1,4 +1,0 @@
-<button type="{{ button_type|default('button') }}" class="ui-btn ui-btn--ghost {{ classes|default('') }}" aria-label="{{ aria_label|default(label|default('action')) }}" {{ attrs|default('')|safe }}>
-  {% if icon %}{% set name = icon %}{% include "components/icon.html" %}{% endif %}
-  {% if label %}<span>{{ label }}</span>{% endif %}
-</button>

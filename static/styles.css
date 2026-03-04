@@ -2,7 +2,7 @@
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px;
+  gap: var(--space-4);
 }
 
 .metric-card {
@@ -16,7 +16,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .metric-title {
@@ -35,26 +35,26 @@
   justify-content: center;
   background: #edf4ff;
   color: #2556a2;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
 }
 
 .metric-value {
-  margin: 8px 0 0;
+  margin: var(--space-2) 0 0;
   font-size: 2rem;
   font-weight: 700;
   line-height: 1.12;
 }
 
 .metric-sub {
-  margin: 8px 0 0;
+  margin: var(--space-2) 0 0;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
 }
 
 .chart-block {
   display: grid;
   grid-template-columns: 140px 1fr;
-  gap: 14px;
+  gap: var(--space-4);
   align-items: center;
 }
 
@@ -75,13 +75,14 @@
   background: #fff;
 }
 
-.chart-legend { display: grid; gap: 8px; }
+.chart-legend { display: grid; gap: var(--space-2); }
+
 .chart-legend-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  font-size: 0.82rem;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
   color: #506883;
 }
 
@@ -91,10 +92,18 @@
 .legend-dot-pricing { background: #f4b844; }
 .legend-dot-closed { background: #3bb273; }
 
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
 .roster-table th:nth-child(n + 3),
 .roster-table td:nth-child(n + 3) {
   text-align: center;
-  vertical-align: middle;
 }
 
 .payroll-table th:nth-child(n + 3),
@@ -110,12 +119,12 @@
 }
 
 .wage-warning {
-  color: var(--danger);
+  color: var(--color-danger);
   font-weight: 700;
 }
 
 .confirmed-edit-mode {
-  border-left: 4px solid #2054ce;
+  border-left: 4px solid var(--color-primary);
 }
 
 .panel-draft {
@@ -129,7 +138,7 @@
 }
 
 .roster-edit-actions {
-  margin-top: var(--spacing-4);
+  margin-top: var(--space-4);
   justify-content: flex-end;
 }
 
@@ -137,46 +146,40 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .form-inline-zero { margin: 0; }
 
-.confirmed-roster-controls {
+.confirmed-roster-controls,
+.payroll-filter-form {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .confirmed-roster-select-label { min-width: 220px; }
 
-.payroll-filter-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: flex-end;
-}
-
 .date-range {
   display: flex;
-  gap: 12px;
   align-items: center;
   flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .date-range label { min-width: 180px; }
 
 .table-toolbar {
   justify-content: space-between;
-  gap: 10px;
 }
 
 .table-toolbar .toolbar-left,
 .table-toolbar .toolbar-right {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .table-toolbar .toolbar-search {
@@ -190,9 +193,9 @@
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   text-align: right;
-  color: var(--text-muted);
+  color: var(--color-text-muted);
 }
 
 .auth-branding-logo {
@@ -215,7 +218,7 @@
 }
 
 .eyebrow {
-  margin: 0 0 var(--spacing-2);
+  margin: 0 0 var(--space-2);
   color: #47607f;
   font-size: 0.78rem;
   text-transform: uppercase;

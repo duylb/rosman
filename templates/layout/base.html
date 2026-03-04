@@ -53,13 +53,7 @@
                 </ul>
               {% endif %}
             {% endwith %}
-            {% set shell_description_block %}{% block page_description %}{% endblock %}{% endset %}
-            {% set shell_toolbar_block %}{% block page_toolbar %}{% endblock %}{% endset %}
-            {% set shell_content %}{% block content %}{% endblock %}{% endset %}
-            {% set shell_title = page_title %}
-            {% set shell_description = shell_description_block|trim %}
-            {% set shell_toolbar = shell_toolbar_block|trim %}
-            {% include "components/page_shell.html" %}
+            {% block content %}{% endblock %}
           </div>
         </main>
       </div>
