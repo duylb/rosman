@@ -107,6 +107,13 @@
       {% include "components/icon.html" %}
       <span>{{ t('edit') }}</span>
     </a>
+    {% elif edit_confirmed_mode and current_version and current_version.status == "confirmed" %}
+    {% set type = 'danger' %}
+    {% set label = 'Confirm' %}
+    {% set button_type = 'submit' %}
+    {% set form_attr = 'confirmed-roster-edit-form' %}
+    {% include "components/button.html" %}
+    {% set form_attr = '' %}
     {% endif %}
   </form>
   {% else %}
@@ -126,6 +133,7 @@
 
   {% if edit_confirmed_mode and current_version and current_version.status == "confirmed" %}
   <form
+    id="confirmed-roster-edit-form"
     method="post"
     action="{{ url_for('confirm_confirmed_roster_override', version_id=current_version.id) }}"
     onsubmit="return confirm('Apply confirmed roster changes?');"
@@ -207,10 +215,6 @@
 
   {% if edit_confirmed_mode and current_version and current_version.status == "confirmed" %}
   <div class="action-group roster-edit-actions">
-    {% set type = 'danger' %}
-    {% set label = 'Confirm' %}
-    {% set button_type = 'submit' %}
-    {% include "components/button.html" %}
     <a class="ui-btn ui-btn--secondary" href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id) }}">{{ t('cancel') }}</a>
   </div>
   </form>
