@@ -19,6 +19,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import DevelopmentConfig, ProductionConfig
 from duy import create_duy_blueprint
+from services.ai_roster_agent import AIRosterAgentError, generate_roster
 from utils.i18n import get_lang, set_lang, t
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -1519,6 +1520,127 @@ def roster() -> str:
         edit_confirmed_mode=edit_confirmed_mode,
         editable_assignment_map=editable_assignment_map,
         multi_assignment_cell_keys=multi_assignment_cell_keys,
+    )
+
+
+@app.post("/roster/ai-generate")
+@login_required
+def ai_generate_roster_preview() -> Any:
+    org_id = current_org_id()
+    start_date_raw = (request.form.get("start_date", "") or request.form.get("roster_date", "")).strip()
+    end_date_raw = request.form.get("end_date", "").strip()
+    start_obj = parse_iso_date(start_date_raw)
+    end_obj = parse_iso_date(end_date_raw)
+    if start_obj is None or end_obj is None:
+        flash("Invalid roster date range.", "error")
+        return redirect(url_for("roster"))
+    if end_obj < start_obj:
+        flash("End date must be on or after start date.", "error")
+        return redirect(url_for("roster", roster_date=start_obj.isoformat(), end_date=end_obj.isoformat()))
+
+    staff_rows = Staff.query.filter_by(org_id=org_id, active=1).order_by(Staff.name).all()
+    shift_rows = ShiftTemplate.query.filter_by(org_id=org_id).order_by(ShiftTemplate.start_time).all()
+    availability_rows = (
+        StaffAvailability.query.filter(
+            StaffAvailability.org_id == org_id,
+            StaffAvailability.end_date >= start_obj.isoformat(),
+            StaffAvailability.start_date <= end_obj.isoformat(),
+        )
+        .order_by(StaffAvailability.start_date, StaffAvailability.staff_id)
+        .all()
+    )
+
+    staff_data = [
+        {
+            "id": row.id,
+            "name": row.name,
+            "role": row.role,
+            "email": row.email,
+            "department": row.department,
+            "active": bool(row.active),
+        }
+        for row in staff_rows
+    ]
+    shift_data = [
+        {
+            "id": row.id,
+            "name": row.name,
+            "start_time": row.start_time,
+            "end_time": row.end_time,
+            "required_staff": row.required_staff,
+        }
+        for row in shift_rows
+    ]
+    availability_data = [
+        {
+            "staff_id": row.staff_id,
+            "start_date": row.start_date,
+            "end_date": row.end_date,
+            "status": row.status,
+            "notes": row.notes,
+        }
+        for row in availability_rows
+    ]
+
+    try:
+        ai_result = generate_roster(
+            staff_data=staff_data,
+            shift_data=shift_data,
+            availability_data=availability_data,
+            start_date=start_obj.isoformat(),
+            end_date=end_obj.isoformat(),
+        )
+    except AIRosterAgentError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("roster", roster_date=start_obj.isoformat(), end_date=end_obj.isoformat()))
+
+    staff_name_map = {row.id: row.name for row in staff_rows}
+    shift_name_map = {
+        row.id: f"{row.name} ({row.start_time} - {row.end_time})"
+        for row in shift_rows
+    }
+    suggestion_rows: list[dict[str, str]] = []
+    raw_suggestions = ai_result.get("roster_suggestions", [])
+    if isinstance(raw_suggestions, list):
+        for item in raw_suggestions:
+            if not isinstance(item, dict):
+                continue
+
+            date_value = str(item.get("date") or item.get("roster_date") or "").strip()
+            staff_id_raw = item.get("staff_id")
+            shift_id_raw = item.get("shift_id")
+            staff_name = str(item.get("staff_name") or item.get("staff") or "").strip()
+            shift_name = str(item.get("shift_name") or item.get("shift") or "").strip()
+
+            if not staff_name and staff_id_raw is not None:
+                try:
+                    staff_name = staff_name_map.get(int(staff_id_raw), f"Staff #{staff_id_raw}")
+                except (TypeError, ValueError):
+                    staff_name = f"Staff #{staff_id_raw}"
+            if not shift_name and shift_id_raw is not None:
+                try:
+                    shift_name = shift_name_map.get(int(shift_id_raw), f"Shift #{shift_id_raw}")
+                except (TypeError, ValueError):
+                    shift_name = f"Shift #{shift_id_raw}"
+
+            suggestion_rows.append(
+                {
+                    "date": date_value or "-",
+                    "shift": shift_name or "-",
+                    "staff": staff_name or "-",
+                }
+            )
+
+    suggestion_rows.sort(key=lambda row: (row["date"], row["shift"], row["staff"]))
+    notes = ai_result.get("notes", [])
+    ai_notes = [str(item) for item in notes] if isinstance(notes, list) else []
+
+    return render_template(
+        "roster_ai_preview.html",
+        start_date=start_obj.isoformat(),
+        end_date=end_obj.isoformat(),
+        suggestion_rows=suggestion_rows,
+        ai_notes=ai_notes,
     )
 
 
