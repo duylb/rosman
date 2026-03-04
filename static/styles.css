@@ -582,35 +582,6 @@ tbody tr:last-child td {
   justify-content: flex-end;
 }
 
-.version-menu { position: relative; }
-.version-menu-toggle { list-style: none; cursor: pointer; }
-
-.version-menu-panel {
-  position: absolute;
-  right: 0;
-  z-index: 20;
-  margin-top: var(--space-2);
-  min-width: 300px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--glass-bg-strong);
-  box-shadow: var(--shadow-sm);
-  padding: var(--space-2);
-}
-
-.version-menu-link {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-3);
-  padding: 7px 8px;
-  border-radius: 8px;
-  text-decoration: none;
-  color: var(--color-text);
-}
-
-.version-menu-link:hover { background: rgba(223, 236, 255, 0.5); }
-
 .meta-chip {
   display: inline-flex;
   align-items: center;
