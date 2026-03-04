@@ -293,6 +293,11 @@ def ensure_roster_schema_compatibility() -> None:
         db.session.execute(text("ALTER TABLE roster_assignments ADD COLUMN version_id INTEGER"))
         db.session.commit()
 
+    roster_version_columns = {col["name"] for col in inspector.get_columns("roster_versions")}
+    if "updated_at" not in roster_version_columns:
+        db.session.execute(text("ALTER TABLE roster_versions ADD COLUMN updated_at DATETIME"))
+        db.session.commit()
+
     # Backfill version_id for legacy assignment rows that predate roster versioning.
     legacy_rows = db.session.execute(
         text(
@@ -895,6 +900,61 @@ def shifts() -> str:
     return render_template("shifts.html", shifts=rows)
 
 
+@app.post("/shifts/<int:shift_id>/edit")
+@login_required
+def edit_shift_template(shift_id: int) -> Any:
+    org_id = current_org_id()
+    shift = ShiftTemplate.query.filter_by(id=shift_id, org_id=org_id).first()
+    if shift is None:
+        abort(404)
+
+    name = request.form.get("name", "").strip()
+    start_time = request.form.get("start_time", "").strip()
+    end_time = request.form.get("end_time", "").strip()
+
+    if not name or not start_time or not end_time:
+        flash(t("msg_shift_required_fields"), "error")
+        return redirect(url_for("shifts"))
+
+    try:
+        start_minutes = to_minutes(start_time)
+        end_minutes = to_minutes(end_time)
+    except (ValueError, AttributeError):
+        flash(t("msg_shift_invalid_time_order"), "error")
+        return redirect(url_for("shifts"))
+
+    if start_minutes >= end_minutes:
+        flash(t("msg_shift_invalid_time_order"), "error")
+        return redirect(url_for("shifts"))
+
+    overlap = (
+        ShiftTemplate.query.filter(
+            ShiftTemplate.org_id == org_id,
+            ShiftTemplate.id != shift.id,
+            ShiftTemplate.start_time < end_time,
+            start_time < ShiftTemplate.end_time,
+        )
+        .order_by(ShiftTemplate.start_time)
+        .first()
+    )
+    if overlap is not None:
+        flash(t("msg_shift_template_overlap"), "error")
+        return redirect(url_for("shifts"))
+
+    shift.name = name
+    shift.start_time = start_time
+    shift.end_time = end_time
+
+    try:
+        db.session.commit()
+        flash(t("msg_shift_template_updated"), "success")
+    except IntegrityError:
+        db.session.rollback()
+        flash(t("msg_shift_name_unique"), "error")
+
+    return redirect(url_for("shifts"))
+
+
 @app.route("/availability", methods=["GET", "POST"])
 @login_required
 def availability() -> str:
@@ -1105,8 +1165,28 @@ def roster() -> str:
     org_id = current_org_id()
     selected_date = request.values.get("roster_date", date.today().isoformat())
     selected_obj = parse_iso_date(selected_date) or date.today()
+    selected_date = selected_obj.isoformat()
     week_start_obj = monday_for(selected_obj)
     version_id_raw = request.args.get("version_id", "").strip()
+    edit_confirmed_mode_requested = request.args.get("edit_confirmed", "0").strip() == "1"
+
+    current_version: Any | None = None
+    if version_id_raw:
+        try:
+            selected_version_id = int(version_id_raw)
+        except ValueError:
+            abort(404)
+        current_version = RosterVersion.query.filter_by(
+            id=selected_version_id,
+            org_id=org_id,
+        ).first()
+        if current_version is None:
+            abort(404)
+        week_start_obj = current_version.week_start
+        week_end_obj = week_start_obj + timedelta(days=6)
+        if not (week_start_obj <= selected_obj <= week_end_obj):
+            selected_obj = week_start_obj
+            selected_date = selected_obj.isoformat()
 
     confirmed_versions = (
         RosterVersion.query.filter_by(org_id=org_id, week_start=week_start_obj, status="confirmed")
@@ -1123,19 +1203,53 @@ def roster() -> str:
     default_version = (confirmed_versions[0] if confirmed_versions else None) or (
         draft_versions[0] if draft_versions else None
     )
-    current_version = default_version
-    if version_id_raw:
-        try:
-            selected_version_id = int(version_id_raw)
-        except ValueError:
-            abort(404)
-        current_version = RosterVersion.query.filter_by(
-            id=selected_version_id,
-            org_id=org_id,
-            week_start=week_start_obj,
-        ).first()
-        if current_version is None:
-            abort(404)
+    if current_version is None:
+        current_version = default_version
+
+    today_obj = date.today()
+    current_month_start, current_month_end = month_bounds(today_obj)
+    confirmed_month_versions_rows = (
+        RosterVersion.query.filter(
+            RosterVersion.org_id == org_id,
+            RosterVersion.status == "confirmed",
+            RosterVersion.week_start.between(current_month_start, current_month_end),
+        )
+        .order_by(RosterVersion.week_start.asc(), RosterVersion.id.asc())
+        .all()
+    )
+    confirmed_month_versions = []
+    for version in confirmed_month_versions_rows:
+        week_end_value = version.week_start + timedelta(days=6)
+        confirmed_month_versions.append(
+            {
+                "id": version.id,
+                "week_start": version.week_start.isoformat(),
+                "label": f"{version.week_start.strftime('%d/%m')}-{week_end_value.strftime('%d/%m')}",
+                "is_active": bool(current_version and current_version.id == version.id),
+            }
+        )
+
+    can_edit_confirmed_current_version = bool(
+        current_version is not None
+        and current_version.status == "confirmed"
+        and current_version.week_start.year == today_obj.year
+        and current_version.week_start.month == today_obj.month
+    )
+    if (
+        edit_confirmed_mode_requested
+        and current_version is not None
+        and current_version.status == "confirmed"
+        and not can_edit_confirmed_current_version
+    ):
+        flash(t("msg_confirmed_edit_current_month_only"), "error")
+        return redirect(
+            url_for(
+                "roster",
+                roster_date=current_version.week_start.isoformat(),
+                version_id=current_version.id,
+            )
+        )
+    edit_confirmed_mode = edit_confirmed_mode_requested and can_edit_confirmed_current_version
 
     if request.method == "POST":
         # If user explicitly selected a confirmed version, keep it read-only.
@@ -1166,17 +1280,35 @@ def roster() -> str:
                 shift_id_int = int(shift_id)
             except ValueError:
                 flash(t("msg_invalid_staff_or_shift"), "error")
-                return redirect(url_for("roster", roster_date=selected_date))
+                return redirect(
+                    url_for(
+                        "roster",
+                        roster_date=selected_date,
+                        version_id=current_version.id if version_id_raw and current_version else None,
+                    )
+                )
 
             target_shift = ShiftTemplate.query.filter_by(id=shift_id_int, org_id=org_id).first()
             if target_shift is None:
                 flash(t("msg_shift_not_found"), "error")
-                return redirect(url_for("roster", roster_date=selected_date))
+                return redirect(
+                    url_for(
+                        "roster",
+                        roster_date=selected_date,
+                        version_id=current_version.id if version_id_raw and current_version else None,
+                    )
+                )
 
             staff_member = Staff.query.filter_by(id=staff_id_int, org_id=org_id, active=1).first()
             if staff_member is None:
                 flash(t("msg_staff_member_not_found"), "error")
-                return redirect(url_for("roster", roster_date=selected_date))
+                return redirect(
+                    url_for(
+                        "roster",
+                        roster_date=selected_date,
+                        version_id=current_version.id if version_id_raw and current_version else None,
+                    )
+                )
 
             blocked = (
                 StaffAvailability.query.filter(
@@ -1219,7 +1351,13 @@ def roster() -> str:
                 )
                 if overlap:
                     flash(t("msg_shift_overlap"), "error")
-                    return redirect(url_for("roster", roster_date=selected_date))
+                    return redirect(
+                        url_for(
+                            "roster",
+                            roster_date=selected_date,
+                            version_id=current_version.id if version_id_raw and current_version else None,
+                        )
+                    )
 
                 try:
                     db.session.add(
@@ -1234,7 +1372,13 @@ def roster() -> str:
                     )
                     db.session.commit()
                     flash(t("msg_assignment_added"), "success")
-                    return redirect(url_for("roster", roster_date=selected_date))
+                    return redirect(
+                        url_for(
+                            "roster",
+                            roster_date=selected_date,
+                            version_id=current_version.id if version_id_raw and current_version else None,
+                        )
+                    )
                 except IntegrityError:
                     db.session.rollback()
                     flash(t("msg_assignment_duplicate"), "error")
@@ -1264,6 +1408,7 @@ def roster() -> str:
                 RosterAssignment.id,
                 RosterAssignment.roster_date,
                 RosterAssignment.staff_id,
+                RosterAssignment.shift_id,
                 RosterAssignment.notes,
                 Staff.name.label("staff_name"),
                 Staff.role.label("staff_role"),
@@ -1291,6 +1436,7 @@ def roster() -> str:
                 "id": row.id,
                 "roster_date": row.roster_date,
                 "staff_id": row.staff_id,
+                "shift_id": row.shift_id,
                 "notes": row.notes,
                 "staff_name": row.staff_name,
                 "staff_role": row.staff_role,
@@ -1313,6 +1459,23 @@ def roster() -> str:
             continue
         staff_entry[row["roster_date"]].append(row)
 
+    editable_assignment_map: dict[int, dict[str, int]] = {
+        row.id: {day_value: 0 for day_value in week_dates}
+        for row in staff_rows
+    }
+    multi_assignment_cell_keys: set[str] = set()
+    for row in assignments:
+        staff_entry = editable_assignment_map.get(row["staff_id"])
+        if staff_entry is None:
+            continue
+        roster_date_value = row["roster_date"]
+        if roster_date_value not in staff_entry:
+            continue
+        if staff_entry[roster_date_value] == 0:
+            staff_entry[roster_date_value] = int(row["shift_id"])
+        elif staff_entry[roster_date_value] != int(row["shift_id"]):
+            multi_assignment_cell_keys.add(f"{row['staff_id']}_{roster_date_value}")
+
     return render_template(
         "roster.html",
         selected_date=selected_date,
@@ -1327,6 +1490,10 @@ def roster() -> str:
         shift_rows=shift_rows,
         assignments=assignments,
         assignments_by_staff_and_day=assignments_by_staff_and_day,
+        confirmed_month_versions=confirmed_month_versions,
+        edit_confirmed_mode=edit_confirmed_mode,
+        editable_assignment_map=editable_assignment_map,
+        multi_assignment_cell_keys=multi_assignment_cell_keys,
     )
 
 
@@ -1389,6 +1556,7 @@ def confirm_roster_version(version_id: int) -> Any:
 
         version.status = "confirmed"
         version.confirmed_at = now_utc
+        version.updated_at = now_utc
         db.session.commit()
 
         payload = {
@@ -1398,6 +1566,7 @@ def confirm_roster_version(version_id: int) -> Any:
                 "week_start": version.week_start.isoformat(),
                 "status": version.status,
                 "confirmed_at": version.confirmed_at.isoformat() if version.confirmed_at else None,
+                "updated_at": version.updated_at.isoformat() if version.updated_at else None,
             },
             "deleted_version_ids": deleted_version_ids,
         }
@@ -1413,6 +1582,118 @@ def confirm_roster_version(version_id: int) -> Any:
             return jsonify({"error": "Unable to confirm roster version."}), 409
         flash(t("msg_roster_confirm_failed"), "error")
         return redirect(url_for("roster", roster_date=roster_date or date.today().isoformat()))
+
+
+@app.post("/roster/confirmed/<int:version_id>/override")
+@login_required
+def confirm_confirmed_roster_override(version_id: int) -> Any:
+    org_id = current_org_id()
+    version = RosterVersion.query.filter_by(id=version_id, org_id=org_id, status="confirmed").first()
+    if version is None:
+        abort(404)
+
+    today_obj = date.today()
+    if version.week_start.year != today_obj.year or version.week_start.month != today_obj.month:
+        flash(t("msg_confirmed_edit_current_month_only"), "error")
+        return redirect(
+            url_for(
+                "roster",
+                roster_date=version.week_start.isoformat(),
+                version_id=version.id,
+            )
+        )
+
+    week_start_obj = version.week_start
+    week_end_obj = week_start_obj + timedelta(days=6)
+    week_dates = each_date(week_start_obj, week_end_obj)
+
+    staff_rows = Staff.query.filter_by(org_id=org_id, active=1).order_by(Staff.name).all()
+    staff_ids = [row.id for row in staff_rows]
+    editable_staff_ids = set(staff_ids)
+    shift_rows = ShiftTemplate.query.filter_by(org_id=org_id).order_by(ShiftTemplate.start_time).all()
+    shift_ids = {row.id for row in shift_rows}
+
+    submitted_assignments: list[tuple[int, str, int]] = []
+    for staff_id in staff_ids:
+        for day_value in week_dates:
+            field_name = f"assignment_{staff_id}_{day_value}"
+            selected_shift_raw = (request.form.get(field_name, "0") or "0").strip()
+            try:
+                selected_shift_id = int(selected_shift_raw)
+            except ValueError:
+                flash(t("msg_invalid_staff_or_shift"), "error")
+                return redirect(
+                    url_for(
+                        "roster",
+                        roster_date=week_start_obj.isoformat(),
+                        version_id=version.id,
+                        edit_confirmed=1,
+                    )
+                )
+
+            # "0" means no assignment for that cell (absent/no-show equivalent).
+            if selected_shift_id == 0:
+                continue
+            if selected_shift_id not in shift_ids:
+                flash(t("msg_shift_not_found"), "error")
+                return redirect(
+                    url_for(
+                        "roster",
+                        roster_date=week_start_obj.isoformat(),
+                        version_id=version.id,
+                        edit_confirmed=1,
+                    )
+                )
+            submitted_assignments.append((staff_id, day_value, selected_shift_id))
+
+    try:
+        existing_assignments = RosterAssignment.query.filter_by(
+            org_id=org_id,
+            version_id=version.id,
+        ).all()
+        preserved_assignments = [
+            row
+            for row in existing_assignments
+            if row.staff_id not in editable_staff_ids
+        ]
+
+        RosterAssignment.query.filter_by(org_id=org_id, version_id=version.id).delete(synchronize_session=False)
+        for row in preserved_assignments:
+            db.session.add(
+                RosterAssignment(
+                    org_id=org_id,
+                    version_id=version.id,
+                    roster_date=row.roster_date,
+                    staff_id=row.staff_id,
+                    shift_id=row.shift_id,
+                    notes=row.notes,
+                )
+            )
+        for staff_id, roster_date_value, shift_id in submitted_assignments:
+            db.session.add(
+                RosterAssignment(
+                    org_id=org_id,
+                    version_id=version.id,
+                    roster_date=roster_date_value,
+                    staff_id=staff_id,
+                    shift_id=shift_id,
+                    notes=None,
+                )
+            )
+        version.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash(t("msg_confirmed_roster_override_saved"), "success")
+    except IntegrityError:
+        db.session.rollback()
+        flash(t("msg_roster_confirm_failed"), "error")
+
+    return redirect(
+        url_for(
+            "roster",
+            roster_date=week_start_obj.isoformat(),
+            version_id=version.id,
+        )
+    )
 
 
 @app.post("/roster/discard/<int:version_id>")

@@ -136,6 +136,7 @@ class RosterVersion(db.Model):
     status = db.Column(db.String(20), nullable=False, default="draft")
     created_at = db.Column(db.DateTime, nullable=False, default=db.func.now())
     confirmed_at = db.Column(db.DateTime, nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=True)
 
     organization = db.relationship("Organization", back_populates="roster_versions")
     roster_assignments = db.relationship(

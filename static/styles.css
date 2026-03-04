@@ -540,6 +540,48 @@ tbody tr:last-child td {
   flex-wrap: wrap;
 }
 
+.confirmed-roster-panel .section-title {
+  margin-bottom: var(--space-3);
+}
+
+.confirmed-roster-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.confirmed-roster-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.confirmed-roster-btn.active {
+  background: #2054ce;
+  border-color: #1848b8;
+  color: #ffffff;
+}
+
+.confirmed-edit-notice {
+  margin-top: var(--space-3);
+}
+
+.confirmed-edit-mode {
+  border-left: 4px solid #2054ce;
+}
+
+.roster-edit-grid-select {
+  min-width: 170px;
+  min-height: 34px;
+  font-size: 0.8rem;
+}
+
+.roster-edit-actions {
+  margin-top: var(--space-4);
+  justify-content: flex-end;
+}
+
 .version-menu { position: relative; }
 .version-menu-toggle { list-style: none; cursor: pointer; }
 
@@ -844,6 +886,19 @@ tbody tr:last-child td {
   margin-bottom: var(--space-4);
 }
 
+.dashboard-container {
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.dashboard-container .metric-grid,
+.dashboard-container .panel {
+  margin-bottom: 0;
+}
+
 .metric-card,
 .card {
   min-height: 154px;
@@ -986,6 +1041,10 @@ tbody tr:last-child td {
 .data-table tbody tr:hover,
 .app-table tbody tr:hover {
   background: #f7fbff;
+}
+
+.shift-action-cell {
+  white-space: nowrap;
 }
 
 /* Badge system */
@@ -1227,6 +1286,20 @@ body {
 
   .nav-right {
     justify-content: flex-end;
+  }
+
+  .confirmed-roster-list {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .confirmed-roster-item {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .roster-edit-grid-select {
+    min-width: 100%;
   }
 
   .data-table,

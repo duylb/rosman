@@ -22,6 +22,7 @@
           <th>{{ t('name') }}</th>
           <th>{{ t('time') }}</th>
           <th>{{ t('required_staff') }}</th>
+          <th>{{ t('action') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -30,11 +31,114 @@
           <td>{{ row.name }}</td>
           <td>{{ row.start_time }} - {{ row.end_time }}</td>
           <td>{{ row.required_staff }}</td>
+          <td class="shift-action-cell">
+            <button
+              type="button"
+              class="btn-secondary js-edit-shift"
+              data-id="{{ row.id }}"
+              data-name="{{ row.name|e }}"
+              data-start-time="{{ row.start_time }}"
+              data-end-time="{{ row.end_time }}"
+            >
+              {{ t('edit') }}
+            </button>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </section>
+
+<div id="shift-edit-modal" class="modal hidden" aria-hidden="true">
+  <div class="modal-backdrop js-close-shift-modal"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="edit-shift-title">
+    <h2 id="edit-shift-title">{{ t('edit') }} {{ t('shift_templates') }}</h2>
+    <form id="shift-edit-form" method="post" class="grid-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <label>{{ t('shift_name') }} <input id="edit-shift-name" name="name" required /></label>
+      <label>{{ t('start_time') }} <input id="edit-start-time" type="time" name="start_time" required /></label>
+      <label>{{ t('end_time') }} <input id="edit-end-time" type="time" name="end_time" required /></label>
+    </form>
+    <p class="hint">Duration: <strong id="edit-shift-duration">-</strong></p>
+    <div class="modal-actions">
+      <div class="action-group modal-actions-main">
+        <button type="button" class="btn-secondary js-close-shift-modal">{{ t('cancel') }}</button>
+        <button type="submit" class="btn-primary" form="shift-edit-form">{{ t('save') }}</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const modal = document.getElementById("shift-edit-modal");
+    const form = document.getElementById("shift-edit-form");
+    const inputName = document.getElementById("edit-shift-name");
+    const inputStart = document.getElementById("edit-start-time");
+    const inputEnd = document.getElementById("edit-end-time");
+    const durationText = document.getElementById("edit-shift-duration");
+
+    if (!modal || !form || !inputName || !inputStart || !inputEnd || !durationText) return;
+
+    const toMinutes = (raw) => {
+      if (!raw || !raw.includes(":")) return null;
+      const [hourRaw, minuteRaw] = raw.split(":");
+      const hour = Number(hourRaw);
+      const minute = Number(minuteRaw);
+      if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+      return hour * 60 + minute;
+    };
+
+    const updateDuration = () => {
+      const start = toMinutes(inputStart.value);
+      const end = toMinutes(inputEnd.value);
+      if (start === null || end === null) {
+        durationText.textContent = "-";
+        return;
+      }
+      const diffMinutes = end - start;
+      if (diffMinutes <= 0) {
+        durationText.textContent = "Invalid";
+        return;
+      }
+      durationText.textContent = `${(diffMinutes / 60).toFixed(2)} h`;
+    };
+
+    const openModal = (button) => {
+      const shiftId = button.dataset.id;
+      form.action = `/shifts/${shiftId}/edit`;
+      inputName.value = button.dataset.name || "";
+      inputStart.value = button.dataset.startTime || "";
+      inputEnd.value = button.dataset.endTime || "";
+      updateDuration();
+      modal.classList.remove("hidden");
+      modal.setAttribute("aria-hidden", "false");
+      inputName.focus();
+    };
+
+    const closeModal = () => {
+      modal.classList.add("hidden");
+      modal.setAttribute("aria-hidden", "true");
+    };
+
+    document.querySelectorAll(".js-edit-shift").forEach((button) => {
+      button.addEventListener("click", () => openModal(button));
+    });
+
+    document.querySelectorAll(".js-close-shift-modal").forEach((element) => {
+      element.addEventListener("click", closeModal);
+    });
+
+    inputStart.addEventListener("input", updateDuration);
+    inputEnd.addEventListener("input", updateDuration);
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !modal.classList.contains("hidden")) {
+        closeModal();
+      }
+    });
+  })();
+</script>
 {% endblock %}
 
