@@ -22,6 +22,23 @@ class AIRosterAgentInvalidJSONError(AIRosterAgentError):
 
 
 logger = logging.getLogger(__name__)
+REQUIRED_ROLES = ["service", "kitchen"]
+REQUIRED_SHIFT_KEYS = [
+    "monday_lunch",
+    "monday_dinner",
+    "tuesday_lunch",
+    "tuesday_dinner",
+    "wednesday_lunch",
+    "wednesday_dinner",
+    "thursday_lunch",
+    "thursday_dinner",
+    "friday_lunch",
+    "friday_dinner",
+    "saturday_lunch",
+    "saturday_dinner",
+    "sunday_lunch",
+    "sunday_dinner",
+]
 
 
 def _parse_iso_date(raw: Any) -> date | None:
@@ -231,14 +248,25 @@ def _build_prompt(
         f"{json.dumps(shift_summary, ensure_ascii=False)}\n\n"
         "Task:\n"
         "Generate a weekly roster demand recommendation.\n"
-        "Return JSON with required staff counts per shift.\n"
-        "You must return ONLY valid JSON. Do not include explanations or text outside JSON.\n\n"
+        "Return the required number of staff per shift.\n"
+        "Roles in this restaurant: service, kitchen.\n"
+        "You must return ONLY valid JSON. Do not include explanations, markdown, or text outside JSON.\n\n"
         "Expected format:\n"
         '{\n'
-        '  "monday_lunch": {"servers": 4, "bartenders": 1},\n'
-        '  "monday_dinner": {"servers": 6, "bartenders": 2},\n'
-        '  "tuesday_lunch": {"servers": 4, "bartenders": 1},\n'
-        '  "tuesday_dinner": {"servers": 6, "bartenders": 2}\n'
+        '  "monday_lunch": {"service": 4, "kitchen": 2},\n'
+        '  "monday_dinner": {"service": 6, "kitchen": 3},\n'
+        '  "tuesday_lunch": {"service": 4, "kitchen": 2},\n'
+        '  "tuesday_dinner": {"service": 6, "kitchen": 3},\n'
+        '  "wednesday_lunch": {"service": 4, "kitchen": 2},\n'
+        '  "wednesday_dinner": {"service": 6, "kitchen": 3},\n'
+        '  "thursday_lunch": {"service": 4, "kitchen": 2},\n'
+        '  "thursday_dinner": {"service": 6, "kitchen": 3},\n'
+        '  "friday_lunch": {"service": 5, "kitchen": 2},\n'
+        '  "friday_dinner": {"service": 7, "kitchen": 3},\n'
+        '  "saturday_lunch": {"service": 5, "kitchen": 2},\n'
+        '  "saturday_dinner": {"service": 8, "kitchen": 4},\n'
+        '  "sunday_lunch": {"service": 5, "kitchen": 2},\n'
+        '  "sunday_dinner": {"service": 6, "kitchen": 3}\n'
         "}\n"
     )
 
@@ -255,11 +283,12 @@ def _default_demand_recommendation(
         return {}
 
     roles = staff_summary.get("roles", {})
-    role_counts = {str(k): int(v) for k, v in roles.items() if isinstance(v, int)}
-    total_roles = sum(role_counts.values())
-    if total_roles <= 0:
-        role_counts = {"servers": 1}
-        total_roles = 1
+    service_pool = int(roles.get("service", 0) or 0)
+    kitchen_pool = int(roles.get("kitchen", 0) or 0)
+    if service_pool <= 0:
+        service_pool = 1
+    if kitchen_pool <= 0:
+        kitchen_pool = 1
 
     shift_templates = shift_summary.get("shift_templates", [])
     if not isinstance(shift_templates, list):
@@ -281,16 +310,13 @@ def _default_demand_recommendation(
         day_name = current.strftime("%A").lower()
         for daypart in ("lunch", "dinner"):
             required = max(default_by_daypart.get(daypart, 0), 1)
-            role_alloc: dict[str, int] = {}
-            assigned = 0
-            role_items = list(role_counts.items())
-            for index, (role_name, count) in enumerate(role_items):
-                if index == len(role_items) - 1:
-                    role_alloc[role_name] = max(required - assigned, 0)
-                else:
-                    portion = int(round(required * (count / total_roles)))
-                    role_alloc[role_name] = portion
-                    assigned += portion
+            service_ratio = service_pool / (service_pool + kitchen_pool)
+            service_count = max(int(round(required * service_ratio)), 1)
+            kitchen_count = max(required - service_count, 1)
+            role_alloc = {
+                "service": service_count,
+                "kitchen": kitchen_count,
+            }
             recommendation[f"{day_name}_{daypart}"] = role_alloc
         current += timedelta(days=1)
     return recommendation
@@ -340,15 +366,46 @@ def _normalize_result(parsed: dict[str, Any]) -> dict[str, Any]:
 def _is_valid_demand_payload(payload: dict[str, Any]) -> bool:
     if not payload:
         return False
-    for key, value in payload.items():
-        if not isinstance(key, str) or "_" not in key:
+    for key in REQUIRED_SHIFT_KEYS:
+        roles = payload.get(key)
+        if not isinstance(roles, dict):
+            return False
+        for role in REQUIRED_ROLES:
+            if role not in roles or not isinstance(roles[role], (int, float)):
+                return False
+    return True
+
+
+def _validate_roster_structure(roster_data: dict[str, Any]) -> None:
+    for shift in REQUIRED_SHIFT_KEYS:
+        if shift not in roster_data:
+            raise ValueError(f"Missing shift '{shift}'")
+        roles = roster_data[shift]
+        if not isinstance(roles, dict):
+            raise ValueError(f"Invalid role map in shift '{shift}'")
+        for role in REQUIRED_ROLES:
+            if role not in roles:
+                raise ValueError(f"Missing role '{role}' in shift '{shift}'")
+            if not isinstance(roles[role], (int, float)):
+                raise ValueError(f"Invalid count for role '{role}' in shift '{shift}'")
+
+
+def _demand_to_suggestions(demand: dict[str, Any]) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for shift_key in REQUIRED_SHIFT_KEYS:
+        roles = demand.get(shift_key, {})
+        if not isinstance(roles, dict):
             continue
-        if not isinstance(value, dict):
-            continue
-        role_values = [role_count for role_count in value.values() if isinstance(role_count, (int, float))]
-        if role_values:
-            return True
-    return False
+        day_name, daypart = shift_key.split("_", 1)
+        staff_text = f"service: {int(roles.get('service', 0) or 0)}, kitchen: {int(roles.get('kitchen', 0) or 0)}"
+        rows.append(
+            {
+                "date": day_name.title(),
+                "shift": daypart.title(),
+                "staff": staff_text,
+            }
+        )
+    return rows
 
 
 def generate_roster(
@@ -391,15 +448,48 @@ def generate_roster(
     )
 
     try:
+        system_prompt = """
+You are a workforce planning AI for a restaurant.
+
+You MUST return ONLY valid JSON.
+
+Rules:
+
+* Do not include explanations
+* Do not include markdown
+* Do not include text outside JSON
+
+Roles in this restaurant:
+service
+kitchen
+
+Return the required number of staff per shift.
+
+Output format:
+
+{
+"monday_lunch": {"service": number, "kitchen": number},
+"monday_dinner": {"service": number, "kitchen": number},
+"tuesday_lunch": {"service": number, "kitchen": number},
+"tuesday_dinner": {"service": number, "kitchen": number},
+"wednesday_lunch": {"service": number, "kitchen": number},
+"wednesday_dinner": {"service": number, "kitchen": number},
+"thursday_lunch": {"service": number, "kitchen": number},
+"thursday_dinner": {"service": number, "kitchen": number},
+"friday_lunch": {"service": number, "kitchen": number},
+"friday_dinner": {"service": number, "kitchen": number},
+"saturday_lunch": {"service": number, "kitchen": number},
+"saturday_dinner": {"service": number, "kitchen": number},
+"sunday_lunch": {"service": number, "kitchen": number},
+"sunday_dinner": {"service": number, "kitchen": number}
+}
+"""
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        "You are an experienced workforce management planner for restaurants. "
-                        "You must return ONLY valid JSON. Do not include explanations or text outside JSON."
-                    ),
+                    "content": system_prompt,
                 },
                 {
                     "role": "user",
@@ -429,6 +519,7 @@ def generate_roster(
         )
 
     content = response.choices[0].message.content if response.choices else None
+    print("AI RAW RESPONSE:", content)
     logger.info("AI raw response: %s", content)
     if not content:
         logger.error("OpenAI returned an empty response.")
@@ -441,12 +532,13 @@ def generate_roster(
         )
 
     try:
-        ai_output = json.loads(content)
+        roster_data = json.loads(content)
     except Exception as exc:
+        print("Failed to parse AI JSON:", exc)
         logger.error("Failed to parse AI JSON: %s", str(exc))
         return {
             "success": False,
-            "error": "AI response format invalid",
+            "error": "AI response was not valid JSON",
             "demand_recommendation": _default_demand_recommendation(
                 staff_summary=staff_summary,
                 shift_summary=shift_summary,
@@ -457,7 +549,7 @@ def generate_roster(
             "notes": ["Fallback logic used due to AI output parsing failure."],
         }
 
-    if not isinstance(ai_output, dict):
+    if not isinstance(roster_data, dict):
         logger.error("Invalid AI output: expected object.")
         return {
             "success": False,
@@ -472,16 +564,13 @@ def generate_roster(
             "notes": ["Fallback logic used due to invalid AI output structure."],
         }
 
-    normalized = _normalize_result(ai_output)
-    demand = normalized.get("demand_recommendation", {})
-    suggestions = normalized.get("roster_suggestions", [])
-    has_demand = isinstance(demand, dict) and _is_valid_demand_payload(demand)
-    has_suggestions = isinstance(suggestions, list) and len(suggestions) > 0
-    if not has_demand and not has_suggestions:
-        logger.warning("AI returned empty roster suggestions")
+    try:
+        _validate_roster_structure(roster_data)
+    except ValueError as exc:
+        logger.error("AI output validation failed: %s", str(exc))
         return {
             "success": False,
-            "error": "AI returned empty roster suggestions",
+            "error": str(exc),
             "demand_recommendation": _default_demand_recommendation(
                 staff_summary=staff_summary,
                 shift_summary=shift_summary,
@@ -489,7 +578,22 @@ def generate_roster(
                 end_date=end_date,
             ),
             "roster_suggestions": [],
+            "notes": ["Fallback logic used because AI output schema was invalid."],
+        }
+
+    if not _is_valid_demand_payload(roster_data):
+        logger.warning("AI returned empty roster suggestions")
+        return {
+            "success": False,
+            "error": "AI returned empty roster suggestions",
+            "demand_recommendation": _default_demand_recommendation(staff_summary, shift_summary, start_date, end_date),
+            "roster_suggestions": [],
             "notes": ["Fallback logic used because AI output had no usable data."],
         }
 
-    return normalized
+    return {
+        "success": True,
+        "demand_recommendation": roster_data,
+        "roster_suggestions": _demand_to_suggestions(roster_data),
+        "notes": [],
+    }
