@@ -223,7 +223,7 @@
 .payroll-filters {
   display: flex;
   gap: 12px;
-  align-items: center;
+  align-items: flex-end;
   justify-content: flex-start;
 }
 
@@ -280,6 +280,17 @@
 
 .add-staff-submit {
   flex: 0 0 auto;
+  min-height: 40px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  align-self: flex-end;
+}
+
+.payroll-view-btn {
+  min-height: 40px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  align-self: flex-end;
 }
 
 .date-range {
