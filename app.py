@@ -295,7 +295,7 @@ def ensure_roster_schema_compatibility() -> None:
 
     roster_version_columns = {col["name"] for col in inspector.get_columns("roster_versions")}
     if "updated_at" not in roster_version_columns:
-        db.session.execute(text("ALTER TABLE roster_versions ADD COLUMN updated_at DATETIME"))
+        db.session.execute(text("ALTER TABLE roster_versions ADD COLUMN updated_at TIMESTAMP"))
         db.session.commit()
 
     # Backfill version_id for legacy assignment rows that predate roster versioning.
