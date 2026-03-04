@@ -4,7 +4,7 @@
 <section class="panel">
   <h2 class="section-title">{{ t('payroll') }}</h2>
   <p class="hint">{{ t('payroll_note_confirmed_only') }}</p>
-  <form method="get" class="inline-form table-toolbar payroll-filter-form payroll-filters">
+  <form method="get" class="inline-form payroll-filter-form payroll-filters">
     <label>{{ t('start_date') }} <input type="date" name="start_date" value="{{ start_date }}" required /></label>
     <label>{{ t('end_date') }} <input type="date" name="end_date" value="{{ end_date }}" required /></label>
     <label>{{ t('department') }}

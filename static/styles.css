@@ -226,6 +226,12 @@
   justify-content: flex-start;
 }
 
+.add-shift-submit {
+  min-height: 40px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
 .import-staff {
   display: flex;
   gap: 10px;
