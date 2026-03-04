@@ -5,70 +5,108 @@
   <h2>{{ t('add_shift_template') }}</h2>
   <form method="post" class="grid-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-    <label>{{ t('shift_name') }} <input name="name" required /></label>
-    <label>{{ t('start_time') }} <input type="time" name="start_time" required /></label>
-    <label>{{ t('end_time') }} <input type="time" name="end_time" required /></label>
-    <label>{{ t('required_staff') }} <input type="number" name="required_staff" value="1" min="1" /></label>
-    <button type="submit" class="btn-primary">{{ t('add') }}</button>
+    {% set label = t('shift_name') %}
+    {% set name = 'name' %}
+    {% set input_type = 'text' %}
+    {% set required = true %}
+    {% include "components/input.html" %}
+    {% set label = t('start_time') %}
+    {% set name = 'start_time' %}
+    {% set input_type = 'time' %}
+    {% include "components/input.html" %}
+    {% set label = t('end_time') %}
+    {% set name = 'end_time' %}
+    {% set input_type = 'time' %}
+    {% include "components/input.html" %}
+    {% set label = t('required_staff') %}
+    {% set name = 'required_staff' %}
+    {% set input_type = 'number' %}
+    {% include "components/input.html" %}
+    {% set type = 'primary' %}
+    {% set label = t('add') %}
+    {% set button_type = 'submit' %}
+    {% set icon = 'plus' %}
+    {% include "components/button.html" %}
   </form>
 </section>
 
 <section class="panel">
   <h2>{{ t('shift_templates') }}</h2>
-  <div class="table-wrapper">
-    <table class="data-table app-table">
-      <thead>
-        <tr>
-          <th>{{ t('name') }}</th>
-          <th>{{ t('time') }}</th>
-          <th>{{ t('required_staff') }}</th>
-          <th>{{ t('action') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in shifts %}
-        <tr>
-          <td>{{ row.name }}</td>
-          <td>{{ row.start_time }} - {{ row.end_time }}</td>
-          <td>{{ row.required_staff }}</td>
-          <td class="shift-action-cell">
-            <button
-              type="button"
-              class="btn-secondary js-edit-shift"
-              data-id="{{ row.id }}"
-              data-name="{{ row.name|e }}"
-              data-start-time="{{ row.start_time }}"
-              data-end-time="{{ row.end_time }}"
-            >
-              {{ t('edit') }}
-            </button>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  {% set table_content %}
+    <thead>
+      <tr>
+        <th>{{ t('name') }}</th>
+        <th>{{ t('time') }}</th>
+        <th>{{ t('required_staff') }}</th>
+        <th>{{ t('action') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in shifts %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.start_time }} - {{ row.end_time }}</td>
+        <td>{{ row.required_staff }}</td>
+        <td class="shift-action-cell">
+          {% set type = 'secondary' %}
+          {% set label = t('edit') %}
+          {% set button_type = 'button' %}
+          {% set classes = 'js-edit-shift' %}
+          {% set attrs = 'data-id="' ~ row.id ~ '" data-name="' ~ (row.name|e) ~ '" data-start-time="' ~ row.start_time ~ '" data-end-time="' ~ row.end_time ~ '"' %}
+          {% include "components/button.html" %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  {% endset %}
+  {% include "components/table.html" %}
 </section>
 
-<div id="shift-edit-modal" class="modal hidden" aria-hidden="true">
-  <div class="modal-backdrop js-close-shift-modal"></div>
-  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="edit-shift-title">
-    <h2 id="edit-shift-title">{{ t('edit') }} {{ t('shift_templates') }}</h2>
-    <form id="shift-edit-form" method="post" class="grid-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-      <label>{{ t('shift_name') }} <input id="edit-shift-name" name="name" required /></label>
-      <label>{{ t('start_time') }} <input id="edit-start-time" type="time" name="start_time" required /></label>
-      <label>{{ t('end_time') }} <input id="edit-end-time" type="time" name="end_time" required /></label>
-    </form>
-    <p class="hint">Duration: <strong id="edit-shift-duration">-</strong></p>
-    <div class="modal-actions">
-      <div class="action-group modal-actions-main">
-        <button type="button" class="btn-secondary js-close-shift-modal">{{ t('cancel') }}</button>
-        <button type="submit" class="btn-primary" form="shift-edit-form">{{ t('save') }}</button>
-      </div>
-    </div>
+{% set modal_body %}
+  <form id="shift-edit-form" method="post" class="grid-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    {% set label = t('shift_name') %}
+    {% set name = 'name' %}
+    {% set id = 'edit-shift-name' %}
+    {% set input_type = 'text' %}
+    {% set required = true %}
+    {% include "components/input.html" %}
+    {% set label = t('start_time') %}
+    {% set name = 'start_time' %}
+    {% set id = 'edit-start-time' %}
+    {% set input_type = 'time' %}
+    {% include "components/input.html" %}
+    {% set label = t('end_time') %}
+    {% set name = 'end_time' %}
+    {% set id = 'edit-end-time' %}
+    {% set input_type = 'time' %}
+    {% include "components/input.html" %}
+  </form>
+  <p class="hint">Duration: <strong id="edit-shift-duration">-</strong></p>
+{% endset %}
+
+{% set modal_footer %}
+  <div class="action-group modal-actions-main">
+    {% set type = 'secondary' %}
+    {% set label = t('cancel') %}
+    {% set button_type = 'button' %}
+    {% set classes = 'js-close-shift-modal' %}
+    {% include "components/button.html" %}
+    {% set type = 'primary' %}
+    {% set label = t('save') %}
+    {% set button_type = 'submit' %}
+    {% set form_attr = 'shift-edit-form' %}
+    {% set classes = '' %}
+    {% include "components/button.html" %}
+    {% set form_attr = '' %}
   </div>
-</div>
+{% endset %}
+
+{% set modal_id = 'shift-edit-modal' %}
+{% set title_id = 'edit-shift-title' %}
+{% set title = t('edit') ~ ' ' ~ t('shift_templates') %}
+{% set close_class = 'js-close-shift-modal' %}
+{% include "components/modal.html" %}
 
 <script>
   (() => {
@@ -141,4 +179,3 @@
   })();
 </script>
 {% endblock %}
-

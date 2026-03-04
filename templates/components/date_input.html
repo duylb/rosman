@@ -1,0 +1,18 @@
+<label class="ui-field {{ field_class|default('') }}">
+  {% if label %}<span class="ui-label">{{ label }}</span>{% endif %}
+  <span class="ui-date-wrap">
+    <input
+      class="ui-input"
+      {% if id %}id="{{ id }}"{% endif %}
+      type="date"
+      name="{{ name|default('') }}"
+      value="{{ value|default('') }}"
+      {% if required %}required{% endif %}
+    />
+    <span class="ui-date-icon" aria-hidden="true">
+      {% set name = 'calendar' %}
+      {% set size = 18 %}
+      {% include "components/icon.html" %}
+    </span>
+  </span>
+</label>

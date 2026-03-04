@@ -1,0 +1,26 @@
+{% set button_kind = type|default('secondary') %}
+{% set button_label = label|default('') %}
+{% set button_icon = icon|default('') %}
+{% set button_classes = classes|default('') %}
+{% set button_attrs = attrs|default('') %}
+{% set button_id = id|default('') %}
+{% set aria = aria_label|default('') %}
+{% set btn_class = 'ui-btn ui-btn--' ~ button_kind ~ (' ' ~ button_classes if button_classes else '') %}
+<button
+  type="{{ button_type|default('submit') }}"
+  class="{{ btn_class }}"
+  {% if button_id %}id="{{ button_id }}"{% endif %}
+  {% if name_attr %}name="{{ name_attr }}"{% endif %}
+  {% if value_attr %}value="{{ value_attr }}"{% endif %}
+  {% if form_attr %}form="{{ form_attr }}"{% endif %}
+  {% if aria %}aria-label="{{ aria }}"{% endif %}
+  {% if disabled %}disabled{% endif %}
+  {{ button_attrs|safe }}
+>
+  {% if button_icon %}
+    {% set name = button_icon %}
+    {% set size = 16 %}
+    {% include "components/icon.html" %}
+  {% endif %}
+  <span>{{ button_label }}</span>
+</button>

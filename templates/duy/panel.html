@@ -5,8 +5,15 @@
   <h2>{{ t('duy_panel_title') }}</h2>
   <form method="post" action="{{ url_for('duy.create_user') }}" class="grid-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-    <label>{{ t('email') }} <input type="email" name="email" required /></label>
-    <label>{{ t('password') }} <input type="password" name="password" required /></label>
+    {% set label = t('email') %}
+    {% set name = 'email' %}
+    {% set input_type = 'email' %}
+    {% set required = true %}
+    {% include "components/input.html" %}
+    {% set label = t('password') %}
+    {% set name = 'password' %}
+    {% set input_type = 'password' %}
+    {% include "components/input.html" %}
     <label>{{ t('org_create_mode') }}
       <select name="use_existing_org">
         <option value="0">{{ t('org_mode_new_default') }}</option>
@@ -22,74 +29,92 @@
         {% endfor %}
       </select>
     </label>
-    <label>{{ t('expires_at') }} <input type="datetime-local" name="expires_at" /></label>
+    {% set label = t('expires_at') %}
+    {% set name = 'expires_at' %}
+    {% set input_type = 'datetime-local' %}
+    {% include "components/input.html" %}
     <label>{{ t('owner_flag') }}
       <select name="is_owner">
         <option value="0">{{ t('no') }}</option>
         <option value="1">{{ t('yes') }}</option>
       </select>
     </label>
-    <button type="submit" class="btn-primary">{{ t('create_user') }}</button>
+    {% set type = 'primary' %}
+    {% set label = t('create_user') %}
+    {% set button_type = 'submit' %}
+    {% set icon = 'plus' %}
+    {% include "components/button.html" %}
   </form>
 </section>
 
 <section class="panel">
   <h2>{{ t('duy_users_title') }}</h2>
-  <div class="table-wrapper">
-    <table class="data-table app-table">
-      <thead>
-        <tr>
-          <th>{{ t('email') }}</th>
-          <th>{{ t('organization') }}</th>
-          <th>{{ t('status') }}</th>
-          <th>{{ t('expires_at') }}</th>
-          <th>{{ t('owner_flag') }}</th>
-          <th>{{ t('action') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in users %}
-        <tr>
-          <td>{{ row.email }}</td>
-          <td>{{ row.org_name }}</td>
-          <td>
-            {% if row.status_key == 'status_locked' %}
-            <span class="badge-status locked">{{ t(row.status_key) }}</span>
-            {% elif row.status_key == 'status_expired' %}
-            <span class="badge-status expired">{{ t(row.status_key) }}</span>
-            {% else %}
-            <span class="badge-status confirmed">{{ t(row.status_key) }}</span>
-            {% endif %}
-          </td>
-          <td>{{ row.expires_at|datetimefmt if row.expires_at else '-' }}</td>
-          <td>{{ t('yes') if row.is_owner else t('no') }}</td>
-          <td>
-            <div class="action-group">
-              <form method="post" action="{{ url_for('duy.toggle_active', user_id=row.id) }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                {% if row.is_owner %}
-                <button type="submit" class="btn-secondary" disabled>{{ t('owner_protected') }}</button>
-                {% else %}
-                <button type="submit" class="btn-secondary">{{ t('unlock') if not row.is_active else t('lock') }}</button>
-                {% endif %}
-              </form>
-              <form method="post" action="{{ url_for('duy.extend_expiration', user_id=row.id) }}" class="inline-form inline-form-compact">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                <input type="datetime-local" name="expires_at" required />
-                <button type="submit" class="btn-primary">{{ t('extend') }}</button>
-              </form>
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-        {% if not users %}
-        <tr>
-          <td colspan="6">{{ t('msg_duy_no_users') }}</td>
-        </tr>
-        {% endif %}
-      </tbody>
-    </table>
-  </div>
+  {% set table_content %}
+    <thead>
+      <tr>
+        <th>{{ t('email') }}</th>
+        <th>{{ t('organization') }}</th>
+        <th>{{ t('status') }}</th>
+        <th>{{ t('expires_at') }}</th>
+        <th>{{ t('owner_flag') }}</th>
+        <th>{{ t('action') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in users %}
+      <tr>
+        <td>{{ row.email }}</td>
+        <td>{{ row.org_name }}</td>
+        <td>
+          {% if row.status_key == 'status_locked' %}
+            {% set type = 'danger' %}
+          {% elif row.status_key == 'status_expired' %}
+            {% set type = 'warning' %}
+          {% else %}
+            {% set type = 'neutral' %}
+          {% endif %}
+          {% set label = t(row.status_key) %}
+          {% include "components/badge.html" %}
+        </td>
+        <td>{{ row.expires_at|datetimefmt if row.expires_at else '-' }}</td>
+        <td>{{ t('yes') if row.is_owner else t('no') }}</td>
+        <td>
+          <div class="action-group">
+            <form method="post" action="{{ url_for('duy.toggle_active', user_id=row.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              {% if row.is_owner %}
+                {% set type = 'secondary' %}
+                {% set label = t('owner_protected') %}
+                {% set button_type = 'submit' %}
+                {% set disabled = true %}
+              {% else %}
+                {% set type = 'secondary' %}
+                {% set label = t('unlock') if not row.is_active else t('lock') %}
+                {% set button_type = 'submit' %}
+                {% set disabled = false %}
+              {% endif %}
+              {% include "components/button.html" %}
+              {% set disabled = false %}
+            </form>
+            <form method="post" action="{{ url_for('duy.extend_expiration', user_id=row.id) }}" class="inline-form inline-form-compact">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <input type="datetime-local" name="expires_at" required />
+              {% set type = 'primary' %}
+              {% set label = t('extend') %}
+              {% set button_type = 'submit' %}
+              {% include "components/button.html" %}
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      {% if not users %}
+      <tr>
+        <td colspan="6">{{ t('msg_duy_no_users') }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  {% endset %}
+  {% include "components/table.html" %}
 </section>
 {% endblock %}
-

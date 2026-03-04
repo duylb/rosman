@@ -1,0 +1,4 @@
+<label class="ui-checkbox {{ field_class|default('') }}">
+  <input type="checkbox" name="{{ name|default('') }}" value="{{ value|default('1') }}" {% if checked %}checked{% endif %} {{ attrs|default('')|safe }} />
+  <span>{{ label|default('') }}</span>
+</label>

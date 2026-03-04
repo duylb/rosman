@@ -1,0 +1,16 @@
+<div id="{{ modal_id }}" class="ui-modal hidden" aria-hidden="true">
+  <div class="ui-modal-backdrop {{ close_class|default('js-close-modal') }}"></div>
+  <div class="ui-modal-card" role="dialog" aria-modal="true" aria-labelledby="{{ title_id }}">
+    <header class="ui-modal-header">
+      <h2 id="{{ title_id }}">{{ title }}</h2>
+    </header>
+    <div class="ui-modal-body">
+      {{ modal_body|default('')|safe }}
+    </div>
+    {% if modal_footer %}
+    <footer class="ui-modal-footer">
+      {{ modal_footer|safe }}
+    </footer>
+    {% endif %}
+  </div>
+</div>

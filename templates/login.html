@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{ t('login_title') }} - {{ t('brand_name') }}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/design-system.css') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   </head>
   <body>
@@ -27,9 +28,22 @@
         <form method="post" class="grid-form">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           <input type="hidden" name="next" value="{{ next_url }}" />
-          <label>{{ t('email') }} <input type="email" name="email" required autofocus /></label>
-          <label>{{ t('password') }} <input type="password" name="password" required /></label>
-          <button type="submit" class="btn-primary">{{ t('btn_login') }}</button>
+          {% set label = t('email') %}
+          {% set name = 'email' %}
+          {% set input_type = 'email' %}
+          {% set required = true %}
+          {% set attrs = 'autofocus' %}
+          {% include "components/input.html" %}
+          {% set label = t('password') %}
+          {% set name = 'password' %}
+          {% set input_type = 'password' %}
+          {% set required = true %}
+          {% set attrs = '' %}
+          {% include "components/input.html" %}
+          {% set type = 'primary' %}
+          {% set label = t('btn_login') %}
+          {% set button_type = 'submit' %}
+          {% include "components/button.html" %}
         </form>
         <div class="auth-footer">
           <form method="post" action="{{ url_for('set_language') }}" class="lang-form auth-lang-form lang-toggle">

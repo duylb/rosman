@@ -4,33 +4,21 @@
 <section class="panel">
   <p class="hint hint-no-margin">From {{ week_dates[0]|datefmt }} to {{ week_dates[-1]|datefmt }}</p>
   <form method="get" class="inline-form roster-date-form">
-    <label>{{ t('start_date') }}
-      <span class="date-input-wrap">
-        <input id="roster-start-date" type="date" name="roster_date" value="{{ week_start }}" />
-        <span class="date-input-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none">
-            <rect x="3" y="4" width="18" height="18" rx="2"></rect>
-            <path d="M16 2v4"></path>
-            <path d="M8 2v4"></path>
-            <path d="M3 10h18"></path>
-          </svg>
-        </span>
-      </span>
-    </label>
-    <label>{{ t('end_date') }}
-      <span class="date-input-wrap">
-        <input id="roster-end-date" type="date" name="end_date" value="{{ week_dates[-1] }}" />
-        <span class="date-input-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none">
-            <rect x="3" y="4" width="18" height="18" rx="2"></rect>
-            <path d="M16 2v4"></path>
-            <path d="M8 2v4"></path>
-            <path d="M3 10h18"></path>
-          </svg>
-        </span>
-      </span>
-    </label>
-    <button type="submit" class="btn-primary">{{ t('load') }}</button>
+    {% set label = t('start_date') %}
+    {% set name = 'roster_date' %}
+    {% set id = 'roster-start-date' %}
+    {% set value = week_start %}
+    {% set required = false %}
+    {% include "components/date_input.html" %}
+    {% set label = t('end_date') %}
+    {% set name = 'end_date' %}
+    {% set id = 'roster-end-date' %}
+    {% set value = week_dates[-1] %}
+    {% include "components/date_input.html" %}
+    {% set type = 'primary' %}
+    {% set label = t('load') %}
+    {% set button_type = 'submit' %}
+    {% include "components/button.html" %}
   </form>
 </section>
 
@@ -57,7 +45,10 @@
       </select>
     </label>
     <label>{{ t('notes') }} <input name="notes" /></label>
-    <button type="submit" class="btn-primary">{{ t('assign') }}</button>
+    {% set type = 'primary' %}
+    {% set label = t('assign') %}
+    {% set button_type = 'submit' %}
+    {% include "components/button.html" %}
   </form>
 </section>
 
@@ -69,21 +60,32 @@
       <form method="post" action="{{ url_for('confirm_roster_version', version_id=current_version.id) }}" onsubmit="return confirm('{{ t('confirm_roster_prompt') }}');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
         <input type="hidden" name="roster_date" value="{{ selected_date }}" />
-        <button type="submit" class="btn-danger">{{ t('confirm_roster') }}</button>
+        {% set type = 'danger' %}
+        {% set label = t('confirm_roster') %}
+        {% set button_type = 'submit' %}
+        {% include "components/button.html" %}
       </form>
       <form method="post" action="{{ url_for('discard_roster_version', version_id=current_version.id) }}" onsubmit="return confirm('{{ t('discard_draft_prompt') }}');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-        <button type="submit" class="btn-secondary">{{ t('discard_draft') }}</button>
+        {% set type = 'secondary' %}
+        {% set label = t('discard_draft') %}
+        {% set button_type = 'submit' %}
+        {% include "components/button.html" %}
       </form>
     </div>
     {% endif %}
   </div>
   <form method="post" action="{{ url_for('auto_schedule') }}" class="inline-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-    <label>{{ t('week_start_monday') }}
-      <input type="date" name="week_start" value="{{ week_start }}" required />
-    </label>
-    <button type="submit" class="btn-primary">{{ t('generate_week') }}</button>
+    {% set label = t('week_start_monday') %}
+    {% set name = 'week_start' %}
+    {% set value = week_start %}
+    {% set required = true %}
+    {% include "components/date_input.html" %}
+    {% set type = 'primary' %}
+    {% set label = t('generate_week') %}
+    {% set button_type = 'submit' %}
+    {% include "components/button.html" %}
   </form>
   <p class="hint">{{ t('auto_schedule_rule') }}</p>
 </section>
@@ -103,11 +105,11 @@
       </select>
     </label>
     {% if current_version and current_version.status == "confirmed" and not edit_confirmed_mode %}
-    <a
-      href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id, edit_confirmed=1) }}"
-      class="button-link btn-secondary"
-    >
-      {{ t('edit') }}
+    <a href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id, edit_confirmed=1) }}" class="ui-btn ui-btn--secondary">
+      {% set name = 'edit' %}
+      {% set size = 16 %}
+      {% include "components/icon.html" %}
+      <span>{{ t('edit') }}</span>
     </a>
     {% endif %}
   </form>
@@ -117,7 +119,7 @@
 
   {% if edit_confirmed_mode %}
   <p class="hint draft-notice confirmed-edit-notice">
-    You are editing a confirmed roster. Changes apply only after you press Confirm Changes.
+    You are editing a confirmed roster. Changes apply only after you press Confirm.
   </p>
   {% endif %}
 </section>
@@ -136,77 +138,80 @@
     <input type="hidden" name="roster_date" value="{{ selected_date }}" />
   {% endif %}
 
-  <div class="table-wrapper">
-    <table class="data-table app-table roster-table">
-      <thead>
-        <tr>
-          <th>{{ t('staff') }}</th>
-          <th>{{ t('role') }}</th>
-          {% for col in week_columns %}
-          <th>{{ col.weekday }}<br>{{ col.date|datefmt(false) }}</th>
-          {% endfor %}
-        </tr>
-      </thead>
-      <tbody>
-        {% for staff in staff_rows %}
-        <tr>
-          <td>{{ staff.name }}</td>
-          <td>{{ staff.role }}</td>
-          {% for col in week_columns %}
-          <td>
-            {% if edit_confirmed_mode and current_version and current_version.status == "confirmed" %}
-              {% set selected_shift_id = editable_assignment_map[staff.id][col.date] %}
-              <select name="assignment_{{ staff.id }}_{{ col.date }}" class="app-select roster-edit-grid-select">
-                <option value="0" {% if selected_shift_id == 0 %}selected{% endif %}>0 &mdash; No show</option>
-                {% for shift in shift_rows %}
-                <option value="{{ shift.id }}" {% if selected_shift_id == shift.id %}selected{% endif %}>
-                  {{ shift.name }} ({{ shift.start_time }}-{{ shift.end_time }})
-                </option>
-                {% endfor %}
-              </select>
-              {% set cell_key = staff.id ~ '_' ~ col.date %}
-              {% if cell_key in multi_assignment_cell_keys %}
-              <p class="hint hint-top-sm">Multiple assignments existed. Select keeps one shift.</p>
-              {% endif %}
-            {% else %}
-              {% set day_assignments = assignments_by_staff_and_day[staff.id][col.date] %}
-              {% if day_assignments %}
-                {% for row in day_assignments %}
-                  <div class="roster-cell-row">
-                    <span>{{ row.shift_name }}</span>
-                    {% if current_version and current_version.status == "draft" %}
-                    <form method="post" action="{{ url_for('delete_assignment', assignment_id=row.id) }}" onsubmit="return confirm('{{ t('remove_shift_assignment_prompt') }}');" class="form-inline-zero">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                      <input type="hidden" name="roster_date" value="{{ selected_date }}" />
-                      <button type="submit" class="btn-danger btn-icon-danger">&times;</button>
-                    </form>
-                    {% endif %}
-                    {% if current_version and current_version.status == "draft" and row.notes != "Auto-scheduled" %}
-                    <span class="hint hint-no-margin">{{ t('manual_assignment_short') }}</span>
-                    {% endif %}
-                  </div>
-                {% endfor %}
-              {% else %}
-                <span class="hint">-</span>
-              {% endif %}
-            {% endif %}
-          </td>
-          {% endfor %}
-        </tr>
+  {% set table_class = 'roster-table' %}
+  {% set table_content %}
+    <thead>
+      <tr>
+        <th>{{ t('staff') }}</th>
+        <th>{{ t('role') }}</th>
+        {% for col in week_columns %}
+        <th>{{ col.weekday }}<br>{{ col.date|datefmt(false) }}</th>
         {% endfor %}
-        {% if not staff_rows %}
-        <tr>
-          <td colspan="{{ 2 + week_columns|length }}">{{ t('no_assignments_for_date') }}</td>
-        </tr>
-        {% endif %}
-      </tbody>
-    </table>
-  </div>
+      </tr>
+    </thead>
+    <tbody>
+      {% for staff in staff_rows %}
+      <tr>
+        <td>{{ staff.name }}</td>
+        <td>{{ staff.role }}</td>
+        {% for col in week_columns %}
+        <td>
+          {% if edit_confirmed_mode and current_version and current_version.status == "confirmed" %}
+            {% set selected_shift_id = editable_assignment_map[staff.id][col.date] %}
+            <select name="assignment_{{ staff.id }}_{{ col.date }}" class="app-select roster-edit-grid-select">
+              <option value="0" {% if selected_shift_id == 0 %}selected{% endif %}>0 &mdash; No show</option>
+              {% for shift in shift_rows %}
+              <option value="{{ shift.id }}" {% if selected_shift_id == shift.id %}selected{% endif %}>
+                {{ shift.name }} ({{ shift.start_time }}-{{ shift.end_time }})
+              </option>
+              {% endfor %}
+            </select>
+            {% set cell_key = staff.id ~ '_' ~ col.date %}
+            {% if cell_key in multi_assignment_cell_keys %}
+            <p class="hint hint-top-sm">Multiple assignments existed. Select keeps one shift.</p>
+            {% endif %}
+          {% else %}
+            {% set day_assignments = assignments_by_staff_and_day[staff.id][col.date] %}
+            {% if day_assignments %}
+              {% for row in day_assignments %}
+                <div class="roster-cell-row">
+                  <span>{{ row.shift_name }}</span>
+                  {% if current_version and current_version.status == "draft" %}
+                  <form method="post" action="{{ url_for('delete_assignment', assignment_id=row.id) }}" onsubmit="return confirm('{{ t('remove_shift_assignment_prompt') }}');" class="form-inline-zero">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <input type="hidden" name="roster_date" value="{{ selected_date }}" />
+                    <button type="submit" class="ui-btn ui-btn--danger btn-icon-danger">&times;</button>
+                  </form>
+                  {% endif %}
+                  {% if current_version and current_version.status == "draft" and row.notes != "Auto-scheduled" %}
+                  <span class="hint hint-no-margin">{{ t('manual_assignment_short') }}</span>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            {% else %}
+              <span class="hint">-</span>
+            {% endif %}
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+      {% if not staff_rows %}
+      <tr>
+        <td colspan="{{ 2 + week_columns|length }}">{{ t('no_assignments_for_date') }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  {% endset %}
+  {% include "components/table.html" %}
 
   {% if edit_confirmed_mode and current_version and current_version.status == "confirmed" %}
   <div class="action-group roster-edit-actions">
-    <button type="submit" class="btn-danger">Confirm</button>
-    <a class="button-link btn-secondary" href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id) }}">{{ t('cancel') }}</a>
+    {% set type = 'danger' %}
+    {% set label = 'Confirm' %}
+    {% set button_type = 'submit' %}
+    {% include "components/button.html" %}
+    <a class="ui-btn ui-btn--secondary" href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id) }}">{{ t('cancel') }}</a>
   </div>
   </form>
   {% endif %}

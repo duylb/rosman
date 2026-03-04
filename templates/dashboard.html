@@ -2,7 +2,7 @@
 {% block page_title %}{{ t('page_dashboard') }}{% endblock %}
 {% block content %}
 <section class="metric-grid">
-  <article class="metric-card">
+  <article class="ui-card metric-card">
     <div class="metric-head">
       <h2 class="metric-title">{{ t('today') }}</h2>
       <span class="metric-badge">TD</span>
@@ -10,7 +10,7 @@
     <p class="metric-value">{{ today|datefmt }}</p>
     <p class="metric-sub">{{ t('workspace') }}</p>
   </article>
-  <article class="metric-card">
+  <article class="ui-card metric-card">
     <div class="metric-head">
       <h2 class="metric-title">{{ t('active_staff') }}</h2>
       <span class="metric-badge">AS</span>
@@ -18,7 +18,7 @@
     <p class="metric-value">{{ staff_count }}</p>
     <p class="metric-sub">{{ t('staff') }}</p>
   </article>
-  <article class="metric-card">
+  <article class="ui-card metric-card">
     <div class="metric-head">
       <h2 class="metric-title">{{ t('shift_templates') }}</h2>
       <span class="metric-badge">ST</span>
@@ -26,7 +26,7 @@
     <p class="metric-value">{{ shift_count }}</p>
     <p class="metric-sub">{{ t('nav_shifts') }}</p>
   </article>
-  <article class="metric-card">
+  <article class="ui-card metric-card">
     <div class="metric-head">
       <h2 class="metric-title">{{ t('assignments_today') }}</h2>
       <span class="metric-badge">AT</span>
@@ -34,7 +34,7 @@
     <p class="metric-value">{{ assignments_today }}</p>
     <p class="metric-sub">{{ t('assignments') }}</p>
   </article>
-  <article class="metric-card">
+  <article class="ui-card metric-card">
     <div class="metric-head">
       <h2 class="metric-title">{{ t('unavailable_today') }}</h2>
       <span class="metric-badge">UA</span>

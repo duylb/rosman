@@ -6,8 +6,15 @@
   <p class="hint">{{ t('payroll_note_confirmed_only') }}</p>
   <form method="get" class="inline-form table-toolbar payroll-filter-form">
     <div class="date-range">
-      <label>{{ t('start_date') }} <input type="date" name="start_date" value="{{ start_date }}" required /></label>
-      <label>{{ t('end_date') }} <input type="date" name="end_date" value="{{ end_date }}" required /></label>
+      {% set label = t('start_date') %}
+      {% set name = 'start_date' %}
+      {% set value = start_date %}
+      {% set required = true %}
+      {% include "components/date_input.html" %}
+      {% set label = t('end_date') %}
+      {% set name = 'end_date' %}
+      {% set value = end_date %}
+      {% include "components/date_input.html" %}
     </div>
     <label>{{ t('department') }}
       <select name="department">
@@ -25,12 +32,18 @@
         {% endfor %}
       </select>
     </label>
-    <button type="submit" class="btn-primary">{{ t('load') }}</button>
+    {% set type = 'primary' %}
+    {% set label = t('load') %}
+    {% set button_type = 'submit' %}
+    {% include "components/button.html" %}
     <a
-      class="button-link btn-secondary"
+      class="ui-btn ui-btn--secondary"
       href="{{ url_for('payroll', start_date=start_date, end_date=end_date, department=selected_department or '', staff_id=selected_staff_id or '', export='csv') }}"
     >
-      {{ t('export_payroll_csv') }}
+      {% set name = 'download' %}
+      {% set size = 16 %}
+      {% include "components/icon.html" %}
+      <span>{{ t('export_payroll_csv') }}</span>
     </a>
   </form>
   <p class="hint hint-top">
@@ -39,64 +52,63 @@
 </section>
 
 <section class="panel">
-  <div class="table-wrapper">
-    <table class="data-table app-table payroll-table">
-      <thead>
-        <tr>
-          <th>{{ t('staff_name') }}</th>
-          <th>{{ t('role') }}</th>
-          {% for date_key in date_columns %}
-          <th>{{ date_key|datefmt }}</th>
-          {% endfor %}
-          <th>{{ t('total_hours') }}</th>
-          <th>{{ t('hourly_wage') }}</th>
-          <th>{{ t('total_salary') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in payroll_rows %}
-        <tr>
-          <td>{{ row.staff_name }}</td>
-          <td>{{ row.role }}</td>
-          {% for date_key in date_columns %}
-          <td>{{ row.hours_by_date[date_key]|money }}</td>
-          {% endfor %}
-          <td>{{ row.total_hours|money }}</td>
-          <td>
-            {{ row.hourly_wage|money }}
-            {% if row.wage_missing %}
-            <span title="{{ t('wage_missing_hint') }}" class="wage-warning">*</span>
-            {% endif %}
-          </td>
-          <td>{{ row.total_salary|money }}</td>
-        </tr>
+  {% set table_class = 'payroll-table' %}
+  {% set table_content %}
+    <thead>
+      <tr>
+        <th>{{ t('staff_name') }}</th>
+        <th>{{ t('role') }}</th>
+        {% for date_key in date_columns %}
+        <th>{{ date_key|datefmt }}</th>
         {% endfor %}
-        {% if not payroll_rows %}
-        <tr>
-          <td colspan="{{ 5 + date_columns|length }}">
-            {% if selected_department %}
-            {{ t('no_staff_found_in_department').format(department=selected_department) }}
-            {% else %}
-            {{ t('no_staff_found_for_filter') }}
-            {% endif %}
-          </td>
-        </tr>
-        {% endif %}
-      </tbody>
-      <tfoot>
-        <tr class="totals-row">
-          <th>{{ t('total') }}</th>
-          <th>-</th>
-          {% for date_key in date_columns %}
-          <th>{{ totals_row.hours_by_date[date_key]|money }}</th>
-          {% endfor %}
-          <th>{{ totals_row.total_hours|money }}</th>
-          <th>-</th>
-          <th>{{ totals_row.total_salary|money }}</th>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
+        <th>{{ t('total_hours') }}</th>
+        <th>{{ t('hourly_wage') }}</th>
+        <th>{{ t('total_salary') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in payroll_rows %}
+      <tr>
+        <td>{{ row.staff_name }}</td>
+        <td>{{ row.role }}</td>
+        {% for date_key in date_columns %}
+        <td>{{ row.hours_by_date[date_key]|money }}</td>
+        {% endfor %}
+        <td>{{ row.total_hours|money }}</td>
+        <td>
+          {{ row.hourly_wage|money }}
+          {% if row.wage_missing %}
+          <span title="{{ t('wage_missing_hint') }}" class="wage-warning">*</span>
+          {% endif %}
+        </td>
+        <td>{{ row.total_salary|money }}</td>
+      </tr>
+      {% endfor %}
+      {% if not payroll_rows %}
+      <tr>
+        <td colspan="{{ 5 + date_columns|length }}">
+          {% if selected_department %}
+          {{ t('no_staff_found_in_department').format(department=selected_department) }}
+          {% else %}
+          {{ t('no_staff_found_for_filter') }}
+          {% endif %}
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+    <tfoot>
+      <tr class="totals-row">
+        <th>{{ t('total') }}</th>
+        <th>-</th>
+        {% for date_key in date_columns %}
+        <th>{{ totals_row.hours_by_date[date_key]|money }}</th>
+        {% endfor %}
+        <th>{{ totals_row.total_hours|money }}</th>
+        <th>-</th>
+        <th>{{ totals_row.total_salary|money }}</th>
+      </tr>
+    </tfoot>
+  {% endset %}
+  {% include "components/table.html" %}
 </section>
 {% endblock %}
-

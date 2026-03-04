@@ -5,8 +5,8 @@
   <h2>{{ t('export_static_data') }}</h2>
   <p class="hint">{{ t('export_static_data_hint') }}</p>
   <div class="button-row">
-    <a class="button-link btn-secondary" href="{{ url_for('export_dataset', dataset='staff') }}">{{ t('export_staff') }}</a>
-    <a class="button-link btn-secondary" href="{{ url_for('export_dataset', dataset='shifts') }}">{{ t('export_shifts') }}</a>
+    <a class="ui-btn ui-btn--secondary" href="{{ url_for('export_dataset', dataset='staff') }}">{{ t('export_staff') }}</a>
+    <a class="ui-btn ui-btn--secondary" href="{{ url_for('export_dataset', dataset='shifts') }}">{{ t('export_shifts') }}</a>
   </div>
 </section>
 
@@ -14,14 +14,17 @@
   <h2>{{ t('export_roster_availability') }}</h2>
   <p class="hint">{{ t('export_roster_availability_hint') }}</p>
   <form method="get" action="{{ url_for('export_dataset', dataset='assignments') }}" class="inline-form inline-form-top">
-    <label>{{ t('start_date') }}
-      <input type="date" name="start_date" value="{{ export_start_date }}" required />
-    </label>
-    <label>{{ t('end_date') }}
-      <input type="date" name="end_date" value="{{ export_end_date }}" required />
-    </label>
-    <button type="submit" class="btn-primary" formaction="{{ url_for('export_dataset', dataset='assignments') }}">{{ t('export_roster') }}</button>
-    <button type="submit" class="btn-secondary" formaction="{{ url_for('export_dataset', dataset='availability') }}">{{ t('export_availability') }}</button>
+    {% set label = t('start_date') %}
+    {% set name = 'start_date' %}
+    {% set value = export_start_date %}
+    {% set required = true %}
+    {% include "components/date_input.html" %}
+    {% set label = t('end_date') %}
+    {% set name = 'end_date' %}
+    {% set value = export_end_date %}
+    {% include "components/date_input.html" %}
+    <button type="submit" class="ui-btn ui-btn--primary" formaction="{{ url_for('export_dataset', dataset='assignments') }}">{{ t('export_roster') }}</button>
+    <button type="submit" class="ui-btn ui-btn--secondary" formaction="{{ url_for('export_dataset', dataset='availability') }}">{{ t('export_availability') }}</button>
   </form>
   <p class="hint">{{ t('only_confirmed_rosters_exported') }}</p>
 </section>
@@ -46,7 +49,10 @@
         <option value="1">{{ t('replace_mode') }}</option>
       </select>
     </label>
-    <button type="submit" class="btn-primary">{{ t('import_csv') }}</button>
+    {% set type = 'primary' %}
+    {% set label = t('import_csv') %}
+    {% set button_type = 'submit' %}
+    {% include "components/button.html" %}
   </form>
 </section>
 {% endblock %}

@@ -1,0 +1,21 @@
+<header class="top-nav">
+  <div class="nav-left">
+    <span class="workspace-label">{{ t('workspace') }}</span>
+    <span class="nav-separator" aria-hidden="true">&mdash;</span>
+    <h1 class="page-title">{{ page_title }}</h1>
+  </div>
+  <div class="nav-right">
+    {% if page_actions %}
+      <div class="action-group">{{ page_actions|safe }}</div>
+    {% endif %}
+    <span class="account-name" aria-label="{{ t('account') }}">{{ g.user.email if g.user else 'User' }}</span>
+    <form method="post" action="{{ url_for('logout') }}" class="logout-form top-nav-logout">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      {% set type = 'secondary' %}
+      {% set label = t('logout') %}
+      {% set button_type = 'submit' %}
+      {% set classes = 'btn-compact' %}
+      {% include "components/button.html" %}
+    </form>
+  </div>
+</header>

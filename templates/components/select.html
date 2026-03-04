@@ -1,0 +1,12 @@
+{% set field_label = label|default('') %}
+<label class="ui-field {{ field_class|default('') }}">
+  {% if field_label %}<span class="ui-label">{{ field_label }}</span>{% endif %}
+  <select
+    class="ui-input ui-select {{ select_class|default('') }}"
+    {% if id %}id="{{ id }}"{% endif %}
+    name="{{ name|default('') }}"
+    {% if required %}required{% endif %}
+  >
+    {{ options_html|default('')|safe }}
+  </select>
+</label>

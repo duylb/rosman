@@ -13,8 +13,15 @@
         {% endfor %}
       </select>
     </label>
-    <label>{{ t('start_date') }} <input type="date" name="start_date" value="{{ today }}" required /></label>
-    <label>{{ t('end_date') }} <input type="date" name="end_date" value="{{ today }}" required /></label>
+    {% set label = t('start_date') %}
+    {% set name = 'start_date' %}
+    {% set value = today %}
+    {% set required = true %}
+    {% include "components/date_input.html" %}
+    {% set label = t('end_date') %}
+    {% set name = 'end_date' %}
+    {% set value = today %}
+    {% include "components/date_input.html" %}
     <label>{{ t('status') }}
       <select name="status" required>
         <option value="leave">{{ t('leave') }}</option>
@@ -22,7 +29,11 @@
       </select>
     </label>
     <label>{{ t('notes') }} <input name="notes" /></label>
-    <button type="submit" class="btn-primary">{{ t('add_entry') }}</button>
+    {% set type = 'primary' %}
+    {% set label = t('add_entry') %}
+    {% set button_type = 'submit' %}
+    {% set icon = 'plus' %}
+    {% include "components/button.html" %}
   </form>
 </section>
 
@@ -38,8 +49,15 @@
         {% endfor %}
       </select>
     </label>
-    <label>{{ t('start_date') }} <input type="date" name="start_date" value="{{ today }}" required /></label>
-    <label>{{ t('end_date') }} <input type="date" name="end_date" value="{{ today }}" required /></label>
+    {% set label = t('start_date') %}
+    {% set name = 'start_date' %}
+    {% set value = today %}
+    {% set required = true %}
+    {% include "components/date_input.html" %}
+    {% set label = t('end_date') %}
+    {% set name = 'end_date' %}
+    {% set value = today %}
+    {% include "components/date_input.html" %}
     <label>{{ t('preferred_shifts_multi') }}
       <select name="shift_ids" multiple size="4" required>
         {% for shift in shift_rows %}
@@ -48,88 +66,97 @@
       </select>
     </label>
     <label>{{ t('notes') }} <input name="notes" /></label>
-    <button type="submit" class="btn-primary">{{ t('add_preferences') }}</button>
+    {% set type = 'primary' %}
+    {% set label = t('add_preferences') %}
+    {% set button_type = 'submit' %}
+    {% set icon = 'plus' %}
+    {% include "components/button.html" %}
   </form>
 </section>
 
 <section class="panel">
   <h2>{{ t('preferred_shift_entries') }}</h2>
-  <div class="table-wrapper">
-    <table class="data-table app-table">
-      <thead>
-        <tr>
-          <th>{{ t('staff') }}</th>
-          <th>{{ t('role') }}</th>
-          <th>{{ t('preferred_shift') }}</th>
-          <th>{{ t('date_range') }}</th>
-          <th>{{ t('notes') }}</th>
-          <th>{{ t('action') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in preference_rows %}
-        <tr>
-          <td>{{ row.staff_name }}</td>
-          <td>{{ row.staff_role }}</td>
-          <td>{{ row.shift_name }} ({{ row.start_time }} - {{ row.end_time }})</td>
-          <td>{{ row.start_date|datefmt }} {{ t('to') }} {{ row.end_date|datefmt }}</td>
-          <td>{{ row.notes or '-' }}</td>
-          <td>
-            <form method="post" action="{{ url_for('delete_shift_preference', preference_id=row.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-              <button type="submit" class="btn-danger">{{ t('remove') }}</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-        {% if not preference_rows %}
-        <tr>
-          <td colspan="6">{{ t('no_shift_preferences') }}</td>
-        </tr>
-        {% endif %}
-      </tbody>
-    </table>
-  </div>
+  {% set table_content %}
+    <thead>
+      <tr>
+        <th>{{ t('staff') }}</th>
+        <th>{{ t('role') }}</th>
+        <th>{{ t('preferred_shift') }}</th>
+        <th>{{ t('date_range') }}</th>
+        <th>{{ t('notes') }}</th>
+        <th>{{ t('action') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in preference_rows %}
+      <tr>
+        <td>{{ row.staff_name }}</td>
+        <td>{{ row.staff_role }}</td>
+        <td>{{ row.shift_name }} ({{ row.start_time }} - {{ row.end_time }})</td>
+        <td>{{ row.start_date|datefmt }} {{ t('to') }} {{ row.end_date|datefmt }}</td>
+        <td>{{ row.notes or '-' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('delete_shift_preference', preference_id=row.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            {% set type = 'danger' %}
+            {% set label = t('remove') %}
+            {% set button_type = 'submit' %}
+            {% set icon = 'trash' %}
+            {% include "components/button.html" %}
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      {% if not preference_rows %}
+      <tr>
+        <td colspan="6">{{ t('no_shift_preferences') }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  {% endset %}
+  {% include "components/table.html" %}
 </section>
 
 <section class="panel">
   <h2>{{ t('availability_entries') }}</h2>
-  <div class="table-wrapper">
-    <table class="data-table app-table">
-      <thead>
-        <tr>
-          <th>{{ t('staff') }}</th>
-          <th>{{ t('role') }}</th>
-          <th>{{ t('date_range') }}</th>
-          <th>{{ t('status') }}</th>
-          <th>{{ t('notes') }}</th>
-          <th>{{ t('action') }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in availability_rows %}
-        <tr>
-          <td>{{ row.staff_name }}</td>
-          <td>{{ row.staff_role }}</td>
-          <td>{{ row.start_date|datefmt }} {{ t('to') }} {{ row.end_date|datefmt }}</td>
-          <td>{{ t(row.status) }}</td>
-          <td>{{ row.notes or '-' }}</td>
-          <td>
-            <form method="post" action="{{ url_for('delete_availability', entry_id=row.id) }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-              <button type="submit" class="btn-danger">{{ t('remove') }}</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-        {% if not availability_rows %}
-        <tr>
-          <td colspan="6">{{ t('no_availability_entries') }}</td>
-        </tr>
-        {% endif %}
-      </tbody>
-    </table>
-  </div>
+  {% set table_content %}
+    <thead>
+      <tr>
+        <th>{{ t('staff') }}</th>
+        <th>{{ t('role') }}</th>
+        <th>{{ t('date_range') }}</th>
+        <th>{{ t('status') }}</th>
+        <th>{{ t('notes') }}</th>
+        <th>{{ t('action') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in availability_rows %}
+      <tr>
+        <td>{{ row.staff_name }}</td>
+        <td>{{ row.staff_role }}</td>
+        <td>{{ row.start_date|datefmt }} {{ t('to') }} {{ row.end_date|datefmt }}</td>
+        <td>{{ t(row.status) }}</td>
+        <td>{{ row.notes or '-' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('delete_availability', entry_id=row.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            {% set type = 'danger' %}
+            {% set label = t('remove') %}
+            {% set button_type = 'submit' %}
+            {% set icon = 'trash' %}
+            {% include "components/button.html" %}
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      {% if not availability_rows %}
+      <tr>
+        <td colspan="6">{{ t('no_availability_entries') }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  {% endset %}
+  {% include "components/table.html" %}
 </section>
 {% endblock %}
-
