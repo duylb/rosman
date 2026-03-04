@@ -154,6 +154,14 @@
   {% include "components/table.html" %}
 </section>
 
+<details class="panel staff-debug-panel" open>
+  <summary>Staff Edit Debug (<span id="staff-debug-count">0</span>)</summary>
+  <div class="action-group">
+    <button type="button" class="ui-btn ui-btn--secondary" id="staff-debug-clear">Clear Logs</button>
+  </div>
+  <pre id="staff-debug-log" class="staff-debug-log"></pre>
+</details>
+
 {% set modal_body %}
   <form id="staff-edit-form" method="post" class="grid-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -223,6 +231,49 @@
 
 <script>
   (() => {
+    const debugLogEl = document.getElementById("staff-debug-log");
+    const debugCountEl = document.getElementById("staff-debug-count");
+    const debugClearBtn = document.getElementById("staff-debug-clear");
+    let debugCount = 0;
+
+    const debug = (message, payload) => {
+      const timestamp = new Date().toISOString().split("T")[1].replace("Z", "");
+      const suffix = payload === undefined ? "" : ` | ${JSON.stringify(payload)}`;
+      const line = `[${timestamp}] ${message}${suffix}`;
+      console.log(`[staff-debug] ${message}`, payload);
+      if (debugLogEl) {
+        debugLogEl.textContent += `${line}\n`;
+        debugLogEl.scrollTop = debugLogEl.scrollHeight;
+      }
+      debugCount += 1;
+      if (debugCountEl) {
+        debugCountEl.textContent = String(debugCount);
+      }
+    };
+
+    window.__staffDebug = debug;
+    debug("script init");
+
+    if (debugClearBtn && debugLogEl) {
+      debugClearBtn.addEventListener("click", () => {
+        debugLogEl.textContent = "";
+        debugCount = 0;
+        if (debugCountEl) {
+          debugCountEl.textContent = "0";
+        }
+        debug("debug log cleared");
+      });
+    }
+
+    window.addEventListener("error", (event) => {
+      debug("window error", {
+        message: event.message,
+        source: event.filename,
+        line: event.lineno,
+        column: event.colno,
+      });
+    });
+
     const wageToggleButton = document.getElementById("toggle-wages");
     const wageHeader = document.getElementById("wage-header");
     const wageCells = document.querySelectorAll(".js-wage-cell");
@@ -242,8 +293,25 @@
       deleteForm: document.getElementById("staff-delete-form"),
     });
 
+    const logModalRefState = (refs, context) => {
+      debug(`modal refs @ ${context}`, {
+        modal: Boolean(refs.modal),
+        form: Boolean(refs.form),
+        inputName: Boolean(refs.inputName),
+        inputRole: Boolean(refs.inputRole),
+        inputDepartment: Boolean(refs.inputDepartment),
+        inputEmail: Boolean(refs.inputEmail),
+        inputHourlyWage: Boolean(refs.inputHourlyWage),
+        deleteForm: Boolean(refs.deleteForm),
+      });
+    };
+
     const openModal = (button) => {
       if (!button) return;
+      debug("openModal called", {
+        id: button.dataset.id || "",
+        name: button.dataset.name || "",
+      });
       const refs = getModalRefs();
       const {
         modal,
@@ -256,6 +324,7 @@
         deleteForm,
       } = refs;
       if (!modal || !form || !inputName || !inputRole || !inputDepartment || !inputEmail || !inputHourlyWage || !deleteForm) {
+        logModalRefState(refs, "openModal-missing");
         return;
       }
       const staffId = button.dataset.id;
@@ -269,31 +338,52 @@
       inputHourlyWage.value = button.dataset.hourlyWage || "";
       modal.classList.remove("hidden");
       modal.setAttribute("aria-hidden", "false");
+      debug("modal opened", {
+        id: staffId || "",
+        formAction: form.action || "",
+        deleteAction: deleteForm.action || "",
+      });
       inputName.focus();
     };
 
     window.openEditStaffModal = (staffId) => {
+      debug("openEditStaffModal called", { staffId: String(staffId) });
       const trigger = document.querySelector(`.js-edit-staff[data-id="${staffId}"]`);
       if (trigger) {
         openModal(trigger);
+      } else {
+        debug("openEditStaffModal could not find trigger", { staffId: String(staffId) });
       }
     };
 
     const closeModal = () => {
       const { modal } = getModalRefs();
-      if (!modal) return;
+      if (!modal) {
+        debug("closeModal skipped (modal missing)");
+        return;
+      }
       modal.classList.add("hidden");
       modal.setAttribute("aria-hidden", "true");
+      debug("modal closed");
     };
+
+    const editButtons = Array.from(document.querySelectorAll(".js-edit-staff"));
+    debug("edit buttons found", { count: editButtons.length });
+    logModalRefState(getModalRefs(), "after-init");
 
     document.addEventListener("click", (event) => {
       const editButton = event.target.closest(".js-edit-staff");
       if (!editButton) return;
+      debug("delegated edit click", {
+        id: editButton.dataset.id || "",
+        targetTag: event.target.tagName,
+      });
       event.preventDefault();
       openModal(editButton);
     });
-    document.querySelectorAll(".js-edit-staff").forEach((button) => {
+    editButtons.forEach((button) => {
       button.addEventListener("click", (event) => {
+        debug("direct edit click", { id: button.dataset.id || "" });
         event.preventDefault();
         openModal(button);
       });
@@ -307,6 +397,7 @@
       const { modal } = getModalRefs();
       if (!modal) return;
       if (event.key === "Escape" && !modal.classList.contains("hidden")) {
+        debug("escape pressed - closing modal");
         closeModal();
       }
     });
@@ -317,8 +408,13 @@
         const confirmMessage = `Are you sure you want to delete this staff member?\n${currentStaffName || ""}`;
         if (!window.confirm(confirmMessage)) {
           event.preventDefault();
+          debug("delete canceled by user");
+        } else {
+          debug("delete confirmed by user");
         }
       });
+    } else {
+      debug("delete form missing at init");
     }
 
     if (wageToggleButton && wageHeader) {
@@ -331,6 +427,7 @@
     }
 
     if (searchInput && staffRows.length > 0) {
+      debug("search initialized", { rows: staffRows.length });
       searchInput.addEventListener("input", () => {
         const query = searchInput.value.trim().toLowerCase();
         staffRows.forEach((row) => {
@@ -340,6 +437,8 @@
         });
       });
     }
+
+    debug("script ready");
   })();
 </script>
 {% endblock %}
