@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="{{ lang }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ title or t('app_title') }}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo.png') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/utilities.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <div class="layout-app">
+      {% include "layout/sidebar.html" %}
+
+      <div class="layout-main">
+        {% set page_title_block %}{% block page_title %}{% endblock %}{% endset %}
+        {% set page_title = page_title_block|trim %}
+        {% if not page_title %}
+          {% set page_name = t('page_dashboard') %}
+          {% if request.path.startswith('/staff') %}
+            {% set page_name = t('page_staff') %}
+          {% elif request.path.startswith('/shifts') %}
+            {% set page_name = t('page_shifts') %}
+          {% elif request.path.startswith('/availability') %}
+            {% set page_name = t('page_availability') %}
+          {% elif request.path.startswith('/roster') %}
+            {% set page_name = t('page_roster') %}
+          {% elif request.path.startswith('/payroll') %}
+            {% set page_name = t('page_payroll') %}
+          {% elif request.path.startswith('/duy') %}
+            {% set page_name = t('page_duy') %}
+          {% elif request.path.startswith('/data') %}
+            {% set page_name = t('page_data') %}
+          {% endif %}
+          {% set page_title = page_name %}
+        {% endif %}
+
+        {% set page_actions_block %}{% block page_actions %}{% endblock %}{% endset %}
+        {% set page_actions = page_actions_block|trim %}
+        {% include "layout/header.html" %}
+
+        <main class="layout-content" role="main">
+          <div class="layout-container app-shell">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                <ul class="alerts" aria-live="polite">
+                  {% for category, msg in messages %}
+                    <li class="{{ category }}">{{ t(msg) }}</li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            {% endwith %}
+            {% set shell_description_block %}{% block page_description %}{% endblock %}{% endset %}
+            {% set shell_toolbar_block %}{% block page_toolbar %}{% endblock %}{% endset %}
+            {% set shell_content %}{% block content %}{% endblock %}{% endset %}
+            {% set shell_title = page_title %}
+            {% set shell_description = shell_description_block|trim %}
+            {% set shell_toolbar = shell_toolbar_block|trim %}
+            {% include "components/page_shell.html" %}
+          </div>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

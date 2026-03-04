@@ -1,0 +1,36 @@
+<nav class="side-nav" aria-label="Sidebar Navigation">
+  <a class="{{ 'active' if request.path == url_for('dashboard') else '' }}" href="{{ url_for('dashboard') }}" aria-label="{{ t('nav_dashboard') }}">
+    <span class="nav-icon">{% set name = 'dashboard' %}{% include "components/icon.html" %}</span>
+    <span class="nav-label">{{ t('nav_dashboard') }}</span>
+  </a>
+  <a class="{{ 'active' if request.path.startswith('/staff') else '' }}" href="{{ url_for('staff') }}" aria-label="{{ t('nav_staff') }}">
+    <span class="nav-icon">{% set name = 'staff' %}{% include "components/icon.html" %}</span>
+    <span class="nav-label">{{ t('nav_staff') }}</span>
+  </a>
+  <a class="{{ 'active' if request.path.startswith('/shifts') else '' }}" href="{{ url_for('shifts') }}" aria-label="{{ t('nav_shifts') }}">
+    <span class="nav-icon">{% set name = 'clock' %}{% include "components/icon.html" %}</span>
+    <span class="nav-label">{{ t('nav_shifts') }}</span>
+  </a>
+  <a class="{{ 'active' if request.path.startswith('/availability') else '' }}" href="{{ url_for('availability') }}" aria-label="{{ t('nav_availability') }}">
+    <span class="nav-icon">{% set name = 'calendar-check' %}{% include "components/icon.html" %}</span>
+    <span class="nav-label">{{ t('nav_availability') }}</span>
+  </a>
+  <a class="{{ 'active' if request.path.startswith('/roster') else '' }}" href="{{ url_for('roster') }}" aria-label="{{ t('nav_roster') }}">
+    <span class="nav-icon">{% set name = 'calendar-days' %}{% include "components/icon.html" %}</span>
+    <span class="nav-label">{{ t('nav_roster') }}</span>
+  </a>
+  <a class="{{ 'active' if request.path.startswith('/payroll') else '' }}" href="{{ url_for('payroll') }}" aria-label="{{ t('nav_payroll') }}">
+    <span class="nav-icon">{% set name = 'wallet' %}{% include "components/icon.html" %}</span>
+    <span class="nav-label">{{ t('nav_payroll') }}</span>
+  </a>
+  <a class="{{ 'active' if request.path.startswith('/data') else '' }}" href="{{ url_for('data_page') }}" aria-label="{{ t('nav_data_io') }}">
+    <span class="nav-icon">{% set name = 'arrows' %}{% include "components/icon.html" %}</span>
+    <span class="nav-label">{{ t('nav_data_io') }}</span>
+  </a>
+  {% if g.user and (g.user.is_owner or g.user.role == 'owner') %}
+  <a class="{{ 'active' if request.path.startswith('/duy') else '' }}" href="{{ url_for('duy.panel') }}" aria-label="{{ t('nav_duy') }}">
+    <span class="nav-icon">{% set name = 'shield-check' %}{% include "components/icon.html" %}</span>
+    <span class="nav-label">{{ t('nav_duy') }}</span>
+  </a>
+  {% endif %}
+</nav>

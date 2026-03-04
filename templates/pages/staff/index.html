@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block page_title %}{{ t('page_staff') }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>{{ t('add_staff') }}</h2>
+  <form method="post" class="grid-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    {% set label = t('name') %}
+    {% set name = 'name' %}
+    {% set input_type = 'text' %}
+    {% set required = true %}
+    {% include "components/input.html" %}
+    {% set label = t('role') %}
+    {% set name = 'role' %}
+    {% set required = true %}
+    {% include "components/input.html" %}
+    {% set label = t('department') %}
+    {% set name = 'department' %}
+    {% set required = false %}
+    {% include "components/input.html" %}
+    {% set label = t('email') %}
+    {% set name = 'email' %}
+    {% set input_type = 'email' %}
+    {% include "components/input.html" %}
+    {% set label = t('hourly_wage') %}
+    {% set name = 'hourly_wage' %}
+    {% set input_type = 'number' %}
+    {% set min = 0 %}
+    {% set step = '0.01' %}
+    {% set attrs = 'inputmode="decimal"' %}
+    {% include "components/input.html" %}
+    {% set type = 'primary' %}
+    {% set label = t('add') %}
+    {% set icon = 'plus' %}
+    {% set button_type = 'submit' %}
+    {% include "components/button.html" %}
+  </form>
+</section>
+
+<section class="panel">
+  <h2>{{ t('import_staff_csv') }}</h2>
+  <p class="hint">{{ t('import_staff_hint') }}</p>
+  <form method="post" action="{{ url_for('import_staff_csv') }}" enctype="multipart/form-data" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    {% set label = t('csv_file') %}
+    {% set name = 'csv_file' %}
+    {% set input_type = 'file' %}
+    {% set required = true %}
+    {% set attrs = 'accept=".csv,text/csv"' %}
+    {% include "components/input.html" %}
+    {% set type = 'primary' %}
+    {% set label = t('import') %}
+    {% set button_type = 'submit' %}
+    {% include "components/button.html" %}
+  </form>
+</section>
+
+<section class="panel">
+  {% set toolbar_content %}
+    <div class="toolbar-left">
+      <h2 class="section-title">{{ t('staff_list') }}</h2>
+      <input type="search" class="app-input toolbar-search" placeholder="{{ t('search_placeholder') }}" />
+    </div>
+    <div class="toolbar-right">
+      {% set type = 'secondary' %}
+      {% set label = t('show_wages') %}
+      {% set button_type = 'button' %}
+      {% set id = 'toggle-wages' %}
+      {% include "components/button.html" %}
+    </div>
+  {% endset %}
+  {% include "components/toolbar.html" %}
+
+  {% set table_content %}
+    <thead>
+      <tr>
+        <th>{{ t('name') }}</th>
+        <th>{{ t('role') }}</th>
+        <th>{{ t('department') }}</th>
+        <th>{{ t('email') }}</th>
+        <th class="wage-col hidden" id="wage-header">{{ t('hourly_wage') }}</th>
+        <th>{{ t('status') }}</th>
+        <th>{{ t('action') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in staff %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.role }}</td>
+        <td>{{ row.department or '-' }}</td>
+        <td>{{ row.email or '-' }}</td>
+        <td class="wage-col hidden js-wage-cell">{{ row.hourly_wage|money if row.hourly_wage is not none else '-' }}</td>
+        <td>
+          {% set type = 'active' if row.active else 'inactive' %}
+          {% set label = t('active') if row.active else t('inactive') %}
+          {% include "components/badge.html" %}
+        </td>
+        <td>
+          <div class="action-group">
+            {% set type = 'secondary' %}
+            {% set label = t('edit') %}
+            {% set button_type = 'button' %}
+            {% set classes = 'js-edit-staff' %}
+            {% set attrs = 'data-id="' ~ row.id ~ '" data-name="' ~ (row.name|e) ~ '" data-role="' ~ (row.role|e) ~ '" data-department="' ~ ((row.department or '')|e) ~ '" data-email="' ~ ((row.email or '')|e) ~ '" data-hourly-wage="' ~ (row.hourly_wage|money if row.hourly_wage is not none else '') ~ '"' %}
+            {% include "components/button.html" %}
+            <form method="post" action="{{ url_for('toggle_staff', staff_id=row.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              {% set type = 'danger' if row.active else 'secondary' %}
+              {% set label = t('disable') if row.active else t('enable') %}
+              {% set button_type = 'submit' %}
+              {% set classes = '' %}
+              {% set attrs = '' %}
+              {% include "components/button.html" %}
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      {% if not staff %}
+      <tr>
+        <td colspan="7">
+          {% set title = "No staff yet" %}
+          {% set description = "Create your first staff member using Add Staff." %}
+          {% include "components/empty_state.html" %}
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  {% endset %}
+  {% include "components/table.html" %}
+</section>
+
+{% set modal_body %}
+  <form id="staff-edit-form" method="post" class="grid-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    {% set label = t('name') %}
+    {% set name = 'name' %}
+    {% set id = 'edit-name' %}
+    {% set required = true %}
+    {% include "components/input.html" %}
+    {% set label = t('role') %}
+    {% set name = 'role' %}
+    {% set id = 'edit-role' %}
+    {% include "components/input.html" %}
+    {% set label = t('department') %}
+    {% set name = 'department' %}
+    {% set id = 'edit-department' %}
+    {% include "components/input.html" %}
+    {% set label = t('email') %}
+    {% set name = 'email' %}
+    {% set input_type = 'email' %}
+    {% set id = 'edit-email' %}
+    {% include "components/input.html" %}
+    {% set label = t('hourly_wage') %}
+    {% set name = 'hourly_wage' %}
+    {% set input_type = 'number' %}
+    {% set id = 'edit-hourly-wage' %}
+    {% set min = 0 %}
+    {% set step = '0.01' %}
+    {% set attrs = 'inputmode="decimal"' %}
+    {% include "components/input.html" %}
+  </form>
+{% endset %}
+
+{% set modal_footer %}
+  <form id="staff-delete-form" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    {% set type = 'danger' %}
+    {% set label = t('delete') %}
+    {% set button_type = 'submit' %}
+    {% set id = 'staff-delete-btn' %}
+    {% include "components/button.html" %}
+  </form>
+  <div class="action-group modal-actions-main">
+    {% set type = 'secondary' %}
+    {% set label = t('cancel') %}
+    {% set button_type = 'button' %}
+    {% set classes = 'js-close-modal' %}
+    {% set id = '' %}
+    {% include "components/button.html" %}
+    {% set type = 'primary' %}
+    {% set label = t('save') %}
+    {% set button_type = 'submit' %}
+    {% set form_attr = 'staff-edit-form' %}
+    {% set classes = '' %}
+    {% include "components/button.html" %}
+    {% set form_attr = '' %}
+  </div>
+{% endset %}
+
+{% set modal_id = 'staff-edit-modal' %}
+{% set title_id = 'edit-staff-title' %}
+{% set title = t('edit_staff') %}
+{% set close_class = 'js-close-modal' %}
+{% include "components/modal.html" %}
+
+<script>
+  (() => {
+    const modal = document.getElementById("staff-edit-modal");
+    const form = document.getElementById("staff-edit-form");
+    const inputName = document.getElementById("edit-name");
+    const inputRole = document.getElementById("edit-role");
+    const inputDepartment = document.getElementById("edit-department");
+    const inputEmail = document.getElementById("edit-email");
+    const inputHourlyWage = document.getElementById("edit-hourly-wage");
+    const deleteForm = document.getElementById("staff-delete-form");
+    const wageToggleButton = document.getElementById("toggle-wages");
+    const wageHeader = document.getElementById("wage-header");
+    const wageCells = document.querySelectorAll(".js-wage-cell");
+    let currentStaffName = "";
+    let wagesVisible = false;
+
+    if (!modal || !form || !inputName || !inputRole || !inputDepartment || !inputEmail || !inputHourlyWage || !deleteForm) return;
+
+    const openModal = (button) => {
+      const staffId = button.dataset.id;
+      currentStaffName = button.dataset.name || "";
+      form.action = `/staff/${staffId}/edit`;
+      deleteForm.action = `/staff/${staffId}/delete`;
+      inputName.value = button.dataset.name || "";
+      inputRole.value = button.dataset.role || "";
+      inputDepartment.value = button.dataset.department || "";
+      inputEmail.value = button.dataset.email || "";
+      inputHourlyWage.value = button.dataset.hourlyWage || "";
+      modal.classList.remove("hidden");
+      modal.setAttribute("aria-hidden", "false");
+      inputName.focus();
+    };
+
+    const closeModal = () => {
+      modal.classList.add("hidden");
+      modal.setAttribute("aria-hidden", "true");
+    };
+
+    document.querySelectorAll(".js-edit-staff").forEach((button) => {
+      button.addEventListener("click", () => openModal(button));
+    });
+
+    document.querySelectorAll(".js-close-modal").forEach((el) => {
+      el.addEventListener("click", closeModal);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !modal.classList.contains("hidden")) {
+        closeModal();
+      }
+    });
+
+    deleteForm.addEventListener("submit", (event) => {
+      const confirmMessage = `Are you sure you want to delete this staff member?\n${currentStaffName || ""}`;
+      if (!window.confirm(confirmMessage)) {
+        event.preventDefault();
+      }
+    });
+
+    if (wageToggleButton && wageHeader) {
+      wageToggleButton.addEventListener("click", () => {
+        wagesVisible = !wagesVisible;
+        wageToggleButton.querySelector("span").textContent = wagesVisible ? "{{ t('hide_wages') }}" : "{{ t('show_wages') }}";
+        wageHeader.classList.toggle("hidden", !wagesVisible);
+        wageCells.forEach((cell) => cell.classList.toggle("hidden", !wagesVisible));
+      });
+    }
+  })();
+</script>
+{% endblock %}

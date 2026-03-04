@@ -6,6 +6,22 @@
 {% set button_id = id|default('') %}
 {% set aria = aria_label|default('') %}
 {% set btn_class = 'ui-btn ui-btn--' ~ button_kind ~ (' ' ~ button_classes if button_classes else '') %}
+{% if href %}
+<a
+  href="{{ href }}"
+  class="{{ btn_class }}"
+  {% if button_id %}id="{{ button_id }}"{% endif %}
+  {% if aria %}aria-label="{{ aria }}"{% endif %}
+  {{ button_attrs|safe }}
+>
+  {% if button_icon %}
+    {% set name = button_icon %}
+    {% set size = 16 %}
+    {% include "components/icon.html" %}
+  {% endif %}
+  <span>{{ button_label }}</span>
+</a>
+{% else %}
 <button
   type="{{ button_type|default('submit') }}"
   class="{{ btn_class }}"
@@ -24,3 +40,4 @@
   {% endif %}
   <span>{{ button_label }}</span>
 </button>
+{% endif %}

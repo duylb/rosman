@@ -6,6 +6,10 @@
     {% if id %}id="{{ id }}"{% endif %}
     name="{{ name|default('') }}"
     {% if required %}required{% endif %}
+    {% if multiple %}multiple{% endif %}
+    {% if size is defined %}size="{{ size }}"{% endif %}
+    {% if disabled %}disabled{% endif %}
+    {{ attrs|default('')|safe }}
   >
     {{ options_html|default('')|safe }}
   </select>

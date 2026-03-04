@@ -7,6 +7,14 @@
     {% if id %}id="{{ id }}"{% endif %}
     type="{{ input_type|default('text') }}"
     name="{{ field_name }}"
+    {% if value is defined %}value="{{ value }}"{% endif %}
+    {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+    {% if min is defined %}min="{{ min }}"{% endif %}
+    {% if max is defined %}max="{{ max }}"{% endif %}
+    {% if step is defined %}step="{{ step }}"{% endif %}
     {% if required %}required{% endif %}
+    {% if readonly %}readonly{% endif %}
+    {% if disabled %}disabled{% endif %}
+    {{ attrs|default('')|safe }}
   />
 </label>
