@@ -101,6 +101,13 @@
   margin-bottom: var(--space-3);
 }
 
+.ui-table-wrap,
+.table-wrapper {
+  overflow: visible;
+  max-height: none;
+  height: auto;
+}
+
 .staff-table th:nth-child(2),
 .staff-table td:nth-child(2),
 .staff-table th:nth-child(3),

@@ -12,10 +12,10 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
   </head>
   <body>
-    <div class="layout-app">
+    <div class="layout-app app-layout">
       {% include "layout/sidebar.html" %}
 
-      <div class="layout-main">
+      <div class="layout-main main">
         {% set page_title_block %}{% block page_title %}{% endblock %}{% endset %}
         {% set page_title = page_title_block|trim %}
         {% if not page_title %}
@@ -42,7 +42,7 @@
         {% set page_actions = page_actions_block|trim %}
         {% include "layout/header.html" %}
 
-        <main class="layout-content" role="main">
+        <main class="layout-content main-content" role="main">
           <div class="layout-container app-shell">
             {% with messages = get_flashed_messages(with_categories=true) %}
               {% if messages %}
