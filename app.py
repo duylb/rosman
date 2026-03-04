@@ -95,7 +95,7 @@ def payroll_access_required(func: Any) -> Any:
 @app.before_request
 def load_current_user() -> None:
     user_id = session.get("user_id")
-    g.user = User.query.get(user_id) if user_id else None
+    g.user = db.session.get(User, user_id) if user_id else None
     if user_id and g.user is None:
         session.clear()
         return
@@ -297,6 +297,20 @@ def ensure_roster_schema_compatibility() -> None:
     if "updated_at" not in roster_version_columns:
         db.session.execute(text("ALTER TABLE roster_versions ADD COLUMN updated_at TIMESTAMP"))
         db.session.commit()
+
+    db.session.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_roster_assignments_org_version_date "
+            "ON roster_assignments (org_id, version_id, roster_date)"
+        )
+    )
+    db.session.execute(
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_roster_versions_org_week_status "
+            "ON roster_versions (org_id, week_start, status)"
+        )
+    )
+    db.session.commit()
 
     # Backfill version_id for legacy assignment rows that predate roster versioning.
     legacy_rows = db.session.execute(
@@ -806,12 +820,10 @@ def edit_staff(staff_id: int) -> Any:
 @app.post("/staff/<int:staff_id>/delete")
 @login_required
 def delete_staff(staff_id: int) -> Any:
-    row = Staff.query.get(staff_id)
+    row = Staff.query.filter_by(id=staff_id, org_id=current_org_id()).first()
     if row is None:
         flash(t("msg_staff_member_not_found"), "error")
         return redirect(url_for("staff"))
-    if row.org_id != current_org_id():
-        abort(403)
 
     db.session.delete(row)
     db.session.commit()

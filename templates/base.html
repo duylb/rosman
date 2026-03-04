@@ -92,6 +92,7 @@
         </header>
 
         <main class="page-content">
+          <div class="page-shell">
           {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
               <ul class="alerts">
@@ -103,6 +104,7 @@
           {% endwith %}
 
           {% block content %}{% endblock %}
+          </div>
         </main>
       </div>
     </div>

@@ -44,6 +44,7 @@ body {
   margin: 0;
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-weight: 400;
+  overflow-x: hidden;
   color: var(--color-text);
   background:
     radial-gradient(860px 420px at -8% -12%, #dce9fb 0%, transparent 58%),
@@ -61,12 +62,6 @@ h6 {
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--color-text);
-}
-
-.app-shell {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 260px 1fr;
 }
 
 .sidebar {
@@ -213,13 +208,6 @@ h6 {
 }
 
 .sidebar .logout-form button { width: 100%; }
-
-.workspace {
-  min-width: 0;
-  padding: var(--space-4) var(--space-4) var(--space-5);
-}
-
-.container { max-width: 1320px; }
 
 .alerts {
   list-style: none;
@@ -708,11 +696,6 @@ tbody tr:last-child td {
   margin-left: auto;
 }
 
-/* SaaS dashboard structure */
-.app-shell {
-  grid-template-columns: 232px 1fr;
-}
-
 .sidebar {
   position: fixed;
   left: 0;
@@ -722,11 +705,6 @@ tbody tr:last-child td {
   padding: var(--space-4);
   background: #141a26;
   border-right: 1px solid rgba(126, 150, 187, 0.2);
-}
-
-.workspace {
-  margin-left: 232px;
-  padding: 20px 24px 28px;
 }
 
 .brand {
@@ -836,10 +814,6 @@ tbody tr:last-child td {
   border-radius: 10px;
 }
 
-.container {
-  max-width: 1360px;
-}
-
 .panel,
 .card,
 .app-card {
@@ -855,19 +829,6 @@ tbody tr:last-child td {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 14px;
   margin-bottom: var(--space-4);
-}
-
-.dashboard-container {
-  width: 100%;
-  max-width: 1320px;
-  margin: 0 auto;
-  display: grid;
-  gap: var(--space-4);
-}
-
-.dashboard-container .metric-grid,
-.dashboard-container .panel {
-  margin-bottom: 0;
 }
 
 .metric-card,
@@ -1192,8 +1153,24 @@ body {
   min-width: 0;
   width: 100%;
   max-width: none;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 0;
+}
+
+.page-shell {
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.page-shell > .panel,
+.page-shell > .metric-grid,
+.page-shell > .cards {
+  margin-bottom: 0;
 }
 
 .panel {
