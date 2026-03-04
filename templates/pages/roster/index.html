@@ -3,21 +3,17 @@
 {% block content %}
 <section class="panel">
   <p class="hint hint-no-margin">From {{ week_dates[0]|datefmt }} to {{ week_dates[-1]|datefmt }}</p>
-  <form method="get" class="inline-form roster-date-form">
-    {% set label = t('start_date') %}
-    {% set name = 'roster_date' %}
-    {% set id = 'roster-start-date' %}
-    {% set value = week_start %}
-    {% set required = false %}
-    {% include "components/date_input.html" %}
-    {% set label = t('end_date') %}
-    {% set name = 'end_date' %}
-    {% set id = 'roster-end-date' %}
-    {% set value = week_dates[-1] %}
-    {% include "components/date_input.html" %}
+  <form method="get" class="inline-form roster-date-form date-controls">
+    <label>{{ t('start_date') }}
+      <input id="roster-start-date" type="date" name="roster_date" value="{{ week_start }}" />
+    </label>
+    <label>{{ t('end_date') }}
+      <input id="roster-end-date" type="date" name="end_date" value="{{ week_dates[-1] }}" />
+    </label>
     {% set type = 'primary' %}
     {% set label = t('load') %}
     {% set button_type = 'submit' %}
+    {% set icon = '' %}
     {% include "components/button.html" %}
   </form>
 </section>
@@ -105,7 +101,7 @@
       </select>
     </label>
     {% if current_version and current_version.status == "confirmed" and not edit_confirmed_mode %}
-    <a href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id, edit_confirmed=1) }}" class="ui-btn ui-btn--secondary">
+    <a href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id, edit_confirmed=1) }}" class="ui-btn ui-btn--secondary btn-edit">
       {% set name = 'edit' %}
       {% set size = 16 %}
       {% include "components/icon.html" %}

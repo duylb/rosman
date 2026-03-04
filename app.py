@@ -923,10 +923,15 @@ def edit_shift_template(shift_id: int) -> Any:
     name = request.form.get("name", "").strip()
     start_time = request.form.get("start_time", "").strip()
     end_time = request.form.get("end_time", "").strip()
+    required_staff_raw = request.form.get("required_staff", "1").strip()
 
     if not name or not start_time or not end_time:
         flash(t("msg_shift_required_fields"), "error")
         return redirect(url_for("shifts"))
+    try:
+        required_staff = max(1, int(required_staff_raw))
+    except ValueError:
+        required_staff = 1
 
     try:
         start_minutes = to_minutes(start_time)
@@ -956,6 +961,7 @@ def edit_shift_template(shift_id: int) -> Any:
     shift.name = name
     shift.start_time = start_time
     shift.end_time = end_time
+    shift.required_staff = required_staff
 
     try:
         db.session.commit()

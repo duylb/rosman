@@ -4,7 +4,7 @@
 <section class="panel">
   <h2 class="section-title">{{ t('payroll') }}</h2>
   <p class="hint">{{ t('payroll_note_confirmed_only') }}</p>
-  <form method="get" class="inline-form table-toolbar payroll-filter-form">
+  <form method="get" class="inline-form table-toolbar payroll-filter-form payroll-filters">
     <label>{{ t('start_date') }} <input type="date" name="start_date" value="{{ start_date }}" required /></label>
     <label>{{ t('end_date') }} <input type="date" name="end_date" value="{{ end_date }}" required /></label>
     <label>{{ t('department') }}
@@ -19,7 +19,7 @@
   </form>
   <div class="action-group">
     <a
-      class="ui-btn ui-btn--secondary"
+      class="ui-btn ui-btn--secondary btn-export"
       href="{{ url_for('payroll', start_date=start_date, end_date=end_date, department=selected_department or '', staff_id=selected_staff_id or '', export='csv') }}"
     >
       {% set name = 'download' %}
@@ -34,6 +34,7 @@
 </section>
 
 <section class="panel">
+  {% set wrapper_class = 'table-wrapper' %}
   {% set table_class = 'payroll-table' %}
   {% set table_content %}
     <thead>

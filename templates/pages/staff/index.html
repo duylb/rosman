@@ -59,18 +59,21 @@
   {% set toolbar_content %}
     <div class="toolbar-left">
       <h2 class="section-title">{{ t('staff_list') }}</h2>
-      <input type="search" class="app-input toolbar-search" placeholder="{{ t('search_placeholder') }}" />
+      <input id="staff-search" type="search" class="app-input toolbar-search" placeholder="{{ t('search_placeholder') }}" />
     </div>
     <div class="toolbar-right">
       {% set type = 'secondary' %}
       {% set label = t('show_wages') %}
       {% set button_type = 'button' %}
       {% set id = 'toggle-wages' %}
+      {% set icon = '' %}
       {% include "components/button.html" %}
     </div>
   {% endset %}
   {% include "components/toolbar.html" %}
 
+  {% set wrapper_class = 'table-wrapper staff-table-wrapper' %}
+  {% set table_class = 'data-table staff-table' %}
   {% set table_content %}
     <thead>
       <tr>
@@ -85,8 +88,8 @@
     </thead>
     <tbody>
       {% for row in staff %}
-      <tr>
-        <td>{{ row.name }}</td>
+      <tr class="js-staff-row">
+        <td class="js-staff-name">{{ row.name }}</td>
         <td>{{ row.role }}</td>
         <td>{{ row.department or '-' }}</td>
         <td>{{ row.email or '-' }}</td>
@@ -102,7 +105,8 @@
             {% set label = t('edit') %}
             {% set button_type = 'button' %}
             {% set classes = 'js-edit-staff' %}
-            {% set attrs = 'data-id="' ~ row.id ~ '" data-name="' ~ (row.name|e) ~ '" data-role="' ~ (row.role|e) ~ '" data-department="' ~ ((row.department or '')|e) ~ '" data-email="' ~ ((row.email or '')|e) ~ '" data-hourly-wage="' ~ (row.hourly_wage|money if row.hourly_wage is not none else '') ~ '"' %}
+            {% set icon = '' %}
+            {% set attrs = 'data-id="' ~ row.id ~ '" data-name="' ~ (row.name|e) ~ '" data-role="' ~ (row.role|e) ~ '" data-department="' ~ ((row.department or '')|e) ~ '" data-email="' ~ ((row.email or '')|e) ~ '" data-hourly-wage="' ~ (row.hourly_wage|money if row.hourly_wage is not none else '') ~ '" data-edit-url="' ~ url_for('edit_staff', staff_id=row.id) ~ '" data-delete-url="' ~ url_for('delete_staff', staff_id=row.id) ~ '"' %}
             {% include "components/button.html" %}
             <form method="post" action="{{ url_for('toggle_staff', staff_id=row.id) }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
@@ -111,6 +115,7 @@
               {% set button_type = 'submit' %}
               {% set classes = '' %}
               {% set attrs = '' %}
+              {% set icon = '' %}
               {% include "components/button.html" %}
             </form>
           </div>
@@ -166,11 +171,12 @@
 {% set modal_footer %}
   <form id="staff-delete-form" method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-    {% set type = 'danger' %}
-    {% set label = t('delete') %}
-    {% set button_type = 'submit' %}
-    {% set id = 'staff-delete-btn' %}
-    {% include "components/button.html" %}
+  {% set type = 'danger' %}
+  {% set label = t('delete') %}
+  {% set button_type = 'submit' %}
+  {% set id = 'staff-delete-btn' %}
+  {% set icon = '' %}
+  {% include "components/button.html" %}
   </form>
   <div class="action-group modal-actions-main">
     {% set type = 'secondary' %}
@@ -178,12 +184,14 @@
     {% set button_type = 'button' %}
     {% set classes = 'js-close-modal' %}
     {% set id = '' %}
+    {% set icon = '' %}
     {% include "components/button.html" %}
     {% set type = 'primary' %}
     {% set label = t('save') %}
     {% set button_type = 'submit' %}
     {% set form_attr = 'staff-edit-form' %}
     {% set classes = '' %}
+    {% set icon = '' %}
     {% include "components/button.html" %}
     {% set form_attr = '' %}
   </div>
@@ -208,6 +216,8 @@
     const wageToggleButton = document.getElementById("toggle-wages");
     const wageHeader = document.getElementById("wage-header");
     const wageCells = document.querySelectorAll(".js-wage-cell");
+    const searchInput = document.getElementById("staff-search");
+    const staffRows = Array.from(document.querySelectorAll(".js-staff-row"));
     let currentStaffName = "";
     let wagesVisible = false;
 
@@ -216,8 +226,8 @@
     const openModal = (button) => {
       const staffId = button.dataset.id;
       currentStaffName = button.dataset.name || "";
-      form.action = `/staff/${staffId}/edit`;
-      deleteForm.action = `/staff/${staffId}/delete`;
+      form.action = button.dataset.editUrl || `/staff/${staffId}/edit`;
+      deleteForm.action = button.dataset.deleteUrl || `/staff/${staffId}/delete`;
       inputName.value = button.dataset.name || "";
       inputRole.value = button.dataset.role || "";
       inputDepartment.value = button.dataset.department || "";
@@ -226,6 +236,13 @@
       modal.classList.remove("hidden");
       modal.setAttribute("aria-hidden", "false");
       inputName.focus();
+    };
+
+    window.openEditStaffModal = (staffId) => {
+      const trigger = document.querySelector(`.js-edit-staff[data-id="${staffId}"]`);
+      if (trigger) {
+        openModal(trigger);
+      }
     };
 
     const closeModal = () => {
@@ -260,6 +277,17 @@
         wageToggleButton.querySelector("span").textContent = wagesVisible ? "{{ t('hide_wages') }}" : "{{ t('show_wages') }}";
         wageHeader.classList.toggle("hidden", !wagesVisible);
         wageCells.forEach((cell) => cell.classList.toggle("hidden", !wagesVisible));
+      });
+    }
+
+    if (searchInput && staffRows.length > 0) {
+      searchInput.addEventListener("input", () => {
+        const query = searchInput.value.trim().toLowerCase();
+        staffRows.forEach((row) => {
+          const nameCell = row.querySelector(".js-staff-name");
+          const name = (nameCell ? nameCell.textContent : "").toLowerCase();
+          row.classList.toggle("hidden", Boolean(query) && !name.includes(query));
+        });
       });
     }
   })();

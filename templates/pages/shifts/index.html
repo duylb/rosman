@@ -28,6 +28,7 @@
 
 <section class="panel">
   <h2>{{ t('shift_templates') }}</h2>
+  {% set table_class = 'data-table shift-template-table' %}
   {% set table_content %}
     <thead>
       <tr>
@@ -48,7 +49,8 @@
           {% set label = t('edit') %}
           {% set button_type = 'button' %}
           {% set classes = 'js-edit-shift' %}
-          {% set attrs = 'data-id="' ~ row.id ~ '" data-name="' ~ (row.name|e) ~ '" data-start-time="' ~ row.start_time ~ '" data-end-time="' ~ row.end_time ~ '"' %}
+          {% set icon = '' %}
+          {% set attrs = 'data-id="' ~ row.id ~ '" data-name="' ~ (row.name|e) ~ '" data-start-time="' ~ row.start_time ~ '" data-end-time="' ~ row.end_time ~ '" data-required-staff="' ~ row.required_staff ~ '"' %}
           {% include "components/button.html" %}
         </td>
       </tr>
@@ -86,6 +88,13 @@
     {% set id = 'edit-end-time' %}
     {% set input_type = 'time' %}
     {% include "components/input.html" %}
+    {% set label = t('required_staff') %}
+    {% set name = 'required_staff' %}
+    {% set id = 'edit-required-staff' %}
+    {% set input_type = 'number' %}
+    {% set min = 1 %}
+    {% set step = 1 %}
+    {% include "components/input.html" %}
   </form>
   <p class="hint">Duration: <strong id="edit-shift-duration">-</strong></p>
 {% endset %}
@@ -96,12 +105,14 @@
     {% set label = t('cancel') %}
     {% set button_type = 'button' %}
     {% set classes = 'js-close-shift-modal' %}
+    {% set icon = '' %}
     {% include "components/button.html" %}
     {% set type = 'primary' %}
     {% set label = t('save') %}
     {% set button_type = 'submit' %}
     {% set form_attr = 'shift-edit-form' %}
     {% set classes = '' %}
+    {% set icon = '' %}
     {% include "components/button.html" %}
     {% set form_attr = '' %}
   </div>
@@ -120,9 +131,10 @@
     const inputName = document.getElementById("edit-shift-name");
     const inputStart = document.getElementById("edit-start-time");
     const inputEnd = document.getElementById("edit-end-time");
+    const inputRequiredStaff = document.getElementById("edit-required-staff");
     const durationText = document.getElementById("edit-shift-duration");
 
-    if (!modal || !form || !inputName || !inputStart || !inputEnd || !durationText) return;
+    if (!modal || !form || !inputName || !inputStart || !inputEnd || !inputRequiredStaff || !durationText) return;
 
     const toMinutes = (raw) => {
       if (!raw || !raw.includes(":")) return null;
@@ -154,6 +166,7 @@
       inputName.value = button.dataset.name || "";
       inputStart.value = button.dataset.startTime || "";
       inputEnd.value = button.dataset.endTime || "";
+      inputRequiredStaff.value = button.dataset.requiredStaff || "1";
       updateDuration();
       modal.classList.remove("hidden");
       modal.setAttribute("aria-hidden", "false");

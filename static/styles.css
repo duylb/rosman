@@ -101,6 +101,29 @@
   margin-bottom: var(--space-3);
 }
 
+.table-wrapper {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.staff-table th:nth-child(2),
+.staff-table td:nth-child(2),
+.staff-table th:nth-child(3),
+.staff-table td:nth-child(3),
+.staff-table th:nth-child(4),
+.staff-table td:nth-child(4),
+.staff-table th:nth-child(6),
+.staff-table td:nth-child(6),
+.staff-table th:nth-child(7),
+.staff-table td:nth-child(7) {
+  text-align: center;
+}
+
+.shift-template-table th,
+.shift-template-table td {
+  text-align: center;
+}
+
 .roster-table th:nth-child(n + 3),
 .roster-table td:nth-child(n + 3) {
   text-align: center;
@@ -159,7 +182,44 @@
   gap: 12px;
 }
 
-.confirmed-roster-select-label { min-width: 220px; }
+.confirmed-roster-select-label {
+  min-width: 220px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.btn-edit {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+.btn-edit:hover {
+  background: #1d4ed8;
+}
+
+.payroll-filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.btn-export {
+  background: #10b981;
+  border-color: #059669;
+  color: #fff;
+}
+
+.btn-export:hover {
+  background: #059669;
+}
 
 .date-range {
   display: flex;
