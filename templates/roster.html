@@ -42,14 +42,7 @@
         </div>
       </details>
       {% endif %}
-      {% if current_version and current_version.status == "confirmed" %}
-        <div>
-          <span class="badge-status confirmed">{{ t('confirmed') }}</span>
-          {% if current_version.confirmed_at %}
-          <div class="hint hint-top-sm">{{ t('confirmed_at') }} {{ current_version.confirmed_at|datefmt }}</div>
-          {% endif %}
-        </div>
-      {% elif current_version and current_version.status == "draft" %}
+      {% if current_version and current_version.status == "draft" %}
         <span class="badge-status draft">{{ t('draft') }}</span>
         <form method="post" action="{{ url_for('confirm_roster_version', version_id=current_version.id) }}" onsubmit="return confirm('{{ t('confirm_roster_prompt') }}');">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
