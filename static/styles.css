@@ -570,6 +570,50 @@ tbody tr:last-child td {
   justify-content: flex-end;
 }
 
+.roster-date-form {
+  margin-top: var(--space-2);
+}
+
+.date-input-wrap {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.date-input-wrap input[type="date"] {
+  padding-right: 36px;
+}
+
+.date-input-icon {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: #516986;
+  pointer-events: none;
+}
+
+.date-input-icon svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.confirmed-roster-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.confirmed-roster-select-label {
+  min-width: 220px;
+}
+
 .meta-chip {
   display: inline-flex;
   align-items: center;
@@ -731,8 +775,16 @@ tbody tr:last-child td {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  opacity: 0.9;
+}
+
+.nav-icon-svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.95;
 }
 
 .nav-label {
@@ -1193,6 +1245,24 @@ body {
   margin-bottom: 16px;
 }
 
+.payroll-filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.date-range {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.date-range label {
+  min-width: 180px;
+}
+
 @media (max-width: 980px) {
   body {
     overflow: auto;
@@ -1248,6 +1318,18 @@ body {
 
   .roster-edit-grid-select {
     min-width: 100%;
+  }
+
+  .confirmed-roster-controls,
+  .payroll-filter-form,
+  .date-range {
+    width: 100%;
+  }
+
+  .confirmed-roster-select-label,
+  .date-range label {
+    min-width: 0;
+    width: 100%;
   }
 
   .data-table,

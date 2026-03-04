@@ -1175,8 +1175,15 @@ def delete_shift_preference(preference_id: int) -> Any:
 @login_required
 def roster() -> str:
     org_id = current_org_id()
-    selected_date = request.values.get("roster_date", date.today().isoformat())
-    selected_obj = parse_iso_date(selected_date) or date.today()
+    selected_date_raw = request.values.get("roster_date", "").strip()
+    selected_obj = parse_iso_date(selected_date_raw)
+    if selected_obj is None:
+        end_date_raw = request.values.get("end_date", "").strip()
+        end_obj = parse_iso_date(end_date_raw)
+        if end_obj is not None:
+            selected_obj = end_obj - timedelta(days=6)
+    if selected_obj is None:
+        selected_obj = date.today()
     selected_date = selected_obj.isoformat()
     week_start_obj = monday_for(selected_obj)
     version_id_raw = request.args.get("version_id", "").strip()

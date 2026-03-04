@@ -3,9 +3,33 @@
 {% block content %}
 <section class="panel">
   <p class="hint hint-no-margin">From {{ week_dates[0]|datefmt }} to {{ week_dates[-1]|datefmt }}</p>
-  <form method="get" class="inline-form">
-    <label>{{ t('start_date') }} <input type="date" name="roster_date" value="{{ week_start }}" /></label>
-    <label>{{ t('end_date') }} <input type="date" value="{{ week_dates[-1] }}" readonly /></label>
+  <form method="get" class="inline-form roster-date-form">
+    <label>{{ t('start_date') }}
+      <span class="date-input-wrap">
+        <input id="roster-start-date" type="date" name="roster_date" value="{{ week_start }}" />
+        <span class="date-input-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+            <path d="M16 2v4"></path>
+            <path d="M8 2v4"></path>
+            <path d="M3 10h18"></path>
+          </svg>
+        </span>
+      </span>
+    </label>
+    <label>{{ t('end_date') }}
+      <span class="date-input-wrap">
+        <input id="roster-end-date" type="date" name="end_date" value="{{ week_dates[-1] }}" />
+        <span class="date-input-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+            <path d="M16 2v4"></path>
+            <path d="M8 2v4"></path>
+            <path d="M3 10h18"></path>
+          </svg>
+        </span>
+      </span>
+    </label>
     <button type="submit" class="btn-primary">{{ t('load') }}</button>
   </form>
 </section>
@@ -67,24 +91,26 @@
 <section class="panel confirmed-roster-panel">
   <h2 class="section-title">Viewing Confirmed Rosters</h2>
   {% if confirmed_month_versions %}
-  <div class="confirmed-roster-list">
-    {% for version in confirmed_month_versions %}
-    <div class="confirmed-roster-item">
-      <a
-        href="{{ url_for('roster', roster_date=version.week_start, version_id=version.id) }}"
-        class="button-link btn-secondary confirmed-roster-btn {{ 'active' if version.is_active else '' }}"
-      >
-        {{ version.label }}
-      </a>
-      <a
-        href="{{ url_for('roster', roster_date=version.week_start, version_id=version.id, edit_confirmed=1) }}"
-        class="button-link btn-secondary confirmed-roster-edit"
-      >
-        {{ t('edit') }}
-      </a>
-    </div>
-    {% endfor %}
-  </div>
+  <form method="get" class="inline-form confirmed-roster-controls">
+    <label class="confirmed-roster-select-label">Select confirmed roster
+      <select id="confirmed-roster-select" name="version_id" class="app-select" aria-label="Select confirmed roster">
+        <option value="">Select confirmed roster</option>
+        {% for version in confirmed_month_versions %}
+        <option value="{{ version.id }}" data-week-start="{{ version.week_start }}" {% if version.is_active %}selected{% endif %}>
+          {{ version.label }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    {% if current_version and current_version.status == "confirmed" and not edit_confirmed_mode %}
+    <a
+      href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id, edit_confirmed=1) }}"
+      class="button-link btn-secondary"
+    >
+      {{ t('edit') }}
+    </a>
+    {% endif %}
+  </form>
   {% else %}
   <p class="hint">No confirmed rosters in the current month.</p>
   {% endif %}
@@ -131,7 +157,7 @@
             {% if edit_confirmed_mode and current_version and current_version.status == "confirmed" %}
               {% set selected_shift_id = editable_assignment_map[staff.id][col.date] %}
               <select name="assignment_{{ staff.id }}_{{ col.date }}" class="app-select roster-edit-grid-select">
-                <option value="0" {% if selected_shift_id == 0 %}selected{% endif %}>0</option>
+                <option value="0" {% if selected_shift_id == 0 %}selected{% endif %}>0 &mdash; No show</option>
                 {% for shift in shift_rows %}
                 <option value="{{ shift.id }}" {% if selected_shift_id == shift.id %}selected{% endif %}>
                   {{ shift.name }} ({{ shift.start_time }}-{{ shift.end_time }})
@@ -179,8 +205,8 @@
 
   {% if edit_confirmed_mode and current_version and current_version.status == "confirmed" %}
   <div class="action-group roster-edit-actions">
-    <button type="submit" class="btn-danger">Confirm Changes</button>
-    <a class="button-link btn-secondary" href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id) }}">Cancel</a>
+    <button type="submit" class="btn-danger">Confirm</button>
+    <a class="button-link btn-secondary" href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id) }}">{{ t('cancel') }}</a>
   </div>
   </form>
   {% endif %}
@@ -189,4 +215,49 @@
   <p class="hint hint-top">{{ t('viewing_historical_version') }}</p>
   {% endif %}
 </section>
+
+<script>
+(() => {
+  const startInput = document.getElementById("roster-start-date");
+  const endInput = document.getElementById("roster-end-date");
+  const confirmedSelect = document.getElementById("confirmed-roster-select");
+
+  const addDays = (isoDate, amount) => {
+    if (!isoDate) return "";
+    const parts = isoDate.split("-");
+    if (parts.length !== 3) return "";
+    const dateValue = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    if (Number.isNaN(dateValue.getTime())) return "";
+    dateValue.setDate(dateValue.getDate() + amount);
+    const year = dateValue.getFullYear();
+    const month = String(dateValue.getMonth() + 1).padStart(2, "0");
+    const day = String(dateValue.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  if (startInput && endInput) {
+    startInput.addEventListener("change", () => {
+      endInput.value = addDays(startInput.value, 6);
+    });
+    endInput.addEventListener("change", () => {
+      startInput.value = addDays(endInput.value, -6);
+    });
+  }
+
+  if (confirmedSelect) {
+    confirmedSelect.addEventListener("change", () => {
+      const selectedOption = confirmedSelect.options[confirmedSelect.selectedIndex];
+      if (!selectedOption || !selectedOption.value) {
+        return;
+      }
+      const weekStart = selectedOption.getAttribute("data-week-start") || "";
+      const query = new URLSearchParams({
+        roster_date: weekStart,
+        version_id: selectedOption.value,
+      });
+      window.location.assign(`{{ url_for('roster') }}?${query.toString()}`);
+    });
+  }
+})();
+</script>
 {% endblock %}
