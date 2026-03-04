@@ -231,11 +231,14 @@ def _build_prompt(
         f"{json.dumps(shift_summary, ensure_ascii=False)}\n\n"
         "Task:\n"
         "Generate a weekly roster demand recommendation.\n"
-        "Return JSON with required staff counts per shift.\n\n"
-        "Example output format:\n"
+        "Return JSON with required staff counts per shift.\n"
+        "You must return ONLY valid JSON. Do not include explanations or text outside JSON.\n\n"
+        "Expected format:\n"
         '{\n'
         '  "monday_lunch": {"servers": 4, "bartenders": 1},\n'
-        '  "monday_dinner": {"servers": 6, "bartenders": 2}\n'
+        '  "monday_dinner": {"servers": 6, "bartenders": 2},\n'
+        '  "tuesday_lunch": {"servers": 4, "bartenders": 1},\n'
+        '  "tuesday_dinner": {"servers": 6, "bartenders": 2}\n'
         "}\n"
     )
 
@@ -334,6 +337,20 @@ def _normalize_result(parsed: dict[str, Any]) -> dict[str, Any]:
     return parsed
 
 
+def _is_valid_demand_payload(payload: dict[str, Any]) -> bool:
+    if not payload:
+        return False
+    for key, value in payload.items():
+        if not isinstance(key, str) or "_" not in key:
+            continue
+        if not isinstance(value, dict):
+            continue
+        role_values = [role_count for role_count in value.values() if isinstance(role_count, (int, float))]
+        if role_values:
+            return True
+    return False
+
+
 def generate_roster(
     staff_data: Any,
     shift_data: Any,
@@ -375,11 +392,14 @@ def generate_roster(
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4.1-mini",
+            model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an experienced workforce management planner for restaurants.",
+                    "content": (
+                        "You are an experienced workforce management planner for restaurants. "
+                        "You must return ONLY valid JSON. Do not include explanations or text outside JSON."
+                    ),
                 },
                 {
                     "role": "user",
@@ -387,7 +407,7 @@ def generate_roster(
                 },
             ],
             response_format={"type": "json_object"},
-            temperature=0.3,
+            temperature=0.2,
         )
     except OpenAIError as exc:
         logger.error("OpenAI API request failed: %s", str(exc))
@@ -409,6 +429,7 @@ def generate_roster(
         )
 
     content = response.choices[0].message.content if response.choices else None
+    logger.info("AI raw response: %s", content)
     if not content:
         logger.error("OpenAI returned an empty response.")
         return _fallback_result(
@@ -420,25 +441,55 @@ def generate_roster(
         )
 
     try:
-        parsed = json.loads(content)
-    except json.JSONDecodeError:
-        logger.error("OpenAI returned invalid JSON.")
-        return _fallback_result(
-            staff_summary=staff_summary,
-            shift_summary=shift_summary,
-            start_date=start_date,
-            end_date=end_date,
-            error="AI returned invalid JSON",
-        )
+        ai_output = json.loads(content)
+    except Exception as exc:
+        logger.error("Failed to parse AI JSON: %s", str(exc))
+        return {
+            "success": False,
+            "error": "AI response format invalid",
+            "demand_recommendation": _default_demand_recommendation(
+                staff_summary=staff_summary,
+                shift_summary=shift_summary,
+                start_date=start_date,
+                end_date=end_date,
+            ),
+            "roster_suggestions": [],
+            "notes": ["Fallback logic used due to AI output parsing failure."],
+        }
 
-    if not isinstance(parsed, dict):
-        logger.error("OpenAI JSON response must be a top-level object.")
-        return _fallback_result(
-            staff_summary=staff_summary,
-            shift_summary=shift_summary,
-            start_date=start_date,
-            end_date=end_date,
-            error="AI response format is invalid",
-        )
+    if not isinstance(ai_output, dict):
+        logger.error("Invalid AI output: expected object.")
+        return {
+            "success": False,
+            "error": "Invalid AI output",
+            "demand_recommendation": _default_demand_recommendation(
+                staff_summary=staff_summary,
+                shift_summary=shift_summary,
+                start_date=start_date,
+                end_date=end_date,
+            ),
+            "roster_suggestions": [],
+            "notes": ["Fallback logic used due to invalid AI output structure."],
+        }
 
-    return _normalize_result(parsed)
+    normalized = _normalize_result(ai_output)
+    demand = normalized.get("demand_recommendation", {})
+    suggestions = normalized.get("roster_suggestions", [])
+    has_demand = isinstance(demand, dict) and _is_valid_demand_payload(demand)
+    has_suggestions = isinstance(suggestions, list) and len(suggestions) > 0
+    if not has_demand and not has_suggestions:
+        logger.warning("AI returned empty roster suggestions")
+        return {
+            "success": False,
+            "error": "AI returned empty roster suggestions",
+            "demand_recommendation": _default_demand_recommendation(
+                staff_summary=staff_summary,
+                shift_summary=shift_summary,
+                start_date=start_date,
+                end_date=end_date,
+            ),
+            "roster_suggestions": [],
+            "notes": ["Fallback logic used because AI output had no usable data."],
+        }
+
+    return normalized
