@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import importlib.util
+import json
 import os
 import sys
 from functools import wraps
@@ -1641,7 +1642,126 @@ def ai_generate_roster_preview() -> Any:
         end_date=end_obj.isoformat(),
         suggestion_rows=suggestion_rows,
         ai_notes=ai_notes,
+        roster_json=json.dumps(ai_result, ensure_ascii=False),
     )
+
+
+@app.post("/roster/ai-confirm")
+@login_required
+def ai_confirm_roster() -> Any:
+    org_id = current_org_id()
+    start_date_raw = request.form.get("start_date", "").strip()
+    end_date_raw = request.form.get("end_date", "").strip()
+    roster_json_raw = request.form.get("roster_json", "").strip()
+    start_obj = parse_iso_date(start_date_raw)
+    end_obj = parse_iso_date(end_date_raw)
+    if start_obj is None or end_obj is None:
+        flash("Invalid roster date range.", "error")
+        return redirect(url_for("roster"))
+
+    try:
+        payload = json.loads(roster_json_raw)
+    except json.JSONDecodeError:
+        flash("Invalid AI roster payload.", "error")
+        return redirect(url_for("roster", roster_date=start_obj.isoformat(), end_date=end_obj.isoformat()))
+
+    if not isinstance(payload, dict):
+        flash("Invalid AI roster payload.", "error")
+        return redirect(url_for("roster", roster_date=start_obj.isoformat(), end_date=end_obj.isoformat()))
+
+    raw_suggestions = payload.get("roster_suggestions", [])
+    if not isinstance(raw_suggestions, list) or not raw_suggestions:
+        flash("No AI roster suggestions to confirm.", "error")
+        return redirect(url_for("roster", roster_date=start_obj.isoformat(), end_date=end_obj.isoformat()))
+
+    valid_staff_ids = {
+        row.id
+        for row in Staff.query.filter_by(org_id=org_id).all()
+    }
+    valid_shift_ids = {
+        row.id
+        for row in ShiftTemplate.query.filter_by(org_id=org_id).all()
+    }
+
+    staged_assignments: list[tuple[date, int, int, str, str | None]] = []
+    for item in raw_suggestions:
+        if not isinstance(item, dict):
+            flash("Invalid AI roster entry format.", "error")
+            return redirect(url_for("roster", roster_date=start_obj.isoformat(), end_date=end_obj.isoformat()))
+
+        date_raw = str(item.get("date") or item.get("roster_date") or "").strip()
+        staff_id_raw = item.get("staff_id")
+        shift_id_raw = item.get("shift_id")
+        notes_raw = str(item.get("rationale") or item.get("notes") or "AI-generated").strip()
+        roster_day = parse_iso_date(date_raw)
+        if roster_day is None:
+            flash("AI roster entry contains invalid date.", "error")
+            return redirect(url_for("roster", roster_date=start_obj.isoformat(), end_date=end_obj.isoformat()))
+
+        try:
+            staff_id = int(staff_id_raw)
+            shift_id = int(shift_id_raw)
+        except (TypeError, ValueError):
+            flash("AI roster entry is missing staff_id or shift_id.", "error")
+            return redirect(url_for("roster", roster_date=start_obj.isoformat(), end_date=end_obj.isoformat()))
+
+        if staff_id not in valid_staff_ids or shift_id not in valid_shift_ids:
+            flash("AI roster contains staff or shift outside your organization.", "error")
+            return redirect(url_for("roster", roster_date=start_obj.isoformat(), end_date=end_obj.isoformat()))
+
+        if not (start_obj <= roster_day <= end_obj):
+            continue
+
+        staged_assignments.append(
+            (roster_day, staff_id, shift_id, roster_day.isoformat(), notes_raw or None)
+        )
+
+    if not staged_assignments:
+        flash("No AI roster entries matched the selected date range.", "error")
+        return redirect(url_for("roster", roster_date=start_obj.isoformat(), end_date=end_obj.isoformat()))
+
+    week_versions: dict[date, RosterVersion] = {}
+    try:
+        for roster_day, staff_id, shift_id, roster_date_value, notes_value in staged_assignments:
+            week_start_obj = monday_for(roster_day)
+            version = week_versions.get(week_start_obj)
+            if version is None:
+                version = (
+                    RosterVersion.query.filter_by(
+                        org_id=org_id,
+                        week_start=week_start_obj,
+                        status="draft",
+                    )
+                    .order_by(RosterVersion.created_at.desc(), RosterVersion.id.desc())
+                    .first()
+                )
+                if version is None:
+                    version = RosterVersion(org_id=org_id, week_start=week_start_obj, status="draft")
+                    db.session.add(version)
+                    db.session.flush()
+                week_versions[week_start_obj] = version
+
+            db.session.add(
+                RosterAssignment(
+                    org_id=org_id,
+                    version_id=version.id,
+                    roster_date=roster_date_value,
+                    staff_id=staff_id,
+                    shift_id=shift_id,
+                    notes=notes_value,
+                )
+            )
+
+        db.session.commit()
+        flash(f"Added {len(staged_assignments)} AI roster assignments.", "success")
+    except IntegrityError:
+        db.session.rollback()
+        flash("Unable to confirm AI roster due to duplicate or conflicting assignments.", "error")
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("Unable to confirm AI roster right now.", "error")
+
+    return redirect(url_for("roster", roster_date=start_obj.isoformat(), end_date=end_obj.isoformat()))
 
 
 @app.post("/roster/auto-schedule")

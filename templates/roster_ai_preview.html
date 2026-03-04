@@ -40,11 +40,16 @@
   {% endif %}
 
   <div class="action-group">
-    {% set href = url_for('roster', roster_date=start_date, end_date=end_date) %}
-    {% set type = 'primary' %}
-    {% set label = 'Confirm Roster' %}
-    {% include "components/button.html" %}
-
+    <form method="post" action="{{ url_for('ai_confirm_roster') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <input type="hidden" name="start_date" value="{{ start_date }}" />
+      <input type="hidden" name="end_date" value="{{ end_date }}" />
+      <input type="hidden" name="roster_json" value="{{ roster_json|e }}" />
+      {% set type = 'primary' %}
+      {% set label = 'Confirm Roster' %}
+      {% set button_type = 'submit' %}
+      {% include "components/button.html" %}
+    </form>
     {% set href = url_for('roster', roster_date=start_date, end_date=end_date) %}
     {% set type = 'secondary' %}
     {% set label = 'Discard' %}
