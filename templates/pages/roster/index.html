@@ -3,7 +3,7 @@
 {% block content %}
 <section class="panel">
   <p class="hint hint-no-margin">From {{ week_dates[0]|datefmt }} to {{ week_dates[-1]|datefmt }}</p>
-  <form method="get" class="inline-form roster-date-form date-controls">
+  <form method="get" class="inline-form roster-date-form date-controls roster-controls">
     <label>{{ t('start_date') }}
       <input id="roster-start-date" type="date" name="roster_date" value="{{ week_start }}" />
     </label>

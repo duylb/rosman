@@ -197,6 +197,18 @@
   align-items: center;
 }
 
+.roster-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.roster-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .btn-edit {
   background: #2563eb;
   border-color: #1d4ed8;
@@ -212,6 +224,23 @@
   gap: 12px;
   align-items: center;
   justify-content: flex-start;
+}
+
+.import-staff {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.import-staff .import-staff-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.import-staff .import-staff-file .ui-label {
+  margin: 0;
+  white-space: nowrap;
 }
 
 .btn-export {
