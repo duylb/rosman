@@ -40,7 +40,8 @@ body {
   flex-direction: column;
   padding: var(--space-4) var(--space-5);
   gap: var(--space-4);
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .layout-header {
@@ -53,7 +54,7 @@ body {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
   padding: 0;
 }
 

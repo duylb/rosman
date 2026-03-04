@@ -101,11 +101,6 @@
   margin-bottom: var(--space-3);
 }
 
-.table-wrapper {
-  max-height: 500px;
-  overflow-y: auto;
-}
-
 .staff-table th:nth-child(2),
 .staff-table td:nth-child(2),
 .staff-table th:nth-child(3),
@@ -209,6 +204,7 @@
   display: flex;
   gap: 12px;
   align-items: center;
+  justify-content: flex-start;
 }
 
 .btn-export {
@@ -219,6 +215,28 @@
 
 .btn-export:hover {
   background: #059669;
+}
+
+.add-staff-form {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: nowrap;
+}
+
+.add-staff-name,
+.add-staff-email {
+  flex: 1 1 220px;
+}
+
+.add-staff-role,
+.add-staff-department,
+.add-staff-wage {
+  flex: 0 0 140px;
+}
+
+.add-staff-submit {
+  flex: 0 0 auto;
 }
 
 .date-range {
@@ -288,6 +306,7 @@
 @media (max-width: 980px) {
   .confirmed-roster-controls,
   .payroll-filter-form,
+  .add-staff-form,
   .date-range,
   .confirmed-roster-select-label,
   .date-range label {
@@ -296,6 +315,11 @@
   }
 
   .payroll-filter-form {
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+
+  .add-staff-form {
     flex-wrap: wrap;
     align-items: flex-end;
   }

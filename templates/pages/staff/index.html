@@ -3,24 +3,28 @@
 {% block content %}
 <section class="panel">
   <h2>{{ t('add_staff') }}</h2>
-  <form method="post" class="grid-form">
+  <form method="post" class="add-staff-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     {% set label = t('name') %}
     {% set name = 'name' %}
     {% set input_type = 'text' %}
     {% set required = true %}
+    {% set field_class = 'add-staff-name' %}
     {% include "components/input.html" %}
     {% set label = t('role') %}
     {% set name = 'role' %}
     {% set required = true %}
+    {% set field_class = 'add-staff-role' %}
     {% include "components/input.html" %}
     {% set label = t('department') %}
     {% set name = 'department' %}
     {% set required = false %}
+    {% set field_class = 'add-staff-department' %}
     {% include "components/input.html" %}
     {% set label = t('email') %}
     {% set name = 'email' %}
     {% set input_type = 'email' %}
+    {% set field_class = 'add-staff-email' %}
     {% include "components/input.html" %}
     {% set label = t('hourly_wage') %}
     {% set name = 'hourly_wage' %}
@@ -28,12 +32,16 @@
     {% set min = 0 %}
     {% set step = '0.01' %}
     {% set attrs = 'inputmode="decimal"' %}
+    {% set field_class = 'add-staff-wage' %}
     {% include "components/input.html" %}
     {% set type = 'primary' %}
     {% set label = t('add') %}
-    {% set icon = 'plus' %}
+    {% set icon = '' %}
+    {% set classes = 'add-staff-submit' %}
     {% set button_type = 'submit' %}
     {% include "components/button.html" %}
+    {% set field_class = '' %}
+    {% set classes = '' %}
   </form>
 </section>
 
@@ -250,8 +258,10 @@
       modal.setAttribute("aria-hidden", "true");
     };
 
-    document.querySelectorAll(".js-edit-staff").forEach((button) => {
-      button.addEventListener("click", () => openModal(button));
+    document.addEventListener("click", (event) => {
+      const editButton = event.target.closest(".js-edit-staff");
+      if (!editButton) return;
+      openModal(editButton);
     });
 
     document.querySelectorAll(".js-close-modal").forEach((el) => {
