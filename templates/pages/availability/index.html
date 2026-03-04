@@ -38,26 +38,19 @@
 </section>
 
 <section class="panel">
-  <h2>{{ t('add_preferred_shifts') }}</h2>
+  <h2>Add Preferred Shifts</h2>
   <form method="post" action="{{ url_for('add_shift_preference') }}" class="grid-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label>{{ t('staff') }}
-      <select name="staff_id" required>
+      <select name="staff_id" class="ui-input" required>
         <option value="">{{ t('select_staff') }}</option>
         {% for row in staff_rows %}
           <option value="{{ row.id }}">{{ row.name }} ({{ row.role }})</option>
         {% endfor %}
       </select>
     </label>
-    {% set label = t('start_date') %}
-    {% set name = 'start_date' %}
-    {% set value = today %}
-    {% set required = true %}
-    {% include "components/date_input.html" %}
-    {% set label = t('end_date') %}
-    {% set name = 'end_date' %}
-    {% set value = today %}
-    {% include "components/date_input.html" %}
+    <label>{{ t('start_date') }} <input type="date" name="start_date" value="{{ today }}" required /></label>
+    <label>{{ t('end_date') }} <input type="date" name="end_date" value="{{ today }}" required /></label>
     <label>{{ t('preferred_shifts_multi') }}
       <select name="shift_ids" multiple size="4" required>
         {% for shift in shift_rows %}

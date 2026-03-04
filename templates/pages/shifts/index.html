@@ -22,11 +22,7 @@
     {% set name = 'required_staff' %}
     {% set input_type = 'number' %}
     {% include "components/input.html" %}
-    {% set type = 'primary' %}
-    {% set label = t('add') %}
-    {% set button_type = 'submit' %}
-    {% set icon = 'plus' %}
-    {% include "components/button.html" %}
+    <button type="submit" class="btn-primary">{{ t('add') }}</button>
   </form>
 </section>
 

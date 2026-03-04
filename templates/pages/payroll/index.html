@@ -5,37 +5,19 @@
   <h2 class="section-title">{{ t('payroll') }}</h2>
   <p class="hint">{{ t('payroll_note_confirmed_only') }}</p>
   <form method="get" class="inline-form table-toolbar payroll-filter-form">
-    <div class="date-range">
-      {% set label = t('start_date') %}
-      {% set name = 'start_date' %}
-      {% set value = start_date %}
-      {% set required = true %}
-      {% include "components/date_input.html" %}
-      {% set label = t('end_date') %}
-      {% set name = 'end_date' %}
-      {% set value = end_date %}
-      {% include "components/date_input.html" %}
-    </div>
+    <label>{{ t('start_date') }} <input type="date" name="start_date" value="{{ start_date }}" required /></label>
+    <label>{{ t('end_date') }} <input type="date" name="end_date" value="{{ end_date }}" required /></label>
     <label>{{ t('department') }}
-      <select name="department">
+      <select name="department" class="ui-input">
         <option value="">{{ t('all_departments') }}</option>
         {% for dept in departments %}
         <option value="{{ dept }}" {% if selected_department == dept %}selected{% endif %}>{{ dept }}</option>
         {% endfor %}
       </select>
     </label>
-    <label>{{ t('staff') }}
-      <select name="staff_id">
-        <option value="">{{ t('all_staff') }}</option>
-        {% for row in staff_options %}
-        <option value="{{ row.id }}" {% if selected_staff_id == row.id %}selected{% endif %}>{{ row.name }} ({{ row.role }})</option>
-        {% endfor %}
-      </select>
-    </label>
-    {% set type = 'primary' %}
-    {% set label = t('load') %}
-    {% set button_type = 'submit' %}
-    {% include "components/button.html" %}
+    <button type="submit" class="btn-primary">View</button>
+  </form>
+  <div class="action-group">
     <a
       class="ui-btn ui-btn--secondary"
       href="{{ url_for('payroll', start_date=start_date, end_date=end_date, department=selected_department or '', staff_id=selected_staff_id or '', export='csv') }}"
@@ -45,7 +27,7 @@
       {% include "components/icon.html" %}
       <span>{{ t('export_payroll_csv') }}</span>
     </a>
-  </form>
+  </div>
   <p class="hint hint-top">
     {{ t('viewing_filter') }} {{ selected_department if selected_department else t('all_departments') }}
   </p>

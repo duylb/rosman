@@ -154,9 +154,9 @@
 .confirmed-roster-controls,
 .payroll-filter-form {
   display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 12px;
 }
 
 .confirmed-roster-select-label { min-width: 220px; }
@@ -233,6 +233,11 @@
   .date-range label {
     width: 100%;
     min-width: 0;
+  }
+
+  .payroll-filter-form {
+    flex-wrap: wrap;
+    align-items: flex-end;
   }
 
   .chart-block {
