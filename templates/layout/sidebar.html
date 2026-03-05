@@ -28,8 +28,18 @@
     <form method="post" action="{{ url_for('set_language') }}" class="lang-form lang-toggle">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}" />
-      <button type="submit" name="lang" value="en" class="lang-toggle-btn {{ 'active' if lang == 'en' else '' }}" aria-label="Switch language to English">EN</button>
-      <button type="submit" name="lang" value="vi" class="lang-toggle-btn {{ 'active' if lang == 'vi' else '' }}" aria-label="Switch language to Vietnamese">VI</button>
+      <button type="submit" name="lang" value="en" class="lang-toggle-btn {{ 'active' if lang == 'en' else '' }}" aria-label="Switch language to English">
+        {% set name = 'arrows' %}
+        {% set size = 14 %}
+        {% include "components/icon.html" %}
+        <span>EN</span>
+      </button>
+      <button type="submit" name="lang" value="vi" class="lang-toggle-btn {{ 'active' if lang == 'vi' else '' }}" aria-label="Switch language to Vietnamese">
+        {% set name = 'arrows' %}
+        {% set size = 14 %}
+        {% include "components/icon.html" %}
+        <span>VI</span>
+      </button>
     </form>
   </div>
 </aside>

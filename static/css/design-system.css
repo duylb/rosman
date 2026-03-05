@@ -301,7 +301,7 @@ a { color: inherit; }
 .table-toolbar,
 .form-row-inline {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--spacing-3);
   flex-wrap: wrap;
 }
@@ -491,6 +491,10 @@ button:disabled {
 }
 
 .lang-form.lang-toggle .lang-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   height: auto;
   min-height: 28px;
   padding: 4px 10px;
@@ -672,6 +676,10 @@ tbody tr:hover {
 }
 
 .lang-form.lang-toggle .lang-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-height: 28px;
   padding: 4px 10px;
   border-radius: 8px;

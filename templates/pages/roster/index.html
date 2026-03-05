@@ -13,7 +13,7 @@
     {% set type = 'primary' %}
     {% set label = t('load') %}
     {% set button_type = 'submit' %}
-    {% set icon = '' %}
+    {% set icon = 'eye' %}
     {% include "components/button.html" %}
   </form>
 </section>
@@ -44,6 +44,7 @@
     {% set type = 'primary' %}
     {% set label = t('assign') %}
     {% set button_type = 'submit' %}
+    {% set icon = 'plus' %}
     {% include "components/button.html" %}
   </form>
 </section>
@@ -59,6 +60,7 @@
         {% set type = 'danger' %}
         {% set label = t('confirm_roster') %}
         {% set button_type = 'submit' %}
+        {% set icon = 'check' %}
         {% include "components/button.html" %}
       </form>
       <form method="post" action="{{ url_for('discard_roster_version', version_id=current_version.id) }}" onsubmit="return confirm('{{ t('discard_draft_prompt') }}');">
@@ -66,6 +68,7 @@
         {% set type = 'secondary' %}
         {% set label = t('discard_draft') %}
         {% set button_type = 'submit' %}
+        {% set icon = 'x' %}
         {% include "components/button.html" %}
       </form>
     </div>
@@ -81,6 +84,7 @@
     {% set type = 'primary' %}
     {% set label = t('generate_week') %}
     {% set button_type = 'submit' %}
+    {% set icon = 'calendar' %}
     {% include "components/button.html" %}
   </form>
   <p class="hint">{{ t('auto_schedule_rule') }}</p>
@@ -90,8 +94,9 @@
   <h2 class="section-title">Viewing Confirmed Rosters</h2>
   {% if confirmed_month_versions %}
   <form method="get" class="inline-form form-row-inline confirmed-roster-controls">
-    <label class="confirmed-roster-select-label">Select confirmed roster
-      <select id="confirmed-roster-select" name="version_id" class="app-select" aria-label="Select confirmed roster">
+    <div class="confirmed-roster-picker">
+      <label for="confirmed-roster-select" class="confirmed-roster-select-label">Select confirmed roster</label>
+      <select id="confirmed-roster-select" name="version_id" class="app-select confirmed-roster-select-control" aria-label="Select confirmed roster">
         <option value="">Select confirmed roster</option>
         {% for version in confirmed_month_versions %}
         <option value="{{ version.id }}" data-week-start="{{ version.week_start }}" {% if version.is_active %}selected{% endif %}>
@@ -99,7 +104,7 @@
         </option>
         {% endfor %}
       </select>
-    </label>
+    </div>
     {% if current_version and current_version.status == "confirmed" and not edit_confirmed_mode %}
     <a href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id, edit_confirmed=1) }}" class="ui-btn ui-btn--secondary btn-edit">
       {% set name = 'edit' %}
@@ -112,6 +117,7 @@
     {% set label = 'Confirm' %}
     {% set button_type = 'submit' %}
     {% set form_attr = 'confirmed-roster-edit-form' %}
+    {% set icon = 'check' %}
     {% include "components/button.html" %}
     {% set form_attr = '' %}
     {% endif %}
@@ -184,7 +190,11 @@
                   <form method="post" action="{{ url_for('delete_assignment', assignment_id=row.id) }}" onsubmit="return confirm('{{ t('remove_shift_assignment_prompt') }}');" class="form-inline-zero">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                     <input type="hidden" name="roster_date" value="{{ selected_date }}" />
-                    <button type="submit" class="ui-btn ui-btn--danger btn-icon-danger">&times;</button>
+                    <button type="submit" class="ui-btn ui-btn--danger btn-icon-danger" aria-label="{{ t('delete') }}">
+                      {% set name = 'trash' %}
+                      {% set size = 16 %}
+                      {% include "components/icon.html" %}
+                    </button>
                   </form>
                   {% endif %}
                   {% if current_version and current_version.status == "draft" and row.notes != "Auto-scheduled" %}
@@ -215,7 +225,12 @@
 
   {% if edit_confirmed_mode and current_version and current_version.status == "confirmed" %}
   <div class="action-group roster-edit-actions">
-    <a class="ui-btn ui-btn--secondary" href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id) }}">{{ t('cancel') }}</a>
+    <a class="ui-btn ui-btn--secondary" href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id) }}">
+      {% set name = 'x' %}
+      {% set size = 16 %}
+      {% include "components/icon.html" %}
+      <span>{{ t('cancel') }}</span>
+    </a>
   </div>
   </form>
   {% endif %}

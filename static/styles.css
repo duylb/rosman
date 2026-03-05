@@ -180,28 +180,41 @@
 .confirmed-roster-controls,
 .payroll-filter-form {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   flex-wrap: nowrap;
   gap: 12px;
 }
 
 .confirmed-roster-select-label {
-  min-width: 220px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.confirmed-roster-picker {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
+.confirmed-roster-select-control {
+  min-width: 220px;
+}
+
+.confirmed-roster-controls .app-select,
+.confirmed-roster-controls .ui-btn {
+  height: var(--ui-control-height);
+}
+
 .date-controls {
   display: flex;
   gap: 12px;
-  align-items: flex-end;
+  align-items: center;
 }
 
 .roster-controls {
   display: flex;
   gap: 12px;
-  align-items: flex-end;
+  align-items: center;
 }
 
 .roster-controls label {
@@ -223,14 +236,14 @@
 .payroll-filters {
   display: flex;
   gap: 12px;
-  align-items: flex-end;
+  align-items: center;
   justify-content: flex-start;
 }
 
 .import-staff {
   display: flex;
   gap: 10px;
-  align-items: flex-end;
+  align-items: center;
 }
 
 .import-staff .import-staff-file {
@@ -257,7 +270,7 @@
 .add-staff-form {
   display: flex;
   gap: 10px;
-  align-items: flex-end;
+  align-items: center;
   flex-wrap: nowrap;
 }
 
@@ -274,11 +287,22 @@
 
 .add-staff-submit {
   flex: 0 0 auto;
-  align-self: flex-end;
+  align-self: center;
 }
 
 .payroll-view-btn {
-  align-self: flex-end;
+  align-self: center;
+}
+
+.csv-import-row {
+  align-items: center;
+}
+
+.csv-import-file-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
 }
 
 .date-range {
@@ -349,6 +373,7 @@
   .confirmed-roster-controls,
   .payroll-filter-form,
   .add-staff-form,
+  .confirmed-roster-picker,
   .date-range,
   .confirmed-roster-select-label,
   .date-range label {
@@ -358,12 +383,12 @@
 
   .payroll-filter-form {
     flex-wrap: wrap;
-    align-items: flex-end;
+    align-items: center;
   }
 
   .add-staff-form {
     flex-wrap: wrap;
-    align-items: flex-end;
+    align-items: center;
   }
 
   .chart-block {

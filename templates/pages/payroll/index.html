@@ -4,7 +4,7 @@
 <section class="panel">
   <h2 class="section-title">{{ t('payroll') }}</h2>
   <p class="hint">{{ t('payroll_note_confirmed_only') }}</p>
-  <form method="get" class="inline-form form-row-inline payroll-filter-form payroll-filters">
+  <form method="get" class="inline-form form-row-inline payroll-filter-form payroll-filters payroll-toolbar">
     <label>{{ t('start_date') }} <input type="date" name="start_date" value="{{ start_date }}" required /></label>
     <label>{{ t('end_date') }} <input type="date" name="end_date" value="{{ end_date }}" required /></label>
     <label>{{ t('department') }}
@@ -15,9 +15,12 @@
         {% endfor %}
       </select>
     </label>
-    <button type="submit" class="btn-primary payroll-view-btn">View</button>
-  </form>
-  <div class="action-group">
+    <button type="submit" class="btn-primary payroll-view-btn">
+      {% set name = 'eye' %}
+      {% set size = 16 %}
+      {% include "components/icon.html" %}
+      <span>View</span>
+    </button>
     <a
       class="ui-btn ui-btn--secondary btn-export"
       href="{{ url_for('payroll', start_date=start_date, end_date=end_date, department=selected_department or '', staff_id=selected_staff_id or '', export='csv') }}"
@@ -27,7 +30,7 @@
       {% include "components/icon.html" %}
       <span>{{ t('export_payroll_csv') }}</span>
     </a>
-  </div>
+  </form>
   <p class="hint hint-top">
     {{ t('viewing_filter') }} {{ selected_department if selected_department else t('all_departments') }}
   </p>

@@ -87,11 +87,13 @@
                 {% set label = t('owner_protected') %}
                 {% set button_type = 'submit' %}
                 {% set disabled = true %}
+                {% set icon = 'shield-check' %}
               {% else %}
                 {% set type = 'secondary' %}
                 {% set label = t('unlock') if not row.is_active else t('lock') %}
                 {% set button_type = 'submit' %}
                 {% set disabled = false %}
+                {% set icon = 'check' if not row.is_active else 'x' %}
               {% endif %}
               {% include "components/button.html" %}
               {% set disabled = false %}
@@ -102,6 +104,7 @@
               {% set type = 'primary' %}
               {% set label = t('extend') %}
               {% set button_type = 'submit' %}
+              {% set icon = 'calendar' %}
               {% include "components/button.html" %}
             </form>
           </div>

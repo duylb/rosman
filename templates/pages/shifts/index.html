@@ -3,7 +3,7 @@
 {% block content %}
 <section class="panel">
   <h2>{{ t('add_shift_template') }}</h2>
-  <form method="post" class="grid-form">
+  <form method="post" class="inline-form form-row-inline add-shift-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     {% set label = t('shift_name') %}
     {% set name = 'name' %}
@@ -25,7 +25,7 @@
     {% set type = 'primary' %}
     {% set label = t('add') %}
     {% set button_type = 'submit' %}
-    {% set icon = '' %}
+    {% set icon = 'plus' %}
     {% set classes = 'add-shift-submit' %}
     {% include "components/button.html" %}
     {% set classes = '' %}
@@ -55,7 +55,7 @@
           {% set label = t('edit') %}
           {% set button_type = 'button' %}
           {% set classes = 'js-edit-shift' %}
-          {% set icon = '' %}
+          {% set icon = 'edit' %}
           {% set attrs = 'data-id="' ~ row.id ~ '" data-name="' ~ (row.name|e) ~ '" data-start-time="' ~ row.start_time ~ '" data-end-time="' ~ row.end_time ~ '" data-required-staff="' ~ row.required_staff ~ '"' %}
           {% include "components/button.html" %}
         </td>
@@ -111,14 +111,14 @@
     {% set label = t('cancel') %}
     {% set button_type = 'button' %}
     {% set classes = 'js-close-shift-modal' %}
-    {% set icon = '' %}
+    {% set icon = 'x' %}
     {% include "components/button.html" %}
     {% set type = 'primary' %}
     {% set label = t('save') %}
     {% set button_type = 'submit' %}
     {% set form_attr = 'shift-edit-form' %}
     {% set classes = '' %}
-    {% set icon = '' %}
+    {% set icon = 'check' %}
     {% include "components/button.html" %}
     {% set form_attr = '' %}
   </div>

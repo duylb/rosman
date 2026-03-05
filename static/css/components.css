@@ -239,6 +239,10 @@ textarea:focus-visible {
 }
 
 .lang-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-height: 28px;
   padding: 4px 10px;
   border-radius: var(--radius-sm);
@@ -260,7 +264,7 @@ textarea:focus-visible {
 .form-row-inline {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--space-3);
 }
 
