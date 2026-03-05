@@ -260,19 +260,31 @@ textarea:focus-visible {
 .app-toolbar,
 .ui-toolbar,
 .inline-form,
-.table-toolbar,
-.form-row-inline {
+.table-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
 }
 
+.form-row-inline,
+.form-section {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .form-row-inline input,
 .form-row-inline select,
 .form-row-inline button,
 .form-row-inline .ui-btn,
-.form-row-inline .ui-input {
+.form-row-inline .ui-input,
+.form-section input,
+.form-section select,
+.form-section button,
+.form-section .ui-btn,
+.form-section .ui-input {
   margin: 0;
 }
 
@@ -338,30 +350,6 @@ textarea,
 
 select[multiple] {
   height: auto;
-}
-
-.ui-date-wrap,
-.date-input-wrap {
-  position: relative;
-  width: 100%;
-  display: inline-block;
-}
-
-.ui-date-wrap input,
-.date-input-wrap input[type="date"] {
-  padding-right: 36px;
-}
-
-.ui-date-icon,
-.date-input-icon {
-  position: absolute;
-  right: 11px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
-  color: #64748b;
-  pointer-events: none;
 }
 
 .ui-btn,
@@ -490,10 +478,11 @@ thead th {
 .ui-table td,
 th,
 td {
-  padding: 12px;
+  padding: 10px 12px;
   border-bottom: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent 18%);
   font-size: 0.86rem;
   vertical-align: middle;
+  text-align: center;
 }
 
 .ui-table tbody tr:hover,

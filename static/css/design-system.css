@@ -24,7 +24,7 @@
   --spacing-4: 16px;
   --spacing-5: 24px;
   --spacing-6: 32px;
-  --ui-control-height: 40px;
+  --ui-control-height: 36px;
 }
 
 * { box-sizing: border-box; }
@@ -298,11 +298,18 @@ a { color: inherit; }
 
 .inline-form,
 .ui-toolbar,
-.table-toolbar,
-.form-row-inline {
+.table-toolbar {
   display: flex;
   align-items: center;
   gap: var(--spacing-3);
+  flex-wrap: wrap;
+}
+
+.form-row-inline,
+.form-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -310,7 +317,12 @@ a { color: inherit; }
 .form-row-inline select,
 .form-row-inline button,
 .form-row-inline .ui-btn,
-.form-row-inline .ui-input {
+.form-row-inline .ui-input,
+.form-section input,
+.form-section select,
+.form-section button,
+.form-section .ui-btn,
+.form-section .ui-input {
   margin: 0;
 }
 
@@ -379,30 +391,6 @@ textarea:focus,
   border-color: rgba(82, 122, 188, 0.65);
   box-shadow: 0 0 0 3px rgba(106, 151, 228, 0.2);
   background: #fff;
-}
-
-.ui-date-wrap,
-.date-input-wrap {
-  position: relative;
-  display: inline-block;
-  width: 100%;
-}
-
-.ui-date-wrap input,
-.date-input-wrap input[type="date"] {
-  padding-right: 36px;
-}
-
-.ui-date-icon,
-.date-input-icon {
-  position: absolute;
-  right: 11px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
-  color: #516986;
-  pointer-events: none;
 }
 
 .ui-btn,
@@ -547,9 +535,10 @@ thead th {
 .app-table td,
 th,
 td {
-  padding: 12px;
+  padding: 10px 12px;
   font-size: 0.88rem;
   border-bottom: 1px solid rgba(208, 219, 236, 0.72);
+  text-align: center;
 }
 
 .ui-table tbody tr:hover,

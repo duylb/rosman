@@ -3,7 +3,7 @@
 {% block content %}
 <section class="panel">
   <p class="hint hint-no-margin">From {{ week_dates[0]|datefmt }} to {{ week_dates[-1]|datefmt }}</p>
-  <form method="get" class="inline-form form-row-inline roster-date-form date-controls roster-controls">
+  <form method="get" class="inline-form form-row-inline form-section roster-date-form date-controls roster-controls">
     <label>{{ t('start_date') }}
       <input id="roster-start-date" type="date" name="roster_date" value="{{ week_start }}" />
     </label>
@@ -74,7 +74,7 @@
     </div>
     {% endif %}
   </div>
-  <form method="post" action="{{ url_for('auto_schedule') }}" class="inline-form form-row-inline">
+  <form method="post" action="{{ url_for('auto_schedule') }}" class="inline-form form-row-inline form-section">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     {% set label = t('week_start_monday') %}
     {% set name = 'week_start' %}
@@ -93,7 +93,7 @@
 <section class="panel confirmed-roster-panel">
   <h2 class="section-title">Viewing Confirmed Rosters</h2>
   {% if confirmed_month_versions %}
-  <form method="get" class="inline-form form-row-inline confirmed-roster-controls">
+  <form method="get" class="inline-form form-row-inline form-section confirmed-roster-controls">
     <div class="confirmed-roster-picker">
       <label for="confirmed-roster-select" class="confirmed-roster-select-label">Select confirmed roster</label>
       <select id="confirmed-roster-select" name="version_id" class="app-select confirmed-roster-select-control" aria-label="Select confirmed roster">
@@ -106,7 +106,7 @@
       </select>
     </div>
     {% if current_version and current_version.status == "confirmed" and not edit_confirmed_mode %}
-    <a href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id, edit_confirmed=1) }}" class="ui-btn ui-btn--secondary btn-edit">
+    <a href="{{ url_for('roster', roster_date=week_start, version_id=current_version.id, edit_confirmed=1) }}" class="ui-btn ui-btn--secondary">
       {% set name = 'edit' %}
       {% set size = 16 %}
       {% include "components/icon.html" %}

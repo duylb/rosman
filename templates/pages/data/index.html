@@ -23,7 +23,7 @@
 <section class="panel">
   <h2>{{ t('export_roster_availability') }}</h2>
   <p class="hint">{{ t('export_roster_availability_hint') }}</p>
-  <form method="get" action="{{ url_for('export_dataset', dataset='assignments') }}" class="inline-form form-row-inline inline-form-top">
+  <form method="get" action="{{ url_for('export_dataset', dataset='assignments') }}" class="inline-form form-row-inline form-section inline-form-top">
     {% set label = t('start_date') %}
     {% set name = 'start_date' %}
     {% set value = export_start_date %}
@@ -62,7 +62,7 @@
         <option value="availability">{{ t('availability') }}</option>
       </select>
     </label>
-    <div class="form-row-inline csv-import-row">
+    <div class="form-row-inline form-section csv-import-row">
       <label class="csv-import-file-label">{{ t('csv_file') }} <input type="file" name="csv_file" accept=".csv,text/csv" required /></label>
       {% set type = 'primary' %}
       {% set label = t('import_csv') %}

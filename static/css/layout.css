@@ -73,15 +73,23 @@ body {
 .main-content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
-  height: calc(100vh - var(--top-nav-height, 84px));
+  overflow-x: hidden;
 }
 
 .layout-container {
   width: 100%;
-  max-width: 1320px;
+  max-width: 1400px;
   margin: 0 auto;
   min-width: 0;
+}
+
+.content-wrapper {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 var(--space-2) var(--space-4);
 }
 
 .layout-grid {
@@ -114,5 +122,9 @@ body {
     padding: var(--space-4);
     min-height: auto;
     overflow: visible;
+  }
+
+  .content-wrapper {
+    padding: 0 0 var(--space-4);
   }
 }

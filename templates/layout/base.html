@@ -43,7 +43,7 @@
         {% include "layout/header.html" %}
 
         <main class="layout-content main-content" role="main">
-          <div class="layout-container app-shell">
+          <div class="layout-container app-shell content-wrapper">
             {% with messages = get_flashed_messages(with_categories=true) %}
               {% if messages %}
                 <ul class="alerts" aria-live="polite">

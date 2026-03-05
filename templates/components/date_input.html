@@ -1,21 +1,14 @@
 <label class="ui-field {{ field_class|default('') }}">
   {% if label %}<span class="ui-label">{{ label }}</span>{% endif %}
-  <span class="ui-date-wrap">
-    <input
-      class="ui-input"
-      {% if id %}id="{{ id }}"{% endif %}
-      type="date"
-      name="{{ name|default('') }}"
-      value="{{ value|default('') }}"
-      {% if required %}required{% endif %}
-      {% if readonly %}readonly{% endif %}
-      {% if disabled %}disabled{% endif %}
-      {{ attrs|default('')|safe }}
-    />
-    <span class="ui-date-icon" aria-hidden="true">
-      {% set name = 'calendar' %}
-      {% set size = 18 %}
-      {% include "components/icon.html" %}
-    </span>
-  </span>
+  <input
+    class="ui-input"
+    {% if id %}id="{{ id }}"{% endif %}
+    type="date"
+    name="{{ name|default('') }}"
+    value="{{ value|default('') }}"
+    {% if required %}required{% endif %}
+    {% if readonly %}readonly{% endif %}
+    {% if disabled %}disabled{% endif %}
+    {{ attrs|default('')|safe }}
+  />
 </label>

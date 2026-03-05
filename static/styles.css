@@ -109,32 +109,8 @@
   height: auto;
 }
 
-.staff-table th:nth-child(2),
-.staff-table td:nth-child(2),
-.staff-table th:nth-child(3),
-.staff-table td:nth-child(3),
-.staff-table th:nth-child(4),
-.staff-table td:nth-child(4),
-.staff-table th:nth-child(6),
-.staff-table td:nth-child(6),
-.staff-table th:nth-child(7),
-.staff-table td:nth-child(7) {
-  text-align: center;
-}
-
-.shift-template-table th,
-.shift-template-table td {
-  text-align: center;
-}
-
-.roster-table th:nth-child(n + 3),
-.roster-table td:nth-child(n + 3) {
-  text-align: center;
-}
-
-.payroll-table th:nth-child(n + 3),
-.payroll-table td:nth-child(n + 3) {
-  text-align: right;
+.payroll-table th,
+.payroll-table td {
   white-space: nowrap;
 }
 
@@ -181,8 +157,8 @@
 .payroll-filter-form {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .confirmed-roster-select-label {
@@ -205,37 +181,9 @@
   height: var(--ui-control-height);
 }
 
-.date-controls {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.roster-controls {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.roster-controls label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-edit {
-  background: #2563eb;
-  border-color: #1d4ed8;
-  color: #fff;
-}
-
-.btn-edit:hover {
-  background: #1d4ed8;
-}
-
 .payroll-filters {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
   justify-content: flex-start;
 }
@@ -246,32 +194,11 @@
   align-items: center;
 }
 
-.import-staff .import-staff-file {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.import-staff .import-staff-file .ui-label {
-  margin: 0;
-  white-space: nowrap;
-}
-
-.btn-export {
-  background: #10b981;
-  border-color: #059669;
-  color: #fff;
-}
-
-.btn-export:hover {
-  background: #059669;
-}
-
 .add-staff-form {
   display: flex;
   gap: 10px;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .add-staff-name,
@@ -292,6 +219,11 @@
 
 .payroll-view-btn {
   align-self: center;
+}
+
+.payroll-filter-form .payroll-view-btn,
+.payroll-filter-form .ui-btn {
+  white-space: nowrap;
 }
 
 .csv-import-row {
@@ -379,16 +311,6 @@
   .date-range label {
     width: 100%;
     min-width: 0;
-  }
-
-  .payroll-filter-form {
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .add-staff-form {
-    flex-wrap: wrap;
-    align-items: center;
   }
 
   .chart-block {

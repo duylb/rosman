@@ -3,7 +3,7 @@
 {% block content %}
 <section class="panel">
   <h2>{{ t('add_shift_template') }}</h2>
-  <form method="post" class="inline-form form-row-inline add-shift-form">
+  <form method="post" class="inline-form form-row-inline form-section add-shift-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     {% set label = t('shift_name') %}
     {% set name = 'name' %}
