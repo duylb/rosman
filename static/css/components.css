@@ -464,6 +464,31 @@ tbody tr:last-child td {
   border-bottom: none;
 }
 
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+th.sortable:hover {
+  color: var(--color-primary);
+}
+
+th.sortable::after {
+  content: " \2195";
+  font-size: 0.72rem;
+  opacity: 0.65;
+}
+
+th.sortable.sortable-asc::after {
+  content: " \2191";
+  opacity: 0.95;
+}
+
+th.sortable.sortable-desc::after {
+  content: " \2193";
+  opacity: 0.95;
+}
+
 .ui-empty-state {
   text-align: center;
   border: 1px dashed var(--color-border);

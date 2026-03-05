@@ -39,8 +39,8 @@
   {% set table_content %}
     <thead>
       <tr>
-        <th>{{ t('staff_name') }}</th>
-        <th>{{ t('role') }}</th>
+        <th class="sortable" data-column="name">{{ t('staff_name') }}</th>
+        <th class="sortable" data-column="role">{{ t('role') }}</th>
         {% for date_key in date_columns %}
         <th>{{ date_key|datefmt }}</th>
         {% endfor %}

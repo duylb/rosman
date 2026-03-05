@@ -146,8 +146,8 @@
   {% set table_content %}
     <thead>
       <tr>
-        <th>{{ t('staff') }}</th>
-        <th>{{ t('role') }}</th>
+        <th class="sortable" data-column="name">{{ t('staff') }}</th>
+        <th class="sortable" data-column="role">{{ t('role') }}</th>
         {% for col in week_columns %}
         <th>{{ col.weekday }}<br>{{ col.date|datefmt(false) }}</th>
         {% endfor %}

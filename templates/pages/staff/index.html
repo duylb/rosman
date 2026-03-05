@@ -92,9 +92,9 @@
   {% set table_content %}
     <thead>
       <tr>
-        <th>{{ t('name') }}</th>
-        <th>{{ t('role') }}</th>
-        <th>{{ t('department') }}</th>
+        <th class="sortable" data-column="name">{{ t('name') }}</th>
+        <th class="sortable" data-column="role">{{ t('role') }}</th>
+        <th class="sortable" data-column="department">{{ t('department') }}</th>
         <th>{{ t('email') }}</th>
         <th class="wage-col hidden" id="wage-header">{{ t('hourly_wage') }}</th>
         <th>{{ t('status') }}</th>

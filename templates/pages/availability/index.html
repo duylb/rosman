@@ -72,8 +72,8 @@
   {% set table_content %}
     <thead>
       <tr>
-        <th>{{ t('staff') }}</th>
-        <th>{{ t('role') }}</th>
+        <th class="sortable" data-column="name">{{ t('staff') }}</th>
+        <th class="sortable" data-column="role">{{ t('role') }}</th>
         <th>{{ t('preferred_shift') }}</th>
         <th>{{ t('date_range') }}</th>
         <th>{{ t('notes') }}</th>
@@ -115,8 +115,8 @@
   {% set table_content %}
     <thead>
       <tr>
-        <th>{{ t('staff') }}</th>
-        <th>{{ t('role') }}</th>
+        <th class="sortable" data-column="name">{{ t('staff') }}</th>
+        <th class="sortable" data-column="role">{{ t('role') }}</th>
         <th>{{ t('date_range') }}</th>
         <th>{{ t('status') }}</th>
         <th>{{ t('notes') }}</th>
