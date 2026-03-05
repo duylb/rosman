@@ -472,18 +472,23 @@ button,
 }
 
 .ui-table-wrap,
-.table-wrapper,
-.table-container {
+.table-wrapper {
   width: 100%;
   min-width: 0;
+}
+
+.table-container {
+  width: 100%;
   overflow-x: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
 }
 
 .ui-table,
+.data-table,
 table {
-  width: 100%;
-  min-width: 760px;
+  width: max-content;
+  min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   border: 1px solid var(--color-border);
@@ -492,6 +497,7 @@ table {
 }
 
 .ui-table thead th,
+.data-table thead th,
 thead th {
   background: #f8fafc;
   color: #475569;
@@ -503,6 +509,8 @@ thead th {
 
 .ui-table th,
 .ui-table td,
+.data-table th,
+.data-table td,
 th,
 td {
   padding: 10px 12px;
@@ -510,14 +518,17 @@ td {
   font-size: 0.86rem;
   vertical-align: middle;
   text-align: center;
+  white-space: nowrap;
 }
 
 .ui-table tbody tr:hover,
+.data-table tbody tr:hover,
 tbody tr:hover {
   background: #f8fbff;
 }
 
 .ui-table tbody tr:last-child td,
+.data-table tbody tr:last-child td,
 tbody tr:last-child td {
   border-bottom: none;
 }
@@ -676,10 +687,6 @@ th.sortable.sortable-desc::after {
     justify-content: flex-end;
   }
 
-  .ui-table,
-  table {
-    min-width: 620px;
-  }
 }
 
 @media (max-width: 768px) {
