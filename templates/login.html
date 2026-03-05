@@ -43,6 +43,15 @@
           {% set required = true %}
           {% set attrs = '' %}
           {% include "components/input.html" %}
+          <label class="remember-me-option">
+            <input
+              type="checkbox"
+              name="remember_me"
+              value="1"
+              {% if remember_me_checked %}checked{% endif %}
+            />
+            <span>Remember me</span>
+          </label>
           {% set type = 'primary' %}
           {% set label = t('btn_login') %}
           {% set button_type = 'submit' %}

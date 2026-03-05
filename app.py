@@ -440,12 +440,15 @@ def login() -> str | Any:
         return redirect(url_for("dashboard"))
 
     next_url = request.args.get("next", "")
+    remember_me_checked = False
     if request.method == "POST":
         email = (
             request.form.get("email", "").strip().lower()
             or request.form.get("username", "").strip().lower()
         )
         password = request.form.get("password", "")
+        remember_raw = request.form.get("remember_me", "")
+        remember_me_checked = str(remember_raw).strip().lower() in {"1", "true", "on", "yes"}
         next_form = request.form.get("next", "").strip()
         if next_form:
             next_url = next_form
@@ -456,18 +459,19 @@ def login() -> str | Any:
                 flash("msg_account_expired_contact_admin", "error")
             else:
                 flash("msg_account_locked_contact_admin", "error")
-            return render_template("login.html", next_url=next_url)
+            return render_template("login.html", next_url=next_url, remember_me_checked=remember_me_checked)
 
         if user and check_password_hash(user.password_hash, password):
             session["user_id"] = user.id
             session["role"] = user.role
+            session.permanent = remember_me_checked
             if not next_url.startswith("/"):
                 next_url = url_for("dashboard")
             return redirect(next_url or url_for("dashboard"))
 
         flash("invalid_login", "error")
 
-    return render_template("login.html", next_url=next_url)
+    return render_template("login.html", next_url=next_url, remember_me_checked=remember_me_checked)
 
 
 @app.post("/set-language")

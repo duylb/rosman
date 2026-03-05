@@ -14,6 +14,7 @@
   <body>
     <div class="layout-app app-layout">
       {% include "layout/sidebar.html" %}
+      <button type="button" class="mobile-sidebar-backdrop" data-mobile-sidebar-backdrop aria-label="Close menu" hidden></button>
 
       <div class="layout-main main">
         {% set page_title_block %}{% block page_title %}{% endblock %}{% endset %}
@@ -59,5 +60,44 @@
       </div>
     </div>
     <script src="{{ url_for('static', filename='js/table_sort.js') }}"></script>
+    <script>
+      (() => {
+        const toggleButton = document.getElementById("mobile-nav-toggle");
+        const sidebar = document.querySelector("[data-mobile-sidebar]");
+        const closeButton = document.querySelector("[data-mobile-sidebar-close]");
+        const backdrop = document.querySelector("[data-mobile-sidebar-backdrop]");
+
+        if (!toggleButton || !sidebar || !backdrop) {
+          return;
+        }
+
+        const setSidebarOpen = (isOpen) => {
+          document.body.classList.toggle("mobile-sidebar-open", isOpen);
+          toggleButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
+          backdrop.hidden = !isOpen;
+        };
+
+        toggleButton.addEventListener("click", () => {
+          setSidebarOpen(!document.body.classList.contains("mobile-sidebar-open"));
+        });
+
+        if (closeButton) {
+          closeButton.addEventListener("click", () => setSidebarOpen(false));
+        }
+        backdrop.addEventListener("click", () => setSidebarOpen(false));
+
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            setSidebarOpen(false);
+          }
+        });
+
+        window.addEventListener("resize", () => {
+          if (window.innerWidth > 768) {
+            setSidebarOpen(false);
+          }
+        });
+      })();
+    </script>
   </body>
 </html>

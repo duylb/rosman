@@ -1,5 +1,18 @@
 <header class="top-nav layout-header" role="banner">
   <div class="nav-left">
+    <button
+      type="button"
+      class="mobile-nav-toggle"
+      id="mobile-nav-toggle"
+      aria-label="Open menu"
+      aria-controls="mobile-sidebar"
+      aria-expanded="false"
+    >
+      {% set name = 'menu' %}
+      {% set size = 16 %}
+      {% include "components/icon.html" %}
+      <span>Menu</span>
+    </button>
     <span class="workspace-label">{{ t('workspace') }}</span>
     <span class="nav-separator" aria-hidden="true">&mdash;</span>
     <h1 class="page-title">{{ page_title }}</h1>

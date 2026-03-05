@@ -102,11 +102,13 @@
 }
 
 .ui-table-wrap,
-.table-wrapper {
+.table-wrapper,
+.table-container {
   overflow-x: auto !important;
   overflow-y: visible;
   max-height: none;
   height: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .payroll-table th,
@@ -319,5 +321,47 @@
 
   .roster-edit-grid-select {
     min-width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .confirmed-roster-controls,
+  .payroll-filter-form,
+  .payroll-filters,
+  .import-staff,
+  .add-staff-form,
+  .confirmed-roster-picker,
+  .date-range,
+  .csv-import-row,
+  .csv-import-file-label,
+  .table-toolbar .toolbar-left,
+  .table-toolbar .toolbar-right {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .add-staff-name,
+  .add-staff-email,
+  .add-staff-role,
+  .add-staff-department,
+  .add-staff-wage,
+  .add-staff-submit,
+  .payroll-view-btn,
+  .confirmed-roster-select-control,
+  .table-toolbar .toolbar-search {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+    flex: 1 1 100%;
+  }
+
+  .roster-cell-row {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .auth-branding {
+    margin-left: 0;
+    text-align: left;
   }
 }

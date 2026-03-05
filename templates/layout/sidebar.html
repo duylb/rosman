@@ -1,4 +1,4 @@
-<aside class="sidebar layout-sidebar" aria-label="Primary Navigation">
+<aside id="mobile-sidebar" class="sidebar layout-sidebar" aria-label="Primary Navigation" data-mobile-sidebar>
   <div class="brand">
     <div class="brand-logo-box">
       <img
@@ -13,6 +13,10 @@
       <p class="brand-name">{{ t('brand_name') }}</p>
       <p class="brand-sub">{{ t('brand_sub') }}</p>
     </div>
+    <button type="button" class="mobile-sidebar-close" data-mobile-sidebar-close aria-label="Close menu">
+      {% set name = 'x' %}
+      {% include "components/icon.html" %}
+    </button>
   </div>
 
   {% include "components/sidebar_nav.html" %}
