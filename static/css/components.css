@@ -256,11 +256,20 @@ textarea:focus-visible {
 .app-toolbar,
 .ui-toolbar,
 .inline-form,
-.table-toolbar {
+.table-toolbar,
+.form-row-inline {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-3);
+}
+
+.form-row-inline input,
+.form-row-inline select,
+.form-row-inline button,
+.form-row-inline .ui-btn,
+.form-row-inline .ui-input {
+  margin: 0;
 }
 
 .grid-form,
@@ -284,13 +293,27 @@ select,
 textarea,
 .ui-input {
   width: 100%;
-  min-height: 40px;
+  min-height: var(--ui-control-height);
   border: 1px solid color-mix(in srgb, var(--color-border) 90%, #8aa0bd 10%);
   border-radius: var(--radius-sm);
   padding: 9px 11px;
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
+}
+
+input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
+select:not([multiple]),
+.ui-input,
+.app-input,
+.app-select {
+  height: var(--ui-control-height);
+}
+
+input[type="file"] {
+  height: var(--ui-control-height);
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 input:focus,
@@ -304,8 +327,13 @@ textarea:focus,
 
 textarea,
 .ui-textarea {
+  height: auto;
   min-height: 94px;
   resize: vertical;
+}
+
+select[multiple] {
+  height: auto;
 }
 
 .ui-date-wrap,
@@ -333,21 +361,25 @@ textarea,
 }
 
 .ui-btn,
+.btn,
 .btn-primary,
 .btn-secondary,
 .btn-danger,
+.btn-action,
 button,
 .button-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: 36px;
-  padding: 8px 14px;
+  height: var(--ui-control-height);
+  min-height: var(--ui-control-height);
+  padding: 0 14px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
   font-weight: 600;
+  line-height: 1;
   text-decoration: none;
   cursor: pointer;
   transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
@@ -376,6 +408,12 @@ button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+}
+
+.lang-toggle-btn {
+  height: auto;
+  min-height: 28px;
+  padding: 4px 10px;
 }
 
 .ui-btn--primary,

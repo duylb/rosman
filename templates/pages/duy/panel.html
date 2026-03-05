@@ -96,7 +96,7 @@
               {% include "components/button.html" %}
               {% set disabled = false %}
             </form>
-            <form method="post" action="{{ url_for('duy.extend_expiration', user_id=row.id) }}" class="inline-form inline-form-compact">
+            <form method="post" action="{{ url_for('duy.extend_expiration', user_id=row.id) }}" class="inline-form form-row-inline inline-form-compact">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
               <input type="datetime-local" name="expires_at" required />
               {% set type = 'primary' %}

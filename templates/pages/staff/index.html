@@ -3,7 +3,7 @@
 {% block content %}
 <section class="panel">
   <h2>{{ t('add_staff') }}</h2>
-  <form method="post" class="add-staff-form">
+  <form method="post" class="add-staff-form form-row-inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     {% set label = t('name') %}
     {% set name = 'name' %}
@@ -50,7 +50,7 @@
 <section class="panel">
   <h2>{{ t('import_staff_csv') }}</h2>
   <p class="hint">{{ t('import_staff_hint') }}</p>
-  <form method="post" action="{{ url_for('import_staff_csv') }}" enctype="multipart/form-data" class="inline-form import-staff">
+  <form method="post" action="{{ url_for('import_staff_csv') }}" enctype="multipart/form-data" class="inline-form form-row-inline import-staff">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     {% set label = t('csv_file') %}
     {% set name = 'csv_file' %}

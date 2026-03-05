@@ -180,7 +180,7 @@
 .confirmed-roster-controls,
 .payroll-filter-form {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   flex-wrap: nowrap;
   gap: 12px;
 }
@@ -195,13 +195,13 @@
 .date-controls {
   display: flex;
   gap: 12px;
-  align-items: center;
+  align-items: flex-end;
 }
 
 .roster-controls {
   display: flex;
   gap: 12px;
-  align-items: center;
+  align-items: flex-end;
 }
 
 .roster-controls label {
@@ -227,16 +227,10 @@
   justify-content: flex-start;
 }
 
-.add-shift-submit {
-  min-height: 40px;
-  padding-top: 9px;
-  padding-bottom: 9px;
-}
-
 .import-staff {
   display: flex;
   gap: 10px;
-  align-items: center;
+  align-items: flex-end;
 }
 
 .import-staff .import-staff-file {
@@ -280,16 +274,10 @@
 
 .add-staff-submit {
   flex: 0 0 auto;
-  min-height: 40px;
-  padding-top: 9px;
-  padding-bottom: 9px;
   align-self: flex-end;
 }
 
 .payroll-view-btn {
-  min-height: 40px;
-  padding-top: 9px;
-  padding-bottom: 9px;
   align-self: flex-end;
 }
 

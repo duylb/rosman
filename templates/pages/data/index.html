@@ -13,7 +13,7 @@
 <section class="panel">
   <h2>{{ t('export_roster_availability') }}</h2>
   <p class="hint">{{ t('export_roster_availability_hint') }}</p>
-  <form method="get" action="{{ url_for('export_dataset', dataset='assignments') }}" class="inline-form inline-form-top">
+  <form method="get" action="{{ url_for('export_dataset', dataset='assignments') }}" class="inline-form form-row-inline inline-form-top">
     {% set label = t('start_date') %}
     {% set name = 'start_date' %}
     {% set value = export_start_date %}

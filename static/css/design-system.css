@@ -24,6 +24,7 @@
   --spacing-4: 16px;
   --spacing-5: 24px;
   --spacing-6: 32px;
+  --ui-control-height: 40px;
 }
 
 * { box-sizing: border-box; }
@@ -297,11 +298,20 @@ a { color: inherit; }
 
 .inline-form,
 .ui-toolbar,
-.table-toolbar {
+.table-toolbar,
+.form-row-inline {
   display: flex;
   align-items: flex-end;
   gap: var(--spacing-3);
   flex-wrap: wrap;
+}
+
+.form-row-inline input,
+.form-row-inline select,
+.form-row-inline button,
+.form-row-inline .ui-btn,
+.form-row-inline .ui-input {
+  margin: 0;
 }
 
 .inline-form-compact { margin: 0; }
@@ -324,7 +334,7 @@ textarea,
 .app-input,
 .app-select {
   width: 100%;
-  min-height: 38px;
+  min-height: var(--ui-control-height);
   padding: 9px 11px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
@@ -334,10 +344,29 @@ textarea,
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
+input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
+select:not([multiple]),
+.ui-input,
+.app-input,
+.app-select {
+  height: var(--ui-control-height);
+}
+
+input[type="file"] {
+  height: var(--ui-control-height);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .ui-textarea,
 textarea {
+  height: auto;
   min-height: 96px;
   resize: vertical;
+}
+
+select[multiple] {
+  height: auto;
 }
 
 .ui-input:focus,
@@ -377,18 +406,21 @@ textarea:focus,
 }
 
 .ui-btn,
+.btn,
 .btn-primary,
 .btn-secondary,
 .btn-danger,
 .btn-danger-lite,
+.btn-action,
 .button-link,
 button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 36px;
-  padding: 8px 14px;
+  height: var(--ui-control-height);
+  min-height: var(--ui-control-height);
+  padding: 0 14px;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
   font-size: 0.84rem;
@@ -456,6 +488,12 @@ button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+}
+
+.lang-form.lang-toggle .lang-toggle-btn {
+  height: auto;
+  min-height: 28px;
+  padding: 4px 10px;
 }
 
 .btn-icon-danger {

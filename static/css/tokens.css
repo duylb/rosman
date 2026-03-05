@@ -28,4 +28,6 @@
   --font-size-sm: 0.82rem;
   --font-size-md: 0.92rem;
   --font-size-lg: 1.14rem;
+
+  --ui-control-height: 40px;
 }
