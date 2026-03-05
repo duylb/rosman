@@ -472,13 +472,10 @@ button,
 }
 
 .ui-table-wrap,
-.table-wrapper {
-  width: 100%;
-  min-width: 0;
-}
-
+.table-wrapper,
 .table-container {
   width: 100%;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: visible;
   -webkit-overflow-scrolling: touch;
