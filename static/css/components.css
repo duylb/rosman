@@ -271,7 +271,7 @@ textarea:focus-visible {
 .form-section {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-end;
   gap: 10px;
 }
 
@@ -288,11 +288,25 @@ textarea:focus-visible {
   margin: 0;
 }
 
+.form-row-inline button,
+.form-row-inline .ui-btn,
+.form-section button,
+.form-section .ui-btn {
+  align-self: flex-end;
+}
+
 .grid-form,
 .ui-form-grid {
   display: grid;
   gap: var(--space-3);
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.grid-form > button,
+.grid-form > .ui-btn,
+.ui-form-grid > button,
+.ui-form-grid > .ui-btn {
+  align-self: end;
 }
 
 label,

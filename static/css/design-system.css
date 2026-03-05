@@ -296,6 +296,11 @@ a { color: inherit; }
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.grid-form > button,
+.grid-form > .ui-btn {
+  align-self: end;
+}
+
 .inline-form,
 .ui-toolbar,
 .table-toolbar {
@@ -308,7 +313,7 @@ a { color: inherit; }
 .form-row-inline,
 .form-section {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 10px;
   flex-wrap: wrap;
 }
@@ -324,6 +329,13 @@ a { color: inherit; }
 .form-section .ui-btn,
 .form-section .ui-input {
   margin: 0;
+}
+
+.form-row-inline button,
+.form-row-inline .ui-btn,
+.form-section button,
+.form-section .ui-btn {
+  align-self: flex-end;
 }
 
 .inline-form-compact { margin: 0; }

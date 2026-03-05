@@ -156,7 +156,7 @@
 .confirmed-roster-controls,
 .payroll-filter-form {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   flex-wrap: wrap;
   gap: 10px;
 }
@@ -184,20 +184,20 @@
 .payroll-filters {
   display: flex;
   gap: 10px;
-  align-items: center;
+  align-items: flex-end;
   justify-content: flex-start;
 }
 
 .import-staff {
   display: flex;
   gap: 10px;
-  align-items: center;
+  align-items: flex-end;
 }
 
 .add-staff-form {
   display: flex;
   gap: 10px;
-  align-items: center;
+  align-items: flex-end;
   flex-wrap: wrap;
 }
 
@@ -214,11 +214,11 @@
 
 .add-staff-submit {
   flex: 0 0 auto;
-  align-self: center;
+  align-self: flex-end;
 }
 
 .payroll-view-btn {
-  align-self: center;
+  align-self: flex-end;
 }
 
 .payroll-filter-form .payroll-view-btn,
@@ -227,7 +227,7 @@
 }
 
 .csv-import-row {
-  align-items: center;
+  align-items: flex-end;
 }
 
 .csv-import-file-label {
