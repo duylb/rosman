@@ -73,46 +73,57 @@
 </section>
 
 <section class="panel">
-  {% set wrapper_class = 'table-wrapper' %}
-  {% set table_class = 'sales-report-table' %}
-  {% set table_content %}
-    <thead>
-      <tr>
-        <th>SKU</th>
-        <th>{{ t('name') }}</th>
-        <th>{{ t('category') }}</th>
-        <th>{{ t('quantity') }}</th>
-        <th>{{ t('revenue') }}</th>
-        <th>{{ t('returns') }}</th>
-        <th>{{ t('return_value') }}</th>
-        <th>{{ t('net_revenue') }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for item in items %}
-      <tr>
-        <td>{{ item.sku }}</td>
-        <td>{{ item.name }}</td>
-        <td>{{ item.category }}</td>
-        <td>{{ item.quantity }}</td>
-        <td>{{ item.revenue|money }}</td>
-        <td>{{ item.returns }}</td>
-        <td>{{ item.return_value|money }}</td>
-        <td>{{ item.net_revenue|money }}</td>
-      </tr>
+  {% if grouped_sales %}
+    {% for category_group in grouped_sales %}
+    <details class="sales-category-group" open>
+      <summary>
+        <strong>{{ category_group.category }}</strong>
+        <span>
+          · {{ t('total_quantity') }}: {{ category_group.total_quantity }}
+          · {{ t('revenue') }}: {{ category_group.total_revenue|money }}
+        </span>
+      </summary>
+
+      {% for type_group in category_group.types %}
+      <h4 style="margin-top: 0.75rem;">{{ t('type') }}: {{ type_group.type }}</h4>
+      {% set wrapper_class = 'table-wrapper' %}
+      {% set table_class = 'sales-report-table' %}
+      {% set table_content %}
+        <thead>
+          <tr>
+            <th>{{ t('item_code') }}</th>
+            <th>{{ t('name') }}</th>
+            <th>{{ t('type') }}</th>
+            <th>{{ t('quantity_sold') }}</th>
+            <th>{{ t('revenue') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in type_group.items %}
+          <tr>
+            <td>{{ item.sku }}</td>
+            <td>{{ item.name }}</td>
+            <td>{{ item.type }}</td>
+            <td>{{ item.quantity }}</td>
+            <td>{{ item.revenue|money }}</td>
+          </tr>
+          {% endfor %}
+          <tr>
+            <td colspan="3"><strong>{{ t('total') }}</strong></td>
+            <td><strong>{{ type_group.total_quantity }}</strong></td>
+            <td><strong>{{ type_group.total_revenue|money }}</strong></td>
+          </tr>
+        </tbody>
+      {% endset %}
+      {% include "components/table.html" %}
       {% endfor %}
-      {% if not items %}
-      <tr>
-        <td colspan="8">
-          {% set title = t('sales_items') %}
-          {% set description = t('no_sales_items_for_filter') %}
-          {% include "components/empty_state.html" %}
-        </td>
-      </tr>
-      {% endif %}
-    </tbody>
-  {% endset %}
-  {% include "components/table.html" %}
+    </details>
+    {% endfor %}
+  {% else %}
+    {% set title = t('sales_items') %}
+    {% set description = t('no_sales_items_for_filter') %}
+    {% include "components/empty_state.html" %}
+  {% endif %}
 </section>
 {% else %}
 <section class="panel">

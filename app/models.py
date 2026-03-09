@@ -64,6 +64,7 @@ class SaleItem(db.Model):
     return_value = db.Column(db.Numeric(14, 2), nullable=False, server_default=db.text("0"))
     net_revenue = db.Column(db.Numeric(14, 2), nullable=False, server_default=db.text("0"))
     category = db.Column(db.String(120), nullable=False, index=True)
+    type = db.Column(db.String(120), nullable=False, index=True)
 
     sale_report = db.relationship("SaleReport", back_populates="sale_items")
 

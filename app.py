@@ -101,19 +101,30 @@ def normalize_pdf_text(raw: str) -> str:
     return (raw or "").strip()
 
 
-def categorize_sales_item(name: str) -> str:
-    lowered = (name or "").strip().lower()
-    if any(token in lowered for token in ["cafe", "cà phê", "bac xiu", "bạc xỉu", "bạc sỉu", "matchalate", "matcha latte"]):
-        return "Coffee"
-    if any(token in lowered for token in ["trà", "tra", "hồng trà", "hong tra", "trà sữa", "tra sua"]):
-        return "Tea/Milk Tea"
-    if any(token in lowered for token in ["tàu hủ", "tàu hũ", "tau hu", "đậu phộng", "dau phong", "chè", "che", "sương sáo", "suong sao"]):
-        return "Dessert/Snack"
-    if any(token in lowered for token in ["trân châu", "tran chau", "hạt nổ", "hat no", "thạch", "thach"]):
-        return "Toppings"
-    if any(token in lowered for token in ["nước cam", "nuoc cam", "nước nho", "nuoc nho", "dừa tươi", "dua tuoi", "đá chanh", "da chanh", "soda"]):
-        return "Juice/Other"
-    return "Juice/Other"
+def get_category_info(item_code: str) -> tuple[str, str]:
+    code = (item_code or "").strip().upper()
+
+    prefix_mapping: list[tuple[str, str, str]] = [
+        ("BWR", "Beverage", "Red Wine"),
+        ("BWW", "Beverage", "White Wine"),
+        ("BC", "Beverage", "Coffee"),
+        ("BT", "Beverage", "Tea"),
+        ("FD", "Food", "Dessert"),
+        ("FB", "Food", "Beef"),
+        ("FC", "Food", "Chicken"),
+        ("FL", "Food", "Salad"),
+        ("FE", "Food", "Entree"),
+        ("FS", "Food", "Side Dish"),
+    ]
+    for prefix, category, item_type in prefix_mapping:
+        if code.startswith(prefix):
+            return category, item_type
+
+    if code.startswith("B"):
+        return "Beverage", "Other"
+    if code.startswith("F"):
+        return "Food", "Other"
+    return "Uncategorized", "Other"
 
 
 def clean_num(val: Any) -> int:
@@ -134,103 +145,72 @@ def is_sales_item_code(value: str) -> bool:
     token = (value or "").strip().upper()
     if not token:
         return False
-    return re.match(r"^[A-Z]{1,5}\d{2,}$", token) is not None
+    return re.match(r"^[A-Z0-9]+$", token) is not None
 
 
 def extract_sales_items_from_pdf(pdf_bytes: bytes) -> list[dict[str, Any]]:
     parsed_rows: list[dict[str, Any]] = []
-    current_item: dict[str, Any] | None = None
-
-    def flush_current_item() -> None:
-        nonlocal current_item
-        if current_item is None:
-            return
-
-        revenue = Decimal(clean_num(current_item.get("revenue")))
-        return_value = Decimal(clean_num(current_item.get("return_value")))
-        net_revenue_raw = clean_num(current_item.get("net_revenue"))
-        net_revenue = Decimal(net_revenue_raw) if net_revenue_raw else (revenue - return_value)
-        if net_revenue < 0:
-            current_item = None
-            return
-
-        quantity = max(0, clean_num(current_item.get("quantity")))
-        returns = max(0, clean_num(current_item.get("returns")))
-        name = normalize_pdf_text(str(current_item.get("name", "")))
-        if not name:
-            current_item = None
-            return
-
-        parsed_rows.append(
-            {
-                "sku": str(current_item.get("sku", "")).strip(),
-                "name": name,
-                "quantity": quantity,
-                "revenue": revenue.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
-                "returns": returns,
-                "return_value": return_value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
-                "net_revenue": net_revenue.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
-                "category": categorize_sales_item(name),
-            }
-        )
-        current_item = None
 
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         for page in pdf.pages:
-            table = page.extract_table()
-            if not table:
+            tables = page.extract_tables() or []
+            if not tables:
+                single_table = page.extract_table()
+                if single_table:
+                    tables = [single_table]
+
+            if not tables:
                 continue
 
-            for raw_row in table:
-                row = [normalize_pdf_text(cell or "") for cell in (raw_row or [])]
-                app.logger.info("[sales-pdf] page=%s raw_row=%s", page.page_number, row)
+            for table in tables:
+                for raw_row in table:
+                    row = [normalize_pdf_text(cell or "") for cell in (raw_row or [])]
+                    if not any(value.strip() for value in row):
+                        continue
 
-                if not any(value.strip() for value in row):
-                    continue
+                    first_col = (row[0] if len(row) > 0 else "").strip()
+                    second_col = (row[1] if len(row) > 1 else "").strip()
+                    lowered_text = " ".join(value.strip().lower() for value in row if value and value.strip())
 
-                normalized_row_text = " ".join(value.strip().lower() for value in row if value and value.strip())
-                if any(meta_token in normalized_row_text for meta_token in ["ngày lập", "báo cáo bán hàng", "trang"]):
-                    continue
+                    # Ignore page headers that can repeat on every page.
+                    if (
+                        first_col.lower() in {"item code", "mã hàng"}
+                        or second_col.lower() in {"item name", "tên hàng"}
+                        or ("item code" in lowered_text and "item name" in lowered_text)
+                        or ("quantity sold" in lowered_text and "revenue" in lowered_text)
+                    ):
+                        continue
 
-                first_col = (row[0] if len(row) > 0 else "").strip()
-                if first_col.lower().startswith("sl mặt hàng"):
-                    continue
-                if "mã hàng" in normalized_row_text and "tên hàng" in normalized_row_text:
-                    continue
+                    if len(row) < 4:
+                        continue
+                    if not is_sales_item_code(first_col):
+                        continue
 
-                if len(row) < 2:
-                    continue
+                    item_code = first_col
+                    item_name = normalize_pdf_text(" ".join([part for part in row[1:-2] if part]))
+                    if not item_name and len(row) > 1:
+                        item_name = normalize_pdf_text(row[1])
 
-                if is_sales_item_code(first_col):
-                    flush_current_item()
+                    quantity = max(0, clean_num(row[-2]))
+                    revenue = sanitize_pdf_number(row[-1])
+                    if revenue is None:
+                        continue
 
-                    if len(row) > 7:
-                        name = normalize_pdf_text(" ".join(row[1:-5]))
-                        quantity_raw, revenue_raw, returns_raw, return_value_raw, net_revenue_raw = row[-5:]
-                    else:
-                        padded = row + [""] * (7 - len(row))
-                        name = normalize_pdf_text(padded[1])
-                        quantity_raw, revenue_raw, returns_raw, return_value_raw, net_revenue_raw = padded[2:7]
-
-                    current_item = {
-                        "sku": first_col,
-                        "name": name,
-                        "quantity": quantity_raw,
-                        "revenue": revenue_raw,
-                        "returns": returns_raw,
-                        "return_value": return_value_raw,
-                        "net_revenue": net_revenue_raw,
-                    }
-                    continue
-
-                continuation_text = (row[1] if len(row) > 1 else "").strip()
-                has_numeric_tail = any((value or "").strip() for value in row[2:])
-                if current_item and not first_col and continuation_text and not has_numeric_tail:
-                    current_item["name"] = normalize_pdf_text(
-                        f"{current_item.get('name', '')} {continuation_text}"
+                    category, item_type = get_category_info(item_code)
+                    revenue_value = revenue.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    parsed_rows.append(
+                        {
+                            "sku": item_code,
+                            "name": item_name,
+                            "quantity": quantity,
+                            "revenue": revenue_value,
+                            "returns": 0,
+                            "return_value": Decimal("0.00"),
+                            "net_revenue": revenue_value,
+                            "category": category,
+                            "type": item_type,
+                        }
                     )
-
-    flush_current_item()
 
     return parsed_rows
 
@@ -548,6 +528,24 @@ def ensure_staff_schema_compatibility() -> None:
     db.session.execute(
         text("CREATE INDEX IF NOT EXISTS ix_staff_org_department ON staff (org_id, department)")
     )
+    db.session.commit()
+
+
+def ensure_sales_schema_compatibility() -> None:
+    inspector = inspect(db.engine)
+    if not inspector.has_table("sale_items"):
+        return
+
+    sale_item_columns = {col["name"] for col in inspector.get_columns("sale_items")}
+    if "category" not in sale_item_columns:
+        db.session.execute(text("ALTER TABLE sale_items ADD COLUMN category VARCHAR(120)"))
+        db.session.execute(text("UPDATE sale_items SET category = 'Uncategorized' WHERE category IS NULL OR category = ''"))
+    if "type" not in sale_item_columns:
+        db.session.execute(text("ALTER TABLE sale_items ADD COLUMN type VARCHAR(120)"))
+        db.session.execute(text("UPDATE sale_items SET type = 'Other' WHERE type IS NULL OR type = ''"))
+
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sale_items_category ON sale_items (category)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sale_items_type ON sale_items (type)"))
     db.session.commit()
 
 
@@ -2162,6 +2160,7 @@ def sales_report() -> str | Response:
                         return_value=parsed["return_value"],
                         net_revenue=parsed["net_revenue"],
                         category=parsed["category"],
+                        type=parsed["type"],
                     )
                 )
                 total_revenue += parsed["net_revenue"]
@@ -2203,6 +2202,7 @@ def sales_report() -> str | Response:
         current_report = reports[0]
 
     items: list[SaleItem] = []
+    grouped_sales: list[dict[str, Any]] = []
     categories: list[str] = []
     selected_category = request.args.get("category", "").strip()
     summary = {
@@ -2235,6 +2235,7 @@ def sales_report() -> str | Response:
                 "sku",
                 "name",
                 "category",
+                "type",
                 "quantity",
                 "revenue",
                 "returns",
@@ -2246,6 +2247,7 @@ def sales_report() -> str | Response:
                     "sku": row.sku,
                     "name": row.name,
                     "category": row.category,
+                    "type": row.type,
                     "quantity": row.quantity,
                     "revenue": format_money(row.revenue),
                     "returns": row.returns,
@@ -2262,6 +2264,64 @@ def sales_report() -> str | Response:
 
         total_items_count = base_query.count()
         items = base_query.order_by(SaleItem.net_revenue.desc(), SaleItem.name.asc()).limit(200).all()
+        grouped_rows = (
+            base_query.order_by(
+                SaleItem.category.asc(),
+                SaleItem.type.asc(),
+                SaleItem.net_revenue.desc(),
+                SaleItem.name.asc(),
+            ).all()
+        )
+        grouped_map: dict[str, dict[str, Any]] = {}
+        for row in grouped_rows:
+            category_key = str(row.category or "Uncategorized")
+            type_key = str(row.type or "Other")
+            if category_key not in grouped_map:
+                grouped_map[category_key] = {
+                    "category": category_key,
+                    "total_quantity": 0,
+                    "total_revenue": Decimal("0.00"),
+                    "types": {},
+                }
+            category_entry = grouped_map[category_key]
+            category_entry["total_quantity"] += int(row.quantity or 0)
+            category_entry["total_revenue"] += Decimal(str(row.revenue or 0))
+
+            if type_key not in category_entry["types"]:
+                category_entry["types"][type_key] = {
+                    "type": type_key,
+                    "total_quantity": 0,
+                    "total_revenue": Decimal("0.00"),
+                    "items": [],
+                }
+            type_entry = category_entry["types"][type_key]
+            type_entry["total_quantity"] += int(row.quantity or 0)
+            type_entry["total_revenue"] += Decimal(str(row.revenue or 0))
+            type_entry["items"].append(row)
+
+        grouped_sales = [
+            {
+                "category": category_entry["category"],
+                "total_quantity": category_entry["total_quantity"],
+                "total_revenue": category_entry["total_revenue"].quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP,
+                ),
+                "types": [
+                    {
+                        "type": type_entry["type"],
+                        "total_quantity": type_entry["total_quantity"],
+                        "total_revenue": type_entry["total_revenue"].quantize(
+                            Decimal("0.01"),
+                            rounding=ROUND_HALF_UP,
+                        ),
+                        "items": type_entry["items"],
+                    }
+                    for _, type_entry in sorted(category_entry["types"].items(), key=lambda pair: pair[0])
+                ],
+            }
+            for _, category_entry in sorted(grouped_map.items(), key=lambda pair: pair[0])
+        ]
         qty_total = (
             db.session.query(func.coalesce(func.sum(SaleItem.quantity), 0))
             .filter(SaleItem.sale_report_id == current_report.id)
@@ -2304,6 +2364,7 @@ def sales_report() -> str | Response:
         reports=reports,
         current_report=current_report,
         items=items,
+        grouped_sales=grouped_sales,
         categories=categories,
         selected_category=selected_category,
         summary=summary,
@@ -2837,6 +2898,7 @@ with app.app_context():
     try:
         ensure_user_schema_compatibility()
         ensure_staff_schema_compatibility()
+        ensure_sales_schema_compatibility()
         ensure_roster_schema_compatibility()
     except SQLAlchemyError:
         db.session.rollback()
