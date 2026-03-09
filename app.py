@@ -103,7 +103,7 @@ def normalize_pdf_text(raw: str) -> str:
 
 def categorize_sales_item(name: str) -> str:
     lowered = (name or "").strip().lower()
-    if any(token in lowered for token in ["cafe", "cà phê", "bac xiu", "bạc xỉu", "matchalate", "matcha latte"]):
+    if any(token in lowered for token in ["cafe", "cà phê", "bac xiu", "bạc xỉu", "bạc sỉu", "matchalate", "matcha latte"]):
         return "Coffee"
     if any(token in lowered for token in ["trà", "tra", "hồng trà", "hong tra", "trà sữa", "tra sua"]):
         return "Tea/Milk Tea"
@@ -116,90 +116,121 @@ def categorize_sales_item(name: str) -> str:
     return "Juice/Other"
 
 
+def clean_num(val: Any) -> int:
+    raw = str(val or "").strip()
+    if not raw:
+        return 0
+    compact = raw.replace(".", "").replace(",", "")
+    compact = re.sub(r"[^\d-]", "", compact)
+    if compact in {"", "-"}:
+        return 0
+    try:
+        return int(compact)
+    except ValueError:
+        return 0
+
+
+def is_sales_item_code(value: str) -> bool:
+    token = (value or "").strip().upper()
+    if not token:
+        return False
+    return re.match(r"^[A-Z]{1,5}\d{2,}$", token) is not None
+
+
 def extract_sales_items_from_pdf(pdf_bytes: bytes) -> list[dict[str, Any]]:
     parsed_rows: list[dict[str, Any]] = []
-    running_index = 1
+    current_item: dict[str, Any] | None = None
+
+    def flush_current_item() -> None:
+        nonlocal current_item
+        if current_item is None:
+            return
+
+        revenue = Decimal(clean_num(current_item.get("revenue")))
+        return_value = Decimal(clean_num(current_item.get("return_value")))
+        net_revenue_raw = clean_num(current_item.get("net_revenue"))
+        net_revenue = Decimal(net_revenue_raw) if net_revenue_raw else (revenue - return_value)
+        if net_revenue < 0:
+            current_item = None
+            return
+
+        quantity = max(0, clean_num(current_item.get("quantity")))
+        returns = max(0, clean_num(current_item.get("returns")))
+        name = normalize_pdf_text(str(current_item.get("name", "")))
+        if not name:
+            current_item = None
+            return
+
+        parsed_rows.append(
+            {
+                "sku": str(current_item.get("sku", "")).strip(),
+                "name": name,
+                "quantity": quantity,
+                "revenue": revenue.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+                "returns": returns,
+                "return_value": return_value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+                "net_revenue": net_revenue.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+                "category": categorize_sales_item(name),
+            }
+        )
+        current_item = None
 
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         for page in pdf.pages:
-            for table in page.extract_tables() or []:
-                for raw_row in table:
-                    row = [normalize_pdf_text(cell or "") for cell in (raw_row or [])]
-                    if not any(row):
-                        continue
+            table = page.extract_table()
+            if not table:
+                continue
 
-                    normalized_row_text = " ".join(value.strip().lower() for value in row if value and value.strip())
-                    if any(meta_token in normalized_row_text for meta_token in ["ngày lập", "báo cáo bán hàng", "chi nhánh"]):
-                        continue
-                    if "sl mặt hàng" in normalized_row_text:
-                        continue
-                    if "mã hàng" in normalized_row_text and "tên hàng" in normalized_row_text:
-                        continue
+            for raw_row in table:
+                row = [normalize_pdf_text(cell or "") for cell in (raw_row or [])]
+                app.logger.info("[sales-pdf] page=%s raw_row=%s", page.page_number, row)
 
-                    if len(row) < 7:
-                        row = row + [""] * (7 - len(row))
+                if not any(value.strip() for value in row):
+                    continue
 
-                    if len(row) >= 2:
-                        continuation_candidate = row[1].strip()
-                        remaining_values = [value.strip() for value in row[2:7]]
-                        if (
-                            continuation_candidate
-                            and not row[0].strip()
-                            and all(not value for value in remaining_values)
-                            and parsed_rows
-                        ):
-                            parsed_rows[-1]["name"] = normalize_pdf_text(
-                                f"{parsed_rows[-1]['name']} {continuation_candidate}"
-                            )
-                            parsed_rows[-1]["category"] = categorize_sales_item(parsed_rows[-1]["name"])
-                            continue
+                normalized_row_text = " ".join(value.strip().lower() for value in row if value and value.strip())
+                if any(meta_token in normalized_row_text for meta_token in ["ngày lập", "báo cáo bán hàng", "trang"]):
+                    continue
+
+                first_col = (row[0] if len(row) > 0 else "").strip()
+                if first_col.lower().startswith("sl mặt hàng"):
+                    continue
+                if "mã hàng" in normalized_row_text and "tên hàng" in normalized_row_text:
+                    continue
+
+                if len(row) < 2:
+                    continue
+
+                if is_sales_item_code(first_col):
+                    flush_current_item()
 
                     if len(row) > 7:
                         name = normalize_pdf_text(" ".join(row[1:-5]))
-                        metrics = row[-5:]
-                        first_col = row[0]
+                        quantity_raw, revenue_raw, returns_raw, return_value_raw, net_revenue_raw = row[-5:]
                     else:
-                        first_col = row[0]
-                        name = normalize_pdf_text(row[1])
-                        metrics = row[2:7]
+                        padded = row + [""] * (7 - len(row))
+                        name = normalize_pdf_text(padded[1])
+                        quantity_raw, revenue_raw, returns_raw, return_value_raw, net_revenue_raw = padded[2:7]
 
-                    if not name:
-                        continue
+                    current_item = {
+                        "sku": first_col,
+                        "name": name,
+                        "quantity": quantity_raw,
+                        "revenue": revenue_raw,
+                        "returns": returns_raw,
+                        "return_value": return_value_raw,
+                        "net_revenue": net_revenue_raw,
+                    }
+                    continue
 
-                    quantity_raw, revenue_raw, returns_raw, return_value_raw, net_revenue_raw = metrics
-                    quantity_decimal = sanitize_pdf_number(quantity_raw)
-                    revenue = sanitize_pdf_number(revenue_raw)
-                    returns_decimal = sanitize_pdf_number(returns_raw)
-                    return_value = sanitize_pdf_number(return_value_raw)
-                    net_revenue = sanitize_pdf_number(net_revenue_raw)
-
-                    if revenue is None or return_value is None:
-                        continue
-
-                    quantity = int(quantity_decimal or 0)
-                    returns = int(returns_decimal or 0)
-                    if quantity < 0 or returns < 0:
-                        continue
-
-                    if net_revenue is None:
-                        net_revenue = revenue - return_value
-                    if net_revenue < 0:
-                        continue
-
-                    sku_value = first_col.strip() or f"ITEM-{running_index}"
-                    parsed_rows.append(
-                        {
-                            "sku": sku_value,
-                            "name": name,
-                            "quantity": quantity,
-                            "revenue": revenue.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
-                            "returns": returns,
-                            "return_value": return_value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
-                            "net_revenue": net_revenue.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
-                            "category": categorize_sales_item(name),
-                        }
+                continuation_text = (row[1] if len(row) > 1 else "").strip()
+                has_numeric_tail = any((value or "").strip() for value in row[2:])
+                if current_item and not first_col and continuation_text and not has_numeric_tail:
+                    current_item["name"] = normalize_pdf_text(
+                        f"{current_item.get('name', '')} {continuation_text}"
                     )
-                    running_index += 1
+
+    flush_current_item()
 
     return parsed_rows
 
