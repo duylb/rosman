@@ -104,11 +104,47 @@
 .ui-table-wrap,
 .table-wrapper,
 .table-container {
-  overflow-x: auto !important;
+  position: relative;
+  container-type: inline-size;
+  container-name: table-scroll;
+  overflow-x: auto;
   overflow-y: visible;
   max-height: none;
   height: auto;
+  border-radius: var(--radius-md);
   -webkit-overflow-scrolling: touch;
+}
+
+.table-container:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 65%, #fff 35%);
+  outline-offset: 2px;
+}
+
+.table-container::after {
+  content: "";
+  position: sticky;
+  right: 0;
+  top: 0;
+  display: block;
+  width: 18px;
+  height: 100%;
+  margin-left: auto;
+  pointer-events: none;
+  background: linear-gradient(to left, color-mix(in srgb, var(--color-surface) 95%, transparent 5%), transparent);
+}
+
+.table-container thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+@container table-scroll (max-width: 48rem) {
+  .table-container > .ui-table,
+  .table-container > .data-table,
+  .table-container > table {
+    min-width: max(100%, 40rem);
+  }
 }
 
 .payroll-table th,
