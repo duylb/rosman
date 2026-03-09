@@ -2202,7 +2202,7 @@ def sales_report() -> str | Response:
         current_report = reports[0]
 
     items: list[SaleItem] = []
-    grouped_sales: list[dict[str, Any]] = []
+    grouped_reports: list[dict[str, Any]] = []
     categories: list[str] = []
     selected_category = request.args.get("category", "").strip()
     summary = {
@@ -2264,63 +2264,63 @@ def sales_report() -> str | Response:
 
         total_items_count = base_query.count()
         items = base_query.order_by(SaleItem.net_revenue.desc(), SaleItem.name.asc()).limit(200).all()
-        grouped_rows = (
-            base_query.order_by(
-                SaleItem.category.asc(),
-                SaleItem.type.asc(),
-                SaleItem.net_revenue.desc(),
-                SaleItem.name.asc(),
-            ).all()
-        )
-        grouped_map: dict[str, dict[str, Any]] = {}
+        grouped_rows = base_query.order_by(SaleItem.sku.asc(), SaleItem.name.asc()).all()
+
+        prefix_definitions: list[tuple[str, str, str]] = [
+            ("BC", "Beverage", "Coffee"),
+            ("BT", "Beverage", "Tea"),
+            ("BWR", "Beverage", "Red Wine"),
+            ("BWW", "Beverage", "White Wine"),
+            ("FD", "Food", "Dessert"),
+            ("FB", "Food", "Beef"),
+            ("FC", "Food", "Chicken"),
+            ("FL", "Food", "Salad"),
+            ("FE", "Food", "Entree"),
+            ("FS", "Food", "Side Dish"),
+        ]
+        grouped_reports_map: dict[str, dict[str, Any]] = {
+            prefix: {
+                "prefix": prefix,
+                "category": category_name,
+                "type": type_name,
+                "group_label": f"{type_name} ({prefix})",
+                "total_quantity": 0,
+                "total_revenue": Decimal("0.00"),
+                "sale_items": [],
+            }
+            for prefix, category_name, type_name in prefix_definitions
+        }
+
         for row in grouped_rows:
-            category_key = str(row.category or "Uncategorized")
-            type_key = str(row.type or "Other")
-            if category_key not in grouped_map:
-                grouped_map[category_key] = {
-                    "category": category_key,
-                    "total_quantity": 0,
-                    "total_revenue": Decimal("0.00"),
-                    "types": {},
-                }
-            category_entry = grouped_map[category_key]
-            category_entry["total_quantity"] += int(row.quantity or 0)
-            category_entry["total_revenue"] += Decimal(str(row.revenue or 0))
+            item_code = str(row.sku or "").strip().upper()
+            matched_prefix: str | None = None
+            for prefix, _, _ in prefix_definitions:
+                if item_code.startswith(prefix):
+                    matched_prefix = prefix
+                    break
+            if matched_prefix is None:
+                continue
 
-            if type_key not in category_entry["types"]:
-                category_entry["types"][type_key] = {
-                    "type": type_key,
-                    "total_quantity": 0,
-                    "total_revenue": Decimal("0.00"),
-                    "items": [],
-                }
-            type_entry = category_entry["types"][type_key]
-            type_entry["total_quantity"] += int(row.quantity or 0)
-            type_entry["total_revenue"] += Decimal(str(row.revenue or 0))
-            type_entry["items"].append(row)
+            group_entry = grouped_reports_map[matched_prefix]
+            group_entry["total_quantity"] += int(row.quantity or 0)
+            group_entry["total_revenue"] += Decimal(str(row.revenue or 0))
+            group_entry["sale_items"].append(row)
 
-        grouped_sales = [
+        grouped_reports = [
             {
-                "category": category_entry["category"],
-                "total_quantity": category_entry["total_quantity"],
-                "total_revenue": category_entry["total_revenue"].quantize(
+                "prefix": entry["prefix"],
+                "category": entry["category"],
+                "type": entry["type"],
+                "group_label": entry["group_label"],
+                "total_quantity": entry["total_quantity"],
+                "total_revenue": entry["total_revenue"].quantize(
                     Decimal("0.01"),
                     rounding=ROUND_HALF_UP,
                 ),
-                "types": [
-                    {
-                        "type": type_entry["type"],
-                        "total_quantity": type_entry["total_quantity"],
-                        "total_revenue": type_entry["total_revenue"].quantize(
-                            Decimal("0.01"),
-                            rounding=ROUND_HALF_UP,
-                        ),
-                        "items": type_entry["items"],
-                    }
-                    for _, type_entry in sorted(category_entry["types"].items(), key=lambda pair: pair[0])
-                ],
+                "sale_items": entry["sale_items"],
             }
-            for _, category_entry in sorted(grouped_map.items(), key=lambda pair: pair[0])
+            for prefix, entry in grouped_reports_map.items()
+            if entry["sale_items"]
         ]
         qty_total = (
             db.session.query(func.coalesce(func.sum(SaleItem.quantity), 0))
@@ -2364,7 +2364,7 @@ def sales_report() -> str | Response:
         reports=reports,
         current_report=current_report,
         items=items,
-        grouped_sales=grouped_sales,
+        grouped_reports=grouped_reports,
         categories=categories,
         selected_category=selected_category,
         summary=summary,
