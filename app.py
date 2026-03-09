@@ -103,15 +103,17 @@ def normalize_pdf_text(raw: str) -> str:
 
 def categorize_sales_item(name: str) -> str:
     lowered = (name or "").strip().lower()
-    if any(token in lowered for token in ["cafe", "cà phê", "bac xiu", "bạc xỉu"]):
+    if any(token in lowered for token in ["cafe", "cà phê", "bac xiu", "bạc xỉu", "matchalate", "matcha latte"]):
         return "Coffee"
-    if any(token in lowered for token in ["trà", "tra", "hồng trà", "hong tra"]):
-        return "Tea"
-    if any(token in lowered for token in ["tàu hủ", "tau hu", "đậu phộng", "dau phong", "chè", "che"]):
+    if any(token in lowered for token in ["trà", "tra", "hồng trà", "hong tra", "trà sữa", "tra sua"]):
+        return "Tea/Milk Tea"
+    if any(token in lowered for token in ["tàu hủ", "tàu hũ", "tau hu", "đậu phộng", "dau phong", "chè", "che", "sương sáo", "suong sao"]):
         return "Dessert/Snack"
     if any(token in lowered for token in ["trân châu", "tran chau", "hạt nổ", "hat no", "thạch", "thach"]):
         return "Toppings"
-    return "Other"
+    if any(token in lowered for token in ["nước cam", "nuoc cam", "nước nho", "nuoc nho", "dừa tươi", "dua tuoi", "đá chanh", "da chanh", "soda"]):
+        return "Juice/Other"
+    return "Juice/Other"
 
 
 def extract_sales_items_from_pdf(pdf_bytes: bytes) -> list[dict[str, Any]]:
@@ -126,9 +128,20 @@ def extract_sales_items_from_pdf(pdf_bytes: bytes) -> list[dict[str, Any]]:
                     if not any(row):
                         continue
 
+                    normalized_row_text = " ".join(value.strip().lower() for value in row if value and value.strip())
+                    if any(meta_token in normalized_row_text for meta_token in ["ngày lập", "báo cáo bán hàng", "chi nhánh"]):
+                        continue
+                    if "sl mặt hàng" in normalized_row_text:
+                        continue
+                    if "mã hàng" in normalized_row_text and "tên hàng" in normalized_row_text:
+                        continue
+
+                    if len(row) < 7:
+                        row = row + [""] * (7 - len(row))
+
                     if len(row) >= 2:
                         continuation_candidate = row[1].strip()
-                        remaining_values = [value.strip() for value in row[2:]]
+                        remaining_values = [value.strip() for value in row[2:7]]
                         if (
                             continuation_candidate
                             and not row[0].strip()
@@ -140,17 +153,6 @@ def extract_sales_items_from_pdf(pdf_bytes: bytes) -> list[dict[str, Any]]:
                             )
                             parsed_rows[-1]["category"] = categorize_sales_item(parsed_rows[-1]["name"])
                             continue
-
-                    first_value = row[0].strip().lower() if row else ""
-                    row_text_lower = " ".join(value.lower() for value in row if value)
-
-                    if first_value.startswith("sl mặt hàng"):
-                        continue
-                    if "tên hàng" in row_text_lower and "doanh thu" in row_text_lower:
-                        continue
-
-                    if len(row) < 7:
-                        continue
 
                     if len(row) > 7:
                         name = normalize_pdf_text(" ".join(row[1:-5]))
