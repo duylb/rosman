@@ -304,6 +304,36 @@
   margin: 0;
 }
 
+.csv-import-form {
+  width: 100%;
+}
+
+.csv-import-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.csv-import-field {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  min-width: 170px;
+  flex: 1 1 200px;
+}
+
+.csv-import-field input,
+.csv-import-field select {
+  width: 100%;
+}
+
+.csv-import-submit {
+  align-self: flex-end;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
 .date-range {
   display: flex;
   align-items: center;
@@ -416,6 +446,17 @@
   .table-toolbar .toolbar-search {
     min-width: 0;
     max-width: none;
+    width: 100%;
+    flex: 1 1 100%;
+  }
+
+  .csv-import-controls {
+    align-items: stretch;
+  }
+
+  .csv-import-field,
+  .csv-import-submit {
+    min-width: 0;
     width: 100%;
     flex: 1 1 100%;
   }
