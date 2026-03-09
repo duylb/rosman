@@ -100,7 +100,7 @@
   <form method="get" class="inline-form form-row-inline form-section confirmed-roster-controls">
     <div class="confirmed-roster-picker">
       <label for="confirmed-roster-select" class="confirmed-roster-select-label">{{ t('select_confirmed_roster') }}</label>
-      <select id="confirmed-roster-select" name="version_id" class="app-select confirmed-roster-select-control" aria-label="{{ t('select_confirmed_roster') }}">
+      <select id="confirmed-roster-select" name="version_id" class="app-select confirmed-roster-select-control form-select-lg" aria-label="{{ t('select_confirmed_roster') }}">
         <option value="">{{ t('select_confirmed_roster') }}</option>
         {% for version in confirmed_month_versions %}
         <option value="{{ version.id }}" data-week-start="{{ version.week_start }}" {% if version.is_active %}selected{% endif %}>

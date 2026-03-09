@@ -243,9 +243,28 @@
   min-width: 220px;
 }
 
+.form-select-lg {
+  min-height: 42px;
+  height: auto;
+  padding-top: 9px;
+  padding-bottom: 9px;
+  line-height: 1.35;
+  font-size: 1rem;
+}
+
+.form-select-lg option {
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
 .confirmed-roster-controls .app-select,
 .confirmed-roster-controls .ui-btn {
   height: var(--ui-control-height);
+}
+
+.confirmed-roster-controls .form-select-lg {
+  min-height: 42px;
+  height: auto;
 }
 
 .payroll-filters {
