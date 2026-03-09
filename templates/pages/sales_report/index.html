@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block page_title %}{{ t('page_sales_report') }}{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2 class="section-title">{{ t('sales_report') }}</h2>
+  <p class="hint">{{ t('sales_report_upload_hint') }}</p>
+  <form method="post" action="{{ url_for('sales_report') }}" enctype="multipart/form-data" class="inline-form form-row-inline form-section">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    <label>{{ t('report_name_optional') }} <input type="text" name="report_name" placeholder="{{ t('report_name_optional') }}" /></label>
+    <label>{{ t('csv_file') }} <input type="file" name="csv_file" accept=".csv,text/csv" required /></label>
+    <button type="submit" class="ui-btn ui-btn--primary">
+      {% set name = 'upload' %}
+      {% set size = 16 %}
+      {% include "components/icon.html" %}
+      <span>{{ t('import_csv') }}</span>
+    </button>
+  </form>
+</section>
+
+<section class="panel">
+  <form method="get" class="inline-form form-row-inline form-section sales-report-toolbar">
+    <label>{{ t('select_report') }}
+      <select name="report_id" class="ui-input" onchange="this.form.submit()">
+        {% for report in reports %}
+        <option value="{{ report.id }}" {% if current_report and current_report.id == report.id %}selected{% endif %}>
+          #{{ report.id }} - {{ report.filename }} ({{ report.imported_at|datetimefmt }})
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>{{ t('category') }}
+      <select name="category" class="ui-input">
+        <option value="">{{ t('all_categories') }}</option>
+        {% for category_name in categories %}
+        <option value="{{ category_name }}" {% if selected_category == category_name %}selected{% endif %}>{{ category_name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="ui-btn ui-btn--primary">
+      {% set name = 'eye' %}
+      {% set size = 16 %}
+      {% include "components/icon.html" %}
+      <span>View</span>
+    </button>
+    {% if current_report %}
+    <a
+      class="ui-btn ui-btn--secondary"
+      href="{{ url_for('sales_report', report_id=current_report.id, category=selected_category or '', export='csv') }}"
+    >
+      {% set name = 'download' %}
+      {% set size = 16 %}
+      {% include "components/icon.html" %}
+      <span>{{ t('export_sales_csv') }}</span>
+    </a>
+    {% endif %}
+  </form>
+</section>
+
+{% if current_report %}
+<section class="metric-grid">
+  <article class="ui-card metric-card">
+    <div class="metric-head"><h2 class="metric-title">{{ t('items_count') }}</h2></div>
+    <p class="metric-value">{{ summary.items_count }}</p>
+  </article>
+  <article class="ui-card metric-card">
+    <div class="metric-head"><h2 class="metric-title">{{ t('total_quantity') }}</h2></div>
+    <p class="metric-value">{{ summary.total_quantity }}</p>
+  </article>
+  <article class="ui-card metric-card">
+    <div class="metric-head"><h2 class="metric-title">{{ t('total_net_revenue') }}</h2></div>
+    <p class="metric-value">{{ summary.total_revenue|money }}</p>
+  </article>
+</section>
+
+<section class="panel">
+  {% set wrapper_class = 'table-wrapper' %}
+  {% set table_class = 'sales-report-table' %}
+  {% set table_content %}
+    <thead>
+      <tr>
+        <th>SKU</th>
+        <th>{{ t('name') }}</th>
+        <th>{{ t('category') }}</th>
+        <th>{{ t('quantity') }}</th>
+        <th>{{ t('revenue') }}</th>
+        <th>{{ t('returns') }}</th>
+        <th>{{ t('return_value') }}</th>
+        <th>{{ t('net_revenue') }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ item.sku }}</td>
+        <td>{{ item.name }}</td>
+        <td>{{ item.category }}</td>
+        <td>{{ item.quantity }}</td>
+        <td>{{ item.revenue|money }}</td>
+        <td>{{ item.returns }}</td>
+        <td>{{ item.return_value|money }}</td>
+        <td>{{ item.net_revenue|money }}</td>
+      </tr>
+      {% endfor %}
+      {% if not items %}
+      <tr>
+        <td colspan="8">
+          {% set title = t('sales_items') %}
+          {% set description = t('no_sales_items_for_filter') %}
+          {% include "components/empty_state.html" %}
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  {% endset %}
+  {% include "components/table.html" %}
+</section>
+{% else %}
+<section class="panel">
+  {% set title = t('sales_report') %}
+  {% set description = t('no_sales_report_uploaded') %}
+  {% include "components/empty_state.html" %}
+</section>
+{% endif %}
+{% endblock %}

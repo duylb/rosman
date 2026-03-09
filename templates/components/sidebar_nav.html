@@ -23,6 +23,10 @@
     <span class="nav-icon">{% set name = 'wallet' %}{% include "components/icon.html" %}</span>
     <span class="nav-label">{{ t('nav_payroll') }}</span>
   </a>
+  <a class="{{ 'active' if request.path.startswith('/sales-report') else '' }}" href="{{ url_for('sales_report') }}" aria-label="{{ t('nav_sales_report') }}">
+    <span class="nav-icon">{% set name = 'chart' %}{% include "components/icon.html" %}</span>
+    <span class="nav-label">{{ t('nav_sales_report') }}</span>
+  </a>
   <a class="{{ 'active' if request.path.startswith('/data') else '' }}" href="{{ url_for('data_page') }}" aria-label="{{ t('nav_data_io') }}">
     <span class="nav-icon">{% set name = 'arrows' %}{% include "components/icon.html" %}</span>
     <span class="nav-label">{{ t('nav_data_io') }}</span>

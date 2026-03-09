@@ -46,6 +46,8 @@ StaffAvailability = _models_module.StaffAvailability
 StaffShiftPreference = _models_module.StaffShiftPreference
 User = _models_module.User
 Organization = _models_module.Organization
+SaleReport = _models_module.SaleReport
+SaleItem = _models_module.SaleItem
 
 app = Flask(__name__)
 app_env = os.environ.get("APP_ENV", os.environ.get("FLASK_ENV", "development")).lower()
@@ -1951,6 +1953,270 @@ def payroll() -> str | Response:
             "total_hours": grand_total_hours,
             "total_salary": grand_total_salary,
         },
+    )
+
+
+@app.route("/sales-report", methods=["GET", "POST"])
+@login_required
+def sales_report() -> str | Response:
+    org_id = current_org_id()
+
+    if request.method == "POST":
+        file_obj = request.files.get("csv_file")
+        report_name = request.form.get("report_name", "").strip()
+
+        if not file_obj or not file_obj.filename:
+            flash(t("msg_choose_csv_file"), "error")
+            return redirect(url_for("sales_report"))
+
+        try:
+            content = file_obj.stream.read().decode("utf-8-sig")
+        except UnicodeDecodeError:
+            flash(t("msg_csv_utf8_required"), "error")
+            return redirect(url_for("sales_report"))
+
+        reader = csv.DictReader(io.StringIO(content))
+        source_headers = reader.fieldnames or []
+        normalized_headers = {(item or "").strip().lower() for item in source_headers}
+        required_headers = {
+            "sku",
+            "name",
+            "quantity",
+            "revenue",
+            "returns",
+            "return_value",
+            "net_revenue",
+            "category",
+        }
+        missing_headers = sorted(required_headers - normalized_headers)
+        if missing_headers:
+            flash(
+                t("msg_sales_csv_headers_required").format(headers=", ".join(missing_headers)),
+                "error",
+            )
+            return redirect(url_for("sales_report"))
+
+        parsed_rows: list[dict[str, Any]] = []
+        skipped = 0
+        for row in reader:
+            normalized = {(key or "").strip().lower(): (value or "").strip() for key, value in row.items()}
+            sku = normalized.get("sku", "")
+            name = normalized.get("name", "")
+            category = normalized.get("category", "")
+
+            if not sku or not name or not category:
+                skipped += 1
+                continue
+
+            try:
+                quantity = int(normalized.get("quantity", "0") or "0")
+                returns = int(normalized.get("returns", "0") or "0")
+            except ValueError:
+                skipped += 1
+                continue
+            if quantity < 0 or returns < 0:
+                skipped += 1
+                continue
+
+            revenue = parse_non_negative_decimal(normalized.get("revenue", ""))
+            return_value = parse_non_negative_decimal(normalized.get("return_value", ""))
+            net_revenue = parse_non_negative_decimal(normalized.get("net_revenue", ""))
+            if revenue is None or return_value is None:
+                skipped += 1
+                continue
+            if net_revenue is None:
+                net_revenue = (revenue - return_value).quantize(
+                    Decimal("0.01"),
+                    rounding=ROUND_HALF_UP,
+                )
+            if net_revenue < 0:
+                skipped += 1
+                continue
+
+            parsed_rows.append(
+                {
+                    "sku": sku,
+                    "name": name,
+                    "quantity": quantity,
+                    "revenue": revenue,
+                    "returns": returns,
+                    "return_value": return_value,
+                    "net_revenue": net_revenue,
+                    "category": category,
+                }
+            )
+
+        if not parsed_rows:
+            flash(t("msg_sales_import_no_valid_rows"), "error")
+            return redirect(url_for("sales_report"))
+
+        try:
+            report = SaleReport(
+                org_id=org_id,
+                filename=report_name or file_obj.filename,
+                total_revenue=Decimal("0.00"),
+            )
+            db.session.add(report)
+            db.session.flush()
+
+            total_revenue = Decimal("0.00")
+            for parsed in parsed_rows:
+                db.session.add(
+                    SaleItem(
+                        sale_report_id=report.id,
+                        sku=parsed["sku"],
+                        name=parsed["name"],
+                        quantity=parsed["quantity"],
+                        revenue=parsed["revenue"],
+                        returns=parsed["returns"],
+                        return_value=parsed["return_value"],
+                        net_revenue=parsed["net_revenue"],
+                        category=parsed["category"],
+                    )
+                )
+                total_revenue += parsed["net_revenue"]
+
+            report.total_revenue = total_revenue.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            db.session.commit()
+            flash(
+                t("msg_sales_report_imported").format(
+                    added=len(parsed_rows),
+                    skipped=skipped,
+                ),
+                "success",
+            )
+            return redirect(url_for("sales_report", report_id=report.id))
+        except IntegrityError:
+            db.session.rollback()
+            flash(t("msg_import_failed_reference_or_duplicate"), "error")
+            return redirect(url_for("sales_report"))
+
+    reports = (
+        SaleReport.query.filter_by(org_id=org_id)
+        .order_by(SaleReport.imported_at.desc(), SaleReport.id.desc())
+        .all()
+    )
+    selected_report_raw = request.args.get("report_id", "").strip()
+    selected_report_id: int | None = None
+    if selected_report_raw:
+        try:
+            selected_report_id = int(selected_report_raw)
+        except ValueError:
+            flash(t("msg_invalid_sales_report"), "error")
+
+    current_report = None
+    if selected_report_id is not None:
+        current_report = next((item for item in reports if item.id == selected_report_id), None)
+        if current_report is None:
+            flash(t("msg_sales_report_not_found"), "error")
+    elif reports:
+        current_report = reports[0]
+
+    items: list[SaleItem] = []
+    categories: list[str] = []
+    selected_category = request.args.get("category", "").strip()
+    summary = {
+        "items_count": 0,
+        "total_quantity": 0,
+        "total_revenue": Decimal("0.00"),
+    }
+
+    if current_report is not None:
+        category_rows = (
+            db.session.query(SaleItem.category)
+            .filter(SaleItem.sale_report_id == current_report.id)
+            .distinct()
+            .order_by(SaleItem.category.asc())
+            .all()
+        )
+        categories = [str(row.category) for row in category_rows if row.category]
+        if selected_category and selected_category not in categories:
+            flash(t("msg_invalid_sales_category_filter"), "error")
+            selected_category = ""
+
+        base_query = SaleItem.query.filter(SaleItem.sale_report_id == current_report.id)
+        if selected_category:
+            base_query = base_query.filter(SaleItem.category == selected_category)
+
+        export_csv = request.args.get("export", "").strip().lower() == "csv"
+        if export_csv:
+            export_rows = base_query.order_by(SaleItem.net_revenue.desc(), SaleItem.name.asc()).all()
+            headers = [
+                "sku",
+                "name",
+                "category",
+                "quantity",
+                "revenue",
+                "returns",
+                "return_value",
+                "net_revenue",
+            ]
+            data_rows = [
+                {
+                    "sku": row.sku,
+                    "name": row.name,
+                    "category": row.category,
+                    "quantity": row.quantity,
+                    "revenue": format_money(row.revenue),
+                    "returns": row.returns,
+                    "return_value": format_money(row.return_value),
+                    "net_revenue": format_money(row.net_revenue),
+                }
+                for row in export_rows
+            ]
+            return csv_response(
+                f"sales_report_{current_report.id}.csv",
+                headers,
+                data_rows,
+            )
+
+        total_items_count = base_query.count()
+        items = base_query.order_by(SaleItem.net_revenue.desc(), SaleItem.name.asc()).limit(200).all()
+        qty_total = (
+            db.session.query(func.coalesce(func.sum(SaleItem.quantity), 0))
+            .filter(SaleItem.sale_report_id == current_report.id)
+            .scalar()
+        )
+        revenue_total = (
+            db.session.query(func.coalesce(func.sum(SaleItem.net_revenue), 0))
+            .filter(SaleItem.sale_report_id == current_report.id)
+            .scalar()
+        )
+        if selected_category:
+            qty_total = (
+                db.session.query(func.coalesce(func.sum(SaleItem.quantity), 0))
+                .filter(
+                    SaleItem.sale_report_id == current_report.id,
+                    SaleItem.category == selected_category,
+                )
+                .scalar()
+            )
+            revenue_total = (
+                db.session.query(func.coalesce(func.sum(SaleItem.net_revenue), 0))
+                .filter(
+                    SaleItem.sale_report_id == current_report.id,
+                    SaleItem.category == selected_category,
+                )
+                .scalar()
+            )
+
+        summary = {
+            "items_count": int(total_items_count),
+            "total_quantity": int(qty_total or 0),
+            "total_revenue": Decimal(str(revenue_total or 0)).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP,
+            ),
+        }
+
+    return render_template(
+        "sales_report.html",
+        reports=reports,
+        current_report=current_report,
+        items=items,
+        categories=categories,
+        selected_category=selected_category,
+        summary=summary,
     )
 
 
