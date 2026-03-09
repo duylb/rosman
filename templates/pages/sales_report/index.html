@@ -38,6 +38,29 @@
     from { opacity: 0; transform: translateY(-3px); }
     to { opacity: 1; transform: translateY(0); }
   }
+
+  .sales-sort-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    width: 100%;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .sales-sort-icon {
+    display: inline-block;
+    width: 1.2em;
+    text-align: center;
+    color: #6b7280;
+    font-size: 0.9em;
+    line-height: 1;
+  }
 </style>
 
 <section class="panel">
@@ -130,10 +153,30 @@
         {% set table_content %}
           <thead>
             <tr>
-              <th>{{ t('item_code') }}</th>
-              <th>{{ t('name') }}</th>
-              <th>{{ t('quantity_sold') }}</th>
-              <th>{{ t('revenue') }}</th>
+              <th>
+                <button type="button" class="sales-sort-btn" onclick="sortSalesTable(this, 0, 'string')">
+                  <span>{{ t('item_code') }}</span>
+                  <span class="sales-sort-icon" aria-hidden="true">↕</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sales-sort-btn" onclick="sortSalesTable(this, 1, 'string')">
+                  <span>{{ t('name') }}</span>
+                  <span class="sales-sort-icon" aria-hidden="true">↕</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sales-sort-btn" onclick="sortSalesTable(this, 2, 'number')">
+                  <span>{{ t('quantity_sold') }}</span>
+                  <span class="sales-sort-icon" aria-hidden="true">↕</span>
+                </button>
+              </th>
+              <th>
+                <button type="button" class="sales-sort-btn" onclick="sortSalesTable(this, 3, 'number')">
+                  <span>{{ t('revenue') }}</span>
+                  <span class="sales-sort-icon" aria-hidden="true">↕</span>
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -169,4 +212,51 @@
   {% include "components/empty_state.html" %}
 </section>
 {% endif %}
+
+<script>
+  function parseSalesNumber(value) {
+    const normalized = String(value || '').replace(/[^0-9.-]/g, '');
+    const number = parseFloat(normalized);
+    return Number.isNaN(number) ? 0 : number;
+  }
+
+  function sortSalesTable(headerButton, columnIndex, type) {
+    const table = headerButton.closest('table');
+    if (!table || !table.tBodies.length) return;
+
+    const tbody = table.tBodies[0];
+    const rows = Array.from(tbody.rows).filter((row) => {
+      const firstCell = row.cells[0];
+      return firstCell && firstCell.colSpan < 4;
+    });
+
+    if (!rows.length) return;
+
+    const currentColumn = Number(table.dataset.sortColumn);
+    const currentDirection = table.dataset.sortDirection || 'asc';
+    const nextDirection = currentColumn === columnIndex && currentDirection === 'asc' ? 'desc' : 'asc';
+    const directionFactor = nextDirection === 'asc' ? 1 : -1;
+
+    rows.sort((rowA, rowB) => {
+      const valueA = rowA.cells[columnIndex]?.textContent.trim() || '';
+      const valueB = rowB.cells[columnIndex]?.textContent.trim() || '';
+
+      if (type === 'number') {
+        return (parseSalesNumber(valueA) - parseSalesNumber(valueB)) * directionFactor;
+      }
+
+      return valueA.localeCompare(valueB, undefined, { sensitivity: 'base', numeric: true }) * directionFactor;
+    });
+
+    rows.forEach((row) => tbody.appendChild(row));
+
+    table.dataset.sortColumn = String(columnIndex);
+    table.dataset.sortDirection = nextDirection;
+
+    const icons = table.querySelectorAll('.sales-sort-icon');
+    icons.forEach((icon, index) => {
+      icon.textContent = index === columnIndex ? (nextDirection === 'asc' ? '↑' : '↓') : '↕';
+    });
+  }
+</script>
 {% endblock %}
