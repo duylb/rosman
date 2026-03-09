@@ -38,12 +38,12 @@
 
 <section class="panel">
   {% set wrapper_class = 'table-wrapper' %}
-  {% set table_class = 'payroll-table' %}
+  {% set table_class = 'payroll-table table-sticky-cols' %}
   {% set table_content %}
     <thead>
       <tr>
-        <th class="sortable" data-column="name">{{ t('staff_name') }}</th>
-        <th class="sortable" data-column="role">{{ t('role') }}</th>
+        <th class="sortable sticky-col-1" data-column="name">{{ t('staff_name') }}</th>
+        <th class="sortable sticky-col-2" data-column="role">{{ t('role') }}</th>
         {% for date_key in date_columns %}
         <th>{{ date_key|datefmt }}</th>
         {% endfor %}
@@ -55,8 +55,8 @@
     <tbody>
       {% for row in payroll_rows %}
       <tr>
-        <td>{{ row.staff_name }}</td>
-        <td>{{ row.role }}</td>
+        <td class="sticky-col-1">{{ row.staff_name }}</td>
+        <td class="sticky-col-2">{{ row.role }}</td>
         {% for date_key in date_columns %}
         <td>{{ row.hours_by_date[date_key]|money }}</td>
         {% endfor %}
@@ -86,8 +86,8 @@
     </tbody>
     <tfoot>
       <tr class="totals-row">
-        <th>{{ t('total') }}</th>
-        <th>-</th>
+        <th class="sticky-col-1">{{ t('total') }}</th>
+        <th class="sticky-col-2">-</th>
         {% for date_key in date_columns %}
         <th>{{ totals_row.hours_by_date[date_key]|money }}</th>
         {% endfor %}

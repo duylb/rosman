@@ -88,12 +88,12 @@
   {% include "components/toolbar.html" %}
 
   {% set wrapper_class = 'table-wrapper staff-table-wrapper' %}
-  {% set table_class = 'data-table staff-table' %}
+  {% set table_class = 'data-table staff-table table-sticky-cols' %}
   {% set table_content %}
     <thead>
       <tr>
-        <th class="sortable" data-column="name">{{ t('name') }}</th>
-        <th class="sortable" data-column="role">{{ t('role') }}</th>
+        <th class="sortable sticky-col-1" data-column="name">{{ t('name') }}</th>
+        <th class="sortable sticky-col-2" data-column="role">{{ t('role') }}</th>
         <th class="sortable" data-column="department">{{ t('department') }}</th>
         <th>{{ t('email') }}</th>
         <th class="wage-col hidden" id="wage-header">{{ t('hourly_wage') }}</th>
@@ -104,8 +104,8 @@
     <tbody>
       {% for row in staff %}
       <tr class="js-staff-row">
-        <td class="js-staff-name">{{ row.name }}</td>
-        <td>{{ row.role }}</td>
+        <td class="js-staff-name sticky-col-1">{{ row.name }}</td>
+        <td class="sticky-col-2">{{ row.role }}</td>
         <td>{{ row.department or '-' }}</td>
         <td>{{ row.email or '-' }}</td>
         <td class="wage-col hidden js-wage-cell">{{ row.hourly_wage|money if row.hourly_wage is not none else '-' }}</td>

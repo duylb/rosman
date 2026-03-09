@@ -69,11 +69,12 @@
 
 <section class="panel">
   <h2>{{ t('preferred_shift_entries') }}</h2>
+  {% set table_class = 'table-sticky-cols' %}
   {% set table_content %}
     <thead>
       <tr>
-        <th class="sortable" data-column="name">{{ t('staff') }}</th>
-        <th class="sortable" data-column="role">{{ t('role') }}</th>
+        <th class="sortable sticky-col-1" data-column="name">{{ t('staff') }}</th>
+        <th class="sortable sticky-col-2" data-column="role">{{ t('role') }}</th>
         <th>{{ t('preferred_shift') }}</th>
         <th>{{ t('date_range') }}</th>
         <th>{{ t('notes') }}</th>
@@ -83,8 +84,8 @@
     <tbody>
       {% for row in preference_rows %}
       <tr>
-        <td>{{ row.staff_name }}</td>
-        <td>{{ row.staff_role }}</td>
+        <td class="sticky-col-1">{{ row.staff_name }}</td>
+        <td class="sticky-col-2">{{ row.staff_role }}</td>
         <td>{{ row.shift_name }} ({{ row.start_time }} - {{ row.end_time }})</td>
         <td>{{ row.start_date|datefmt }} {{ t('to') }} {{ row.end_date|datefmt }}</td>
         <td>{{ row.notes or '-' }}</td>
@@ -112,11 +113,12 @@
 
 <section class="panel">
   <h2>{{ t('availability_entries') }}</h2>
+  {% set table_class = 'table-sticky-cols' %}
   {% set table_content %}
     <thead>
       <tr>
-        <th class="sortable" data-column="name">{{ t('staff') }}</th>
-        <th class="sortable" data-column="role">{{ t('role') }}</th>
+        <th class="sortable sticky-col-1" data-column="name">{{ t('staff') }}</th>
+        <th class="sortable sticky-col-2" data-column="role">{{ t('role') }}</th>
         <th>{{ t('date_range') }}</th>
         <th>{{ t('status') }}</th>
         <th>{{ t('notes') }}</th>
@@ -126,8 +128,8 @@
     <tbody>
       {% for row in availability_rows %}
       <tr>
-        <td>{{ row.staff_name }}</td>
-        <td>{{ row.staff_role }}</td>
+        <td class="sticky-col-1">{{ row.staff_name }}</td>
+        <td class="sticky-col-2">{{ row.staff_role }}</td>
         <td>{{ row.start_date|datefmt }} {{ t('to') }} {{ row.end_date|datefmt }}</td>
         <td>{{ t(row.status) }}</td>
         <td>{{ row.notes or '-' }}</td>

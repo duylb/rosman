@@ -152,12 +152,12 @@
     <input type="hidden" name="roster_date" value="{{ selected_date }}" />
   {% endif %}
 
-  {% set table_class = 'roster-table' %}
+  {% set table_class = 'roster-table table-sticky-cols' %}
   {% set table_content %}
     <thead>
       <tr>
-        <th class="sortable" data-column="name">{{ t('staff') }}</th>
-        <th class="sortable" data-column="role">{{ t('role') }}</th>
+        <th class="sortable sticky-col-1" data-column="name">{{ t('staff') }}</th>
+        <th class="sortable sticky-col-2" data-column="role">{{ t('role') }}</th>
         {% for col in week_columns %}
         <th>{{ col.weekday }}<br>{{ col.date|datefmt(false) }}</th>
         {% endfor %}
@@ -166,8 +166,8 @@
     <tbody>
       {% for staff in staff_rows %}
       <tr>
-        <td>{{ staff.name }}</td>
-        <td>{{ staff.role }}</td>
+        <td class="sticky-col-1">{{ staff.name }}</td>
+        <td class="sticky-col-2">{{ staff.role }}</td>
         {% for col in week_columns %}
         <td>
           {% if edit_confirmed_mode and current_version and current_version.status == "confirmed" %}
