@@ -4,6 +4,7 @@ import csv
 import io
 import importlib.util
 import os
+import re
 import sys
 from functools import wraps
 from datetime import date, datetime, timedelta
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import click
+import pdfplumber
 from flask import Flask, Response, abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -76,6 +78,128 @@ def parse_non_negative_decimal(raw: str) -> Decimal | None:
     if value < 0:
         return None
     return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def sanitize_pdf_number(raw: str) -> Decimal | None:
+    cleaned = (raw or "").strip()
+    if not cleaned:
+        return None
+    cleaned = re.sub(r"[^\d,.-]", "", cleaned)
+    cleaned = cleaned.replace(".", "").replace(",", "")
+    if cleaned in {"", "-", "."}:
+        return None
+    try:
+        return Decimal(cleaned)
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def normalize_pdf_text(raw: str) -> str:
+    lines = [segment.strip() for segment in (raw or "").splitlines() if segment and segment.strip()]
+    if lines:
+        return " ".join(lines)
+    return (raw or "").strip()
+
+
+def categorize_sales_item(name: str) -> str:
+    lowered = (name or "").strip().lower()
+    if any(token in lowered for token in ["cafe", "cà phê", "bac xiu", "bạc xỉu"]):
+        return "Coffee"
+    if any(token in lowered for token in ["trà", "tra", "hồng trà", "hong tra"]):
+        return "Tea"
+    if any(token in lowered for token in ["tàu hủ", "tau hu", "đậu phộng", "dau phong", "chè", "che"]):
+        return "Dessert/Snack"
+    if any(token in lowered for token in ["trân châu", "tran chau", "hạt nổ", "hat no", "thạch", "thach"]):
+        return "Toppings"
+    return "Other"
+
+
+def extract_sales_items_from_pdf(pdf_bytes: bytes) -> list[dict[str, Any]]:
+    parsed_rows: list[dict[str, Any]] = []
+    running_index = 1
+
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        for page in pdf.pages:
+            for table in page.extract_tables() or []:
+                for raw_row in table:
+                    row = [normalize_pdf_text(cell or "") for cell in (raw_row or [])]
+                    if not any(row):
+                        continue
+
+                    if len(row) >= 2:
+                        continuation_candidate = row[1].strip()
+                        remaining_values = [value.strip() for value in row[2:]]
+                        if (
+                            continuation_candidate
+                            and not row[0].strip()
+                            and all(not value for value in remaining_values)
+                            and parsed_rows
+                        ):
+                            parsed_rows[-1]["name"] = normalize_pdf_text(
+                                f"{parsed_rows[-1]['name']} {continuation_candidate}"
+                            )
+                            parsed_rows[-1]["category"] = categorize_sales_item(parsed_rows[-1]["name"])
+                            continue
+
+                    first_value = row[0].strip().lower() if row else ""
+                    row_text_lower = " ".join(value.lower() for value in row if value)
+
+                    if first_value.startswith("sl mặt hàng"):
+                        continue
+                    if "tên hàng" in row_text_lower and "doanh thu" in row_text_lower:
+                        continue
+
+                    if len(row) < 7:
+                        continue
+
+                    if len(row) > 7:
+                        name = normalize_pdf_text(" ".join(row[1:-5]))
+                        metrics = row[-5:]
+                        first_col = row[0]
+                    else:
+                        first_col = row[0]
+                        name = normalize_pdf_text(row[1])
+                        metrics = row[2:7]
+
+                    if not name:
+                        continue
+
+                    quantity_raw, revenue_raw, returns_raw, return_value_raw, net_revenue_raw = metrics
+                    quantity_decimal = sanitize_pdf_number(quantity_raw)
+                    revenue = sanitize_pdf_number(revenue_raw)
+                    returns_decimal = sanitize_pdf_number(returns_raw)
+                    return_value = sanitize_pdf_number(return_value_raw)
+                    net_revenue = sanitize_pdf_number(net_revenue_raw)
+
+                    if revenue is None or return_value is None:
+                        continue
+
+                    quantity = int(quantity_decimal or 0)
+                    returns = int(returns_decimal or 0)
+                    if quantity < 0 or returns < 0:
+                        continue
+
+                    if net_revenue is None:
+                        net_revenue = revenue - return_value
+                    if net_revenue < 0:
+                        continue
+
+                    sku_value = first_col.strip() or f"ITEM-{running_index}"
+                    parsed_rows.append(
+                        {
+                            "sku": sku_value,
+                            "name": name,
+                            "quantity": quantity,
+                            "revenue": revenue.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+                            "returns": returns,
+                            "return_value": return_value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+                            "net_revenue": net_revenue.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP),
+                            "category": categorize_sales_item(name),
+                        }
+                    )
+                    running_index += 1
+
+    return parsed_rows
 
 
 def has_payroll_access() -> bool:
@@ -1962,89 +2086,22 @@ def sales_report() -> str | Response:
     org_id = current_org_id()
 
     if request.method == "POST":
-        file_obj = request.files.get("csv_file")
+        file_obj = request.files.get("pdf_file")
         report_name = request.form.get("report_name", "").strip()
 
         if not file_obj or not file_obj.filename:
-            flash(t("msg_choose_csv_file"), "error")
+            flash(t("msg_choose_pdf_file"), "error")
+            return redirect(url_for("sales_report"))
+        if not file_obj.filename.lower().endswith(".pdf"):
+            flash(t("msg_sales_pdf_required"), "error")
             return redirect(url_for("sales_report"))
 
         try:
-            content = file_obj.stream.read().decode("utf-8-sig")
-        except UnicodeDecodeError:
-            flash(t("msg_csv_utf8_required"), "error")
+            file_bytes = file_obj.stream.read()
+            parsed_rows = extract_sales_items_from_pdf(file_bytes)
+        except Exception:
+            flash(t("msg_sales_pdf_parse_failed"), "error")
             return redirect(url_for("sales_report"))
-
-        reader = csv.DictReader(io.StringIO(content))
-        source_headers = reader.fieldnames or []
-        normalized_headers = {(item or "").strip().lower() for item in source_headers}
-        required_headers = {
-            "sku",
-            "name",
-            "quantity",
-            "revenue",
-            "returns",
-            "return_value",
-            "net_revenue",
-            "category",
-        }
-        missing_headers = sorted(required_headers - normalized_headers)
-        if missing_headers:
-            flash(
-                t("msg_sales_csv_headers_required").format(headers=", ".join(missing_headers)),
-                "error",
-            )
-            return redirect(url_for("sales_report"))
-
-        parsed_rows: list[dict[str, Any]] = []
-        skipped = 0
-        for row in reader:
-            normalized = {(key or "").strip().lower(): (value or "").strip() for key, value in row.items()}
-            sku = normalized.get("sku", "")
-            name = normalized.get("name", "")
-            category = normalized.get("category", "")
-
-            if not sku or not name or not category:
-                skipped += 1
-                continue
-
-            try:
-                quantity = int(normalized.get("quantity", "0") or "0")
-                returns = int(normalized.get("returns", "0") or "0")
-            except ValueError:
-                skipped += 1
-                continue
-            if quantity < 0 or returns < 0:
-                skipped += 1
-                continue
-
-            revenue = parse_non_negative_decimal(normalized.get("revenue", ""))
-            return_value = parse_non_negative_decimal(normalized.get("return_value", ""))
-            net_revenue = parse_non_negative_decimal(normalized.get("net_revenue", ""))
-            if revenue is None or return_value is None:
-                skipped += 1
-                continue
-            if net_revenue is None:
-                net_revenue = (revenue - return_value).quantize(
-                    Decimal("0.01"),
-                    rounding=ROUND_HALF_UP,
-                )
-            if net_revenue < 0:
-                skipped += 1
-                continue
-
-            parsed_rows.append(
-                {
-                    "sku": sku,
-                    "name": name,
-                    "quantity": quantity,
-                    "revenue": revenue,
-                    "returns": returns,
-                    "return_value": return_value,
-                    "net_revenue": net_revenue,
-                    "category": category,
-                }
-            )
 
         if not parsed_rows:
             flash(t("msg_sales_import_no_valid_rows"), "error")
@@ -2081,7 +2138,7 @@ def sales_report() -> str | Response:
             flash(
                 t("msg_sales_report_imported").format(
                     added=len(parsed_rows),
-                    skipped=skipped,
+                    skipped=0,
                 ),
                 "success",
             )

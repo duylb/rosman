@@ -7,12 +7,12 @@
   <form method="post" action="{{ url_for('sales_report') }}" enctype="multipart/form-data" class="inline-form form-row-inline form-section">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label>{{ t('report_name_optional') }} <input type="text" name="report_name" placeholder="{{ t('report_name_optional') }}" /></label>
-    <label>{{ t('csv_file') }} <input type="file" name="csv_file" accept=".csv,text/csv" required /></label>
+    <label>{{ t('pdf_file') }} <input type="file" name="pdf_file" accept=".pdf,application/pdf" required /></label>
     <button type="submit" class="ui-btn ui-btn--primary">
       {% set name = 'upload' %}
       {% set size = 16 %}
       {% include "components/icon.html" %}
-      <span>{{ t('import_csv') }}</span>
+      <span>{{ t('import_pdf') }}</span>
     </button>
   </form>
 </section>
