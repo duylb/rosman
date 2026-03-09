@@ -38,25 +38,4 @@
     <p class="metric-sub">{{ t('availability') }}</p>
   </article>
 </section>
-
-<section class="panel">
-  <h2 class="section-title">{{ t('payroll') }}</h2>
-  <div class="chart-block">
-    <div class="chart-donut"></div>
-    <div class="chart-legend">
-      <div class="chart-legend-item">
-        <span class="legend-label"><span class="legend-dot legend-dot-primary"></span>{{ t('active_staff') }}</span>
-        <strong>{{ staff_count }}</strong>
-      </div>
-      <div class="chart-legend-item">
-        <span class="legend-label"><span class="legend-dot legend-dot-pricing"></span>{{ t('assignments_today') }}</span>
-        <strong>{{ assignments_today }}</strong>
-      </div>
-      <div class="chart-legend-item">
-        <span class="legend-label"><span class="legend-dot legend-dot-closed"></span>{{ t('unavailable_today') }}</span>
-        <strong>{{ unavailable_today }}</strong>
-      </div>
-    </div>
-  </div>
-</section>
 {% endblock %}
