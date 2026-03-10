@@ -7,7 +7,7 @@ from app.extensions import csrf, db
 from app.models import ProductSale, SalesReport
 
 sales_api = Blueprint("sales_api", __name__)
-API_KEY = os.environ.get("SALES_API_KEY", "Baoduy567")
+API_KEY = os.environ.get("SALES_API_KEY")
 
 
 @sales_api.route("/api/import-sales", methods=["POST"])
