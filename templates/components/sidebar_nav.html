@@ -3,6 +3,7 @@
     <span class="nav-icon">{% set name = 'dashboard' %}{% include "components/icon.html" %}</span>
     <span class="nav-label">{{ t('nav_dashboard') }}</span>
   </a>
+  {% if people_ops_enabled %}
   <a class="{{ 'active' if request.path.startswith('/staff') else '' }}" href="{{ url_for('staff') }}" aria-label="{{ t('nav_staff') }}">
     <span class="nav-icon">{% set name = 'staff' %}{% include "components/icon.html" %}</span>
     <span class="nav-label">{{ t('nav_staff') }}</span>
@@ -23,10 +24,13 @@
     <span class="nav-icon">{% set name = 'wallet' %}{% include "components/icon.html" %}</span>
     <span class="nav-label">{{ t('nav_payroll') }}</span>
   </a>
+  {% endif %}
+  {% if business_ops_enabled %}
   <a class="{{ 'active' if request.path.startswith('/sales-report') else '' }}" href="{{ url_for('sales_report') }}" aria-label="{{ t('nav_sales_report') }}">
     <span class="nav-icon">{% set name = 'chart' %}{% include "components/icon.html" %}</span>
     <span class="nav-label">{{ t('nav_sales_report') }}</span>
   </a>
+  {% endif %}
   <a class="{{ 'active' if request.path.startswith('/data') else '' }}" href="{{ url_for('data_page') }}" aria-label="{{ t('nav_data_io') }}">
     <span class="nav-icon">{% set name = 'arrows' %}{% include "components/icon.html" %}</span>
     <span class="nav-label">{{ t('nav_data_io') }}</span>

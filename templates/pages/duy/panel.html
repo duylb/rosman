@@ -48,6 +48,43 @@
 </section>
 
 <section class="panel">
+  <h2>{{ t('module_toggles_org_title') if t('module_toggles_org_title') != 'module_toggles_org_title' else 'Organization Modules' }}</h2>
+  {% if organizations %}
+  <div class="panel-grid">
+    {% for org in organizations %}
+    <form method="post" action="{{ url_for('duy.toggle_org_modules', org_id=org.id) }}" class="inline-form form-row-inline form-section">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <div class="form-row-inline">
+        <strong>{{ org.name }}</strong>
+      </div>
+      <label>
+        {{ t('people_ops') if t('people_ops') != 'people_ops' else 'People Ops' }}
+        <select name="enable_people_ops">
+          <option value="1" {% if org.enable_people_ops %}selected{% endif %}>{{ t('enabled') if t('enabled') != 'enabled' else 'Enabled' }}</option>
+          <option value="0" {% if not org.enable_people_ops %}selected{% endif %}>{{ t('disabled') if t('disabled') != 'disabled' else 'Disabled' }}</option>
+        </select>
+      </label>
+      <label>
+        {{ t('business_ops') if t('business_ops') != 'business_ops' else 'Business Ops' }}
+        <select name="enable_business_ops">
+          <option value="1" {% if org.enable_business_ops %}selected{% endif %}>{{ t('enabled') if t('enabled') != 'enabled' else 'Enabled' }}</option>
+          <option value="0" {% if not org.enable_business_ops %}selected{% endif %}>{{ t('disabled') if t('disabled') != 'disabled' else 'Disabled' }}</option>
+        </select>
+      </label>
+      {% set type = 'primary' %}
+      {% set label = t('save') if t('save') != 'save' else 'Save' %}
+      {% set button_type = 'submit' %}
+      {% set icon = 'check' %}
+      {% include "components/button.html" %}
+    </form>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="hint">{{ t('msg_duy_no_orgs') if t('msg_duy_no_orgs') != 'msg_duy_no_orgs' else 'No organizations available.' }}</p>
+  {% endif %}
+</section>
+
+<section class="panel">
   <h2>{{ t('duy_users_title') }}</h2>
   {% set table_content %}
     <thead>
@@ -57,6 +94,7 @@
         <th>{{ t('status') }}</th>
         <th>{{ t('expires_at') }}</th>
         <th>{{ t('owner_flag') }}</th>
+        <th>{{ t('module_toggles') if t('module_toggles') != 'module_toggles' else 'Modules' }}</th>
         <th>{{ t('action') }}</th>
       </tr>
     </thead>
@@ -78,6 +116,35 @@
         </td>
         <td>{{ row.expires_at|datetimefmt if row.expires_at else '-' }}</td>
         <td>{{ t('yes') if row.is_owner else t('no') }}</td>
+        <td>
+          <form method="post" action="{{ url_for('duy.toggle_user_modules', user_id=row.id) }}" class="inline-form form-row-inline form-section">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <label>
+              {{ t('people_ops') if t('people_ops') != 'people_ops' else 'People' }}
+              <select name="enable_people_ops">
+                <option value="1" {% if row.enable_people_ops %}selected{% endif %}>{{ t('enabled') if t('enabled') != 'enabled' else 'Enabled' }}</option>
+                <option value="0" {% if not row.enable_people_ops %}selected{% endif %}>{{ t('disabled') if t('disabled') != 'disabled' else 'Disabled' }}</option>
+              </select>
+            </label>
+            <label>
+              {{ t('business_ops') if t('business_ops') != 'business_ops' else 'Business' }}
+              <select name="enable_business_ops">
+                <option value="1" {% if row.enable_business_ops %}selected{% endif %}>{{ t('enabled') if t('enabled') != 'enabled' else 'Enabled' }}</option>
+                <option value="0" {% if not row.enable_business_ops %}selected{% endif %}>{{ t('disabled') if t('disabled') != 'disabled' else 'Disabled' }}</option>
+              </select>
+            </label>
+            {% set type = 'secondary' %}
+            {% set label = t('save') if t('save') != 'save' else 'Save' %}
+            {% set button_type = 'submit' %}
+            {% set icon = 'check' %}
+            {% include "components/button.html" %}
+          </form>
+          <p class="hint hint-top-sm">
+            {{ t('org_module_status') if t('org_module_status') != 'org_module_status' else 'Org defaults:' }}
+            {{ 'People=' ~ ('On' if row.org_enable_people_ops else 'Off') }},
+            {{ 'Business=' ~ ('On' if row.org_enable_business_ops else 'Off') }}
+          </p>
+        </td>
         <td>
           <div class="action-group">
             <form method="post" action="{{ url_for('duy.toggle_active', user_id=row.id) }}">
@@ -113,7 +180,7 @@
       {% endfor %}
       {% if not users %}
       <tr>
-        <td colspan="6">{{ t('msg_duy_no_users') }}</td>
+        <td colspan="7">{{ t('msg_duy_no_users') }}</td>
       </tr>
       {% endif %}
     </tbody>

@@ -50,6 +50,10 @@ def create_duy_blueprint(
                 User.is_active,
                 User.expires_at,
                 User.is_owner,
+                User.enable_people_ops,
+                User.enable_business_ops,
+                Organization.enable_people_ops.label("org_enable_people_ops"),
+                Organization.enable_business_ops.label("org_enable_business_ops"),
             )
             .join(Organization, Organization.id == User.org_id)
             .order_by(User.is_owner.desc(), User.email.asc())
@@ -74,6 +78,10 @@ def create_duy_blueprint(
                     "is_active": bool(row.is_active),
                     "expires_at": row.expires_at,
                     "is_owner": bool(row.is_owner),
+                    "enable_people_ops": bool(row.enable_people_ops),
+                    "enable_business_ops": bool(row.enable_business_ops),
+                    "org_enable_people_ops": bool(row.org_enable_people_ops),
+                    "org_enable_business_ops": bool(row.org_enable_business_ops),
                     "status_key": status_key,
                 }
             )
@@ -175,6 +183,42 @@ def create_duy_blueprint(
         target.is_active = not bool(target.is_active)
         db.session.commit()
         flash("msg_duy_user_status_updated", "success")
+        return redirect(url_for("duy.panel"))
+
+    @bp.post("/users/<int:user_id>/toggle-modules")
+    @login_required
+    @owner_required
+    def toggle_user_modules(user_id: int) -> Any:
+        target = User.query.filter_by(id=user_id).first()
+        if target is None:
+            flash("msg_duy_user_not_found", "error")
+            return redirect(url_for("duy.panel"))
+
+        enable_people_ops = request.form.get("enable_people_ops") == "1"
+        enable_business_ops = request.form.get("enable_business_ops") == "1"
+
+        target.enable_people_ops = enable_people_ops
+        target.enable_business_ops = enable_business_ops
+        db.session.commit()
+        flash("msg_duy_modules_updated", "success")
+        return redirect(url_for("duy.panel"))
+
+    @bp.post("/organizations/<int:org_id>/toggle-modules")
+    @login_required
+    @owner_required
+    def toggle_org_modules(org_id: int) -> Any:
+        org = Organization.query.filter_by(id=org_id).first()
+        if org is None:
+            flash("msg_duy_invalid_org", "error")
+            return redirect(url_for("duy.panel"))
+
+        enable_people_ops = request.form.get("enable_people_ops") == "1"
+        enable_business_ops = request.form.get("enable_business_ops") == "1"
+
+        org.enable_people_ops = enable_people_ops
+        org.enable_business_ops = enable_business_ops
+        db.session.commit()
+        flash("msg_duy_org_modules_updated", "success")
         return redirect(url_for("duy.panel"))
 
     @bp.post("/users/<int:user_id>/extend")

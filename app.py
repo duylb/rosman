@@ -34,7 +34,7 @@ sys.modules["rosman_extensions"] = _extensions_module
 db = _extensions_module.db
 csrf = _extensions_module.csrf
 migrate = _extensions_module.migrate
-MODELS_FILE = BASE_DIR / "app" / "models.py"
+MODELS_FILE = BASE_DIR / "app" / "models" / "__init__.py"
 _models_spec = importlib.util.spec_from_file_location("rosman_models", MODELS_FILE)
 if _models_spec is None or _models_spec.loader is None:
     raise RuntimeError(f"Cannot load models module at {MODELS_FILE}.")
@@ -271,6 +271,44 @@ def login_required(func: Any) -> Any:
     return wrapper
 
 
+def is_people_ops_enabled(user: Any) -> bool:
+    if user is None:
+        return False
+    org_enabled = bool(getattr(user.organization, "enable_people_ops", True))
+    user_enabled = bool(getattr(user, "enable_people_ops", True))
+    return org_enabled and user_enabled
+
+
+def is_business_ops_enabled(user: Any) -> bool:
+    if user is None:
+        return False
+    org_enabled = bool(getattr(user.organization, "enable_business_ops", True))
+    user_enabled = bool(getattr(user, "enable_business_ops", True))
+    return org_enabled and user_enabled
+
+
+def people_ops_required(func: Any) -> Any:
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if is_people_ops_enabled(getattr(g, "user", None)):
+            return func(*args, **kwargs)
+        flash("msg_module_people_ops_disabled", "error")
+        return redirect(url_for("dashboard"))
+
+    return wrapper
+
+
+def business_ops_required(func: Any) -> Any:
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if is_business_ops_enabled(getattr(g, "user", None)):
+            return func(*args, **kwargs)
+        flash("msg_module_business_ops_disabled", "error")
+        return redirect(url_for("dashboard"))
+
+    return wrapper
+
+
 @app.context_processor
 def inject_translation_helpers() -> dict[str, Any]:
     return {
@@ -278,6 +316,8 @@ def inject_translation_helpers() -> dict[str, Any]:
         "lang": get_lang(),
         "app_version": app.config.get("APP_VERSION", ""),
         "app_author": app.config.get("APP_AUTHOR", ""),
+        "people_ops_enabled": is_people_ops_enabled(getattr(g, "user", None)),
+        "business_ops_enabled": is_business_ops_enabled(getattr(g, "user", None)),
     }
 
 
@@ -570,6 +610,18 @@ def ensure_user_schema_compatibility() -> None:
         db.session.execute(
             text(f"ALTER TABLE users ADD COLUMN is_owner {bool_type} NOT NULL DEFAULT {bool_false}")
         )
+    if "enable_people_ops" not in user_columns:
+        db.session.execute(
+            text(
+                f"ALTER TABLE users ADD COLUMN enable_people_ops {bool_type} NOT NULL DEFAULT {bool_true}"
+            )
+        )
+    if "enable_business_ops" not in user_columns:
+        db.session.execute(
+            text(
+                f"ALTER TABLE users ADD COLUMN enable_business_ops {bool_type} NOT NULL DEFAULT {bool_true}"
+            )
+        )
 
     # Keep legacy owner role semantics while introducing explicit owner flag.
     db.session.execute(text(f"UPDATE users SET is_owner = {bool_true} WHERE role = 'owner'"))
@@ -588,6 +640,30 @@ def ensure_user_schema_compatibility() -> None:
                 ),
                 {"user_id": int(first_user_id)},
             )
+    db.session.commit()
+
+
+def ensure_org_schema_compatibility() -> None:
+    inspector = inspect(db.engine)
+    if not inspector.has_table("organizations"):
+        return
+    dialect_name = db.engine.dialect.name.lower()
+    bool_type = "BOOLEAN" if dialect_name == "postgresql" else "INTEGER"
+    bool_true = "TRUE" if dialect_name == "postgresql" else "1"
+
+    org_columns = {col["name"] for col in inspector.get_columns("organizations")}
+    if "enable_people_ops" not in org_columns:
+        db.session.execute(
+            text(
+                f"ALTER TABLE organizations ADD COLUMN enable_people_ops {bool_type} NOT NULL DEFAULT {bool_true}"
+            )
+        )
+    if "enable_business_ops" not in org_columns:
+        db.session.execute(
+            text(
+                f"ALTER TABLE organizations ADD COLUMN enable_business_ops {bool_type} NOT NULL DEFAULT {bool_true}"
+            )
+        )
     db.session.commit()
 
 
@@ -900,6 +976,7 @@ def dashboard() -> str:
 
 @app.route("/staff", methods=["GET", "POST"])
 @login_required
+@people_ops_required
 def staff() -> str:
     org_id = current_org_id()
     if request.method == "POST":
@@ -935,6 +1012,7 @@ def staff() -> str:
 
 @app.post("/staff/<int:staff_id>/toggle")
 @login_required
+@people_ops_required
 def toggle_staff(staff_id: int) -> Any:
     row = Staff.query.filter_by(id=staff_id, org_id=current_org_id()).first()
     if row is None:
@@ -948,6 +1026,7 @@ def toggle_staff(staff_id: int) -> Any:
 
 @app.post("/staff/<int:staff_id>/edit")
 @login_required
+@people_ops_required
 def edit_staff(staff_id: int) -> Any:
     row = Staff.query.filter_by(id=staff_id, org_id=current_org_id()).first()
     if row is None:
@@ -980,6 +1059,7 @@ def edit_staff(staff_id: int) -> Any:
 
 @app.post("/staff/<int:staff_id>/delete")
 @login_required
+@people_ops_required
 def delete_staff(staff_id: int) -> Any:
     row = Staff.query.filter_by(id=staff_id, org_id=current_org_id()).first()
     if row is None:
@@ -994,6 +1074,7 @@ def delete_staff(staff_id: int) -> Any:
 
 @app.post("/staff/import")
 @login_required
+@people_ops_required
 def import_staff_csv() -> Any:
     org_id = current_org_id()
     file_obj = request.files.get("csv_file")
@@ -1036,6 +1117,7 @@ def import_staff_csv() -> Any:
 
 @app.route("/shifts", methods=["GET", "POST"])
 @login_required
+@people_ops_required
 def shifts() -> str:
     org_id = current_org_id()
     if request.method == "POST":
@@ -1075,6 +1157,7 @@ def shifts() -> str:
 
 @app.post("/shifts/<int:shift_id>/edit")
 @login_required
+@people_ops_required
 def edit_shift_template(shift_id: int) -> Any:
     org_id = current_org_id()
     shift = ShiftTemplate.query.filter_by(id=shift_id, org_id=org_id).first()
@@ -1136,6 +1219,7 @@ def edit_shift_template(shift_id: int) -> Any:
 
 @app.route("/availability", methods=["GET", "POST"])
 @login_required
+@people_ops_required
 def availability() -> str:
     org_id = current_org_id()
     today = date.today().isoformat()
@@ -1257,6 +1341,7 @@ def availability() -> str:
 
 @app.post("/availability/<int:entry_id>/delete")
 @login_required
+@people_ops_required
 def delete_availability(entry_id: int) -> Any:
     entry = StaffAvailability.query.filter_by(id=entry_id, org_id=current_org_id()).first()
     if entry is not None:
@@ -1268,6 +1353,7 @@ def delete_availability(entry_id: int) -> Any:
 
 @app.post("/availability/preferences")
 @login_required
+@people_ops_required
 def add_shift_preference() -> Any:
     org_id = current_org_id()
     staff_id = request.form.get("staff_id", "").strip()
@@ -1327,6 +1413,7 @@ def add_shift_preference() -> Any:
 
 @app.post("/availability/preferences/<int:preference_id>/delete")
 @login_required
+@people_ops_required
 def delete_shift_preference(preference_id: int) -> Any:
     preference = StaffShiftPreference.query.filter_by(
         id=preference_id, org_id=current_org_id()
@@ -1340,6 +1427,7 @@ def delete_shift_preference(preference_id: int) -> Any:
 
 @app.route("/roster", methods=["GET", "POST"])
 @login_required
+@people_ops_required
 def roster() -> str:
     org_id = current_org_id()
     selected_date_raw = request.values.get("roster_date", "").strip()
@@ -1685,6 +1773,7 @@ def roster() -> str:
 
 @app.post("/roster/auto-schedule")
 @login_required
+@people_ops_required
 def auto_schedule() -> Any:
     week_start_raw = request.form.get("week_start", "")
     week_start = parse_iso_date(week_start_raw)
@@ -1714,6 +1803,7 @@ def auto_schedule() -> Any:
 
 @app.post("/roster/confirm/<int:version_id>")
 @login_required
+@people_ops_required
 def confirm_roster_version(version_id: int) -> Any:
     org_id = current_org_id()
     deleted_version_ids: list[int] = []
@@ -1772,6 +1862,7 @@ def confirm_roster_version(version_id: int) -> Any:
 
 @app.post("/roster/confirmed/<int:version_id>/override")
 @login_required
+@people_ops_required
 def confirm_confirmed_roster_override(version_id: int) -> Any:
     org_id = current_org_id()
     version = RosterVersion.query.filter_by(id=version_id, org_id=org_id, status="confirmed").first()
@@ -1884,6 +1975,7 @@ def confirm_confirmed_roster_override(version_id: int) -> Any:
 
 @app.post("/roster/discard/<int:version_id>")
 @login_required
+@people_ops_required
 def discard_roster_version(version_id: int) -> Any:
     org_id = current_org_id()
     version = RosterVersion.query.filter_by(id=version_id, org_id=org_id).first()
@@ -1909,6 +2001,7 @@ def discard_roster_version(version_id: int) -> Any:
 
 @app.post("/roster/<int:assignment_id>/delete")
 @login_required
+@people_ops_required
 def delete_assignment(assignment_id: int) -> Any:
     roster_date = request.form.get("roster_date", date.today().isoformat())
     org_id = current_org_id()
@@ -1936,6 +2029,7 @@ def delete_assignment(assignment_id: int) -> Any:
 
 @app.route("/payroll")
 @login_required
+@people_ops_required
 @payroll_access_required
 def payroll() -> str | Response:
     org_id = current_org_id()
@@ -2113,6 +2207,7 @@ def payroll() -> str | Response:
 
 @app.route("/sales-report", methods=["GET", "POST"])
 @login_required
+@business_ops_required
 def sales_report() -> str | Response:
     org_id = current_org_id()
 
@@ -2373,6 +2468,7 @@ def sales_report() -> str | Response:
 
 @app.route("/data")
 @login_required
+@people_ops_required
 def data_page() -> str:
     today_obj = date.today()
     start_obj = monday_for(today_obj)
@@ -2386,6 +2482,7 @@ def data_page() -> str:
 
 @app.route("/data/export/<dataset>")
 @login_required
+@people_ops_required
 def export_dataset(dataset: str) -> Response:
     org_id = current_org_id()
     if dataset == "assignments":
@@ -2583,6 +2680,7 @@ def export_dataset(dataset: str) -> Response:
 
 @app.post("/data/import")
 @login_required
+@people_ops_required
 def import_dataset() -> Any:
     org_id = current_org_id()
     dataset = request.form.get("dataset", "")
@@ -2896,6 +2994,7 @@ def create_owner() -> None:
 with app.app_context():
     db.create_all()
     try:
+        ensure_org_schema_compatibility()
         ensure_user_schema_compatibility()
         ensure_staff_schema_compatibility()
         ensure_sales_schema_compatibility()
