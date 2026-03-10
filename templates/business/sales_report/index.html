@@ -140,8 +140,9 @@
 
 <section class="panel">
   {% if grouped_reports %}
+    <p class="hint">Showing summary only. Click a category to view item-level details.</p>
     {% for report_group in grouped_reports %}
-    <details class="sales-prefix-group" open>
+    <details class="sales-prefix-group">
       <summary class="sales-prefix-summary">
         <strong>{{ report_group.group_label }}</strong>
         <span>
