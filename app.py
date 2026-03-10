@@ -18,7 +18,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db, csrf, migrate
 from app.models import (
+    InventoryItem,
     Organization,
+    Recipe,
     RosterAssignment,
     RosterVersion,
     SaleItem,
@@ -27,6 +29,7 @@ from app.models import (
     Staff,
     StaffAvailability,
     StaffShiftPreference,
+    Supplier,
     User,
 )
 from config import DevelopmentConfig, ProductionConfig
@@ -555,6 +558,14 @@ def ensure_staff_schema_compatibility() -> None:
 
 def ensure_sales_schema_compatibility() -> None:
     inspector = inspect(db.engine)
+    if inspector.has_table("sale_reports"):
+        sale_report_columns = {col["name"] for col in inspector.get_columns("sale_reports")}
+        if "start_date" not in sale_report_columns:
+            db.session.execute(text("ALTER TABLE sale_reports ADD COLUMN start_date DATE"))
+        if "end_date" not in sale_report_columns:
+            db.session.execute(text("ALTER TABLE sale_reports ADD COLUMN end_date DATE"))
+        db.session.commit()
+
     if not inspector.has_table("sale_items"):
         return
 
@@ -2192,16 +2203,40 @@ def payroll() -> str | Response:
 @business_ops_required
 def sales_report() -> str | Response:
     org_id = current_org_id()
+    filter_start_raw = request.args.get("start_date", "").strip()
+    filter_end_raw = request.args.get("end_date", "").strip()
+    filter_start_obj = parse_iso_date(filter_start_raw) if filter_start_raw else None
+    filter_end_obj = parse_iso_date(filter_end_raw) if filter_end_raw else None
+    if filter_start_raw and filter_start_obj is None:
+        flash("Invalid start date filter.", "error")
+    if filter_end_raw and filter_end_obj is None:
+        flash("Invalid end date filter.", "error")
+    if filter_start_obj and filter_end_obj and filter_end_obj < filter_start_obj:
+        flash("End date must be on or after start date.", "error")
+        filter_end_obj = filter_start_obj
 
     if request.method == "POST":
         file_obj = request.files.get("pdf_file")
         report_name = request.form.get("report_name", "").strip()
+        report_start_raw = (request.form.get("start_date", "") or "").strip()
+        report_end_raw = (request.form.get("end_date", "") or "").strip()
+        report_start_obj = parse_iso_date(report_start_raw) if report_start_raw else None
+        report_end_obj = parse_iso_date(report_end_raw) if report_end_raw else None
 
         if not file_obj or not file_obj.filename:
             flash(t("msg_choose_pdf_file"), "error")
             return redirect(url_for("sales_report"))
         if not file_obj.filename.lower().endswith(".pdf"):
             flash(t("msg_sales_pdf_required"), "error")
+            return redirect(url_for("sales_report"))
+        if report_start_raw and report_start_obj is None:
+            flash("Invalid report start date.", "error")
+            return redirect(url_for("sales_report"))
+        if report_end_raw and report_end_obj is None:
+            flash("Invalid report end date.", "error")
+            return redirect(url_for("sales_report"))
+        if report_start_obj and report_end_obj and report_end_obj < report_start_obj:
+            flash("Report end date must be on or after start date.", "error")
             return redirect(url_for("sales_report"))
 
         try:
@@ -2219,6 +2254,8 @@ def sales_report() -> str | Response:
             report = SaleReport(
                 org_id=org_id,
                 filename=report_name or file_obj.filename,
+                start_date=report_start_obj,
+                end_date=report_end_obj,
                 total_revenue=Decimal("0.00"),
             )
             db.session.add(report)
@@ -2262,6 +2299,15 @@ def sales_report() -> str | Response:
         .order_by(SaleReport.imported_at.desc(), SaleReport.id.desc())
         .all()
     )
+    if filter_start_obj or filter_end_obj:
+        reports = [
+            report
+            for report in reports
+            if (
+                (filter_start_obj is None or (report.end_date is None or report.end_date >= filter_start_obj))
+                and (filter_end_obj is None or (report.start_date is None or report.start_date <= filter_end_obj))
+            )
+        ]
     selected_report_raw = request.args.get("report_id", "").strip()
     selected_report_id: int | None = None
     if selected_report_raw:
@@ -2440,12 +2486,144 @@ def sales_report() -> str | Response:
         "sales_report.html",
         reports=reports,
         current_report=current_report,
+        filter_start_date=filter_start_obj.isoformat() if filter_start_obj else "",
+        filter_end_date=filter_end_obj.isoformat() if filter_end_obj else "",
         items=items,
         grouped_reports=grouped_reports,
         categories=categories,
         selected_category=selected_category,
         summary=summary,
     )
+
+
+@app.route("/inventory")
+@login_required
+@business_ops_required
+def inventory() -> str:
+    org_id = current_org_id()
+    items = (
+        InventoryItem.query.filter_by(org_id=org_id)
+        .order_by(InventoryItem.name.asc())
+        .all()
+    )
+    return render_template("business_ops/inventory/index.html", items=items)
+
+
+@app.route("/recipes", methods=["GET", "POST"])
+@login_required
+@business_ops_required
+def recipes() -> str | Any:
+    org_id = current_org_id()
+
+    if request.method == "POST":
+        sale_item_ref = (request.form.get("sale_item_ref", "") or "").strip().upper()
+        sale_item_name = (request.form.get("sale_item_name", "") or "").strip()
+        match_type = (request.form.get("match_type", "exact") or "exact").strip().lower()
+        inventory_item_id_raw = (request.form.get("inventory_item_id", "") or "").strip()
+        quantity_raw = (request.form.get("quantity_per_sale", "") or "").strip()
+
+        if match_type not in {"exact", "prefix"}:
+            flash("Invalid match type.", "error")
+            return redirect(url_for("recipes"))
+        if not sale_item_ref or not inventory_item_id_raw or not quantity_raw:
+            flash("Recipe fields are required.", "error")
+            return redirect(url_for("recipes"))
+
+        try:
+            inventory_item_id = int(inventory_item_id_raw)
+            quantity_per_sale = Decimal(quantity_raw)
+        except (ValueError, InvalidOperation):
+            flash("Invalid recipe values.", "error")
+            return redirect(url_for("recipes"))
+
+        if quantity_per_sale <= 0:
+            flash("Quantity per sale must be greater than zero.", "error")
+            return redirect(url_for("recipes"))
+
+        inventory_item = InventoryItem.query.filter_by(id=inventory_item_id, org_id=org_id).first()
+        if inventory_item is None:
+            flash("Inventory item not found.", "error")
+            return redirect(url_for("recipes"))
+
+        try:
+            db.session.add(
+                Recipe(
+                    org_id=org_id,
+                    match_type=match_type,
+                    sale_item_ref=sale_item_ref,
+                    sale_item_name=sale_item_name or None,
+                    inventory_item_id=inventory_item.id,
+                    quantity_per_sale=quantity_per_sale.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP),
+                )
+            )
+            db.session.commit()
+            flash("Recipe saved.", "success")
+        except IntegrityError:
+            db.session.rollback()
+            flash("Recipe already exists for this mapping.", "error")
+        return redirect(url_for("recipes"))
+
+    recipe_rows = (
+        db.session.query(
+            Recipe.id,
+            Recipe.match_type,
+            Recipe.sale_item_ref,
+            Recipe.sale_item_name,
+            Recipe.quantity_per_sale,
+            InventoryItem.name.label("inventory_item_name"),
+            InventoryItem.unit.label("inventory_item_unit"),
+        )
+        .join(InventoryItem, InventoryItem.id == Recipe.inventory_item_id)
+        .filter(Recipe.org_id == org_id, InventoryItem.org_id == org_id)
+        .order_by(Recipe.sale_item_ref.asc(), Recipe.id.asc())
+        .all()
+    )
+    inventory_items = (
+        InventoryItem.query.filter_by(org_id=org_id)
+        .order_by(InventoryItem.name.asc())
+        .all()
+    )
+    return render_template(
+        "business_ops/recipes/index.html",
+        recipes=recipe_rows,
+        inventory_items=inventory_items,
+    )
+
+
+@app.route("/suppliers", methods=["GET", "POST"])
+@login_required
+@business_ops_required
+def suppliers() -> str | Any:
+    org_id = current_org_id()
+    if request.method == "POST":
+        name = (request.form.get("name", "") or "").strip()
+        contact = (request.form.get("contact", "") or "").strip()
+        lead_time_raw = (request.form.get("lead_time_days", "") or "").strip()
+        lead_time_days = None
+        if lead_time_raw:
+            try:
+                lead_time_days = int(lead_time_raw)
+            except ValueError:
+                flash("Invalid lead time.", "error")
+                return redirect(url_for("suppliers"))
+        if not name:
+            flash("Supplier name is required.", "error")
+            return redirect(url_for("suppliers"))
+
+        db.session.add(
+            Supplier(
+                org_id=org_id,
+                name=name,
+                contact=contact or None,
+                lead_time_days=lead_time_days,
+            )
+        )
+        db.session.commit()
+        flash("Supplier saved.", "success")
+        return redirect(url_for("suppliers"))
+
+    rows = Supplier.query.filter_by(org_id=org_id).order_by(Supplier.name.asc()).all()
+    return render_template("business_ops/suppliers/index.html", suppliers=rows)
 
 
 @app.route("/data")

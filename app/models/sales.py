@@ -12,6 +12,8 @@ class SaleReport(db.Model):
         index=True,
     )
     filename = db.Column(db.Text, nullable=False)
+    start_date = db.Column(db.Date, nullable=True, index=True)
+    end_date = db.Column(db.Date, nullable=True, index=True)
     imported_at = db.Column(db.DateTime, nullable=False, default=db.func.now())
     total_revenue = db.Column(db.Numeric(14, 2), nullable=False, server_default=db.text("0"))
 

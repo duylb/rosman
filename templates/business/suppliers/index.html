@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block page_title %}Suppliers{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2 class="section-title">Suppliers</h2>
+  <form method="post" class="inline-form form-row-inline form-section">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    <label>Name <input name="name" required /></label>
+    <label>Contact <input name="contact" /></label>
+    <label>Lead Time (days) <input type="number" name="lead_time_days" min="0" /></label>
+    <button type="submit" class="ui-btn ui-btn--primary">Save</button>
+  </form>
+</section>
+<section class="panel">
+  {% set wrapper_class = 'table-wrapper' %}
+  {% set table_content %}
+  <thead><tr><th>Name</th><th>Contact</th><th>Lead Time</th></tr></thead>
+  <tbody>{% for s in suppliers %}<tr><td>{{ s.name }}</td><td>{{ s.contact or '' }}</td><td>{{ s.lead_time_days or '' }}</td></tr>{% endfor %}</tbody>
+  {% endset %}
+  {% include "components/table.html" %}
+</section>
+{% endblock %}

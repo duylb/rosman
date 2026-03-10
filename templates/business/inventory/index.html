@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block page_title %}Inventory{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2 class="section-title">Inventory</h2>
+  {% set wrapper_class = 'table-wrapper' %}
+  {% set table_content %}
+  <thead>
+    <tr><th>SKU</th><th>Name</th><th>Unit</th><th>Min Stock</th><th>Current Stock</th></tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr {% if (item.current_stock or 0) < (item.minimum_stock_level or 0) %}style="background:#fee2e2;"{% endif %}>
+      <td>{{ item.sku }}</td><td>{{ item.name }}</td><td>{{ item.unit }}</td>
+      <td>{{ item.minimum_stock_level }}</td><td>{{ item.current_stock }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  {% endset %}
+  {% include "components/table.html" %}
+</section>
+{% endblock %}

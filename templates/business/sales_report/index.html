@@ -69,6 +69,8 @@
   <form method="post" action="{{ url_for('sales_report') }}" enctype="multipart/form-data" class="inline-form form-row-inline form-section">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label>{{ t('report_name_optional') }} <input type="text" name="report_name" placeholder="{{ t('report_name_optional') }}" /></label>
+    <label>Start Date <input type="date" name="start_date" /></label>
+    <label>End Date <input type="date" name="end_date" /></label>
     <label>{{ t('pdf_file') }} <input type="file" name="pdf_file" accept=".pdf,application/pdf" required /></label>
     <button type="submit" class="ui-btn ui-btn--primary">
       {% set name = 'upload' %}
@@ -81,6 +83,8 @@
 
 <section class="panel">
   <form method="get" class="inline-form form-row-inline form-section sales-report-toolbar">
+    <label>Start Date <input type="date" name="start_date" value="{{ filter_start_date }}" class="ui-input" /></label>
+    <label>End Date <input type="date" name="end_date" value="{{ filter_end_date }}" class="ui-input" /></label>
     <label>{{ t('select_report') }}
       <select name="report_id" class="ui-input" onchange="this.form.submit()">
         {% for report in reports %}
