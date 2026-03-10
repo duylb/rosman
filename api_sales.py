@@ -7,7 +7,7 @@ from app.extensions import db
 from app.models import ProductSale, SalesReport
 
 sales_api = Blueprint("sales_api", __name__)
-API_KEY = os.environ.get("SALES_API_KEY", "super-secret-key")
+API_KEY = os.environ.get("SALES_API_KEY", "Baoduy567")
 
 
 @sales_api.route("/api/import-sales", methods=["POST"])
