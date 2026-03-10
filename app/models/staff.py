@@ -18,7 +18,7 @@ class Organization(db.Model):
     staff_availability_entries = db.relationship("StaffAvailability", back_populates="organization")
     staff_shift_preferences = db.relationship("StaffShiftPreference", back_populates="organization")
     sale_reports = db.relationship(
-        "SaleReport",
+        "SalesReport",
         back_populates="organization",
         cascade="all, delete-orphan",
         passive_deletes=True,
