@@ -22,18 +22,23 @@
   {% include "components/sidebar_nav.html" %}
 
   <div class="sidebar-footer">
-    <div class="sidebar-branding">
-      <p class="sidebar-branding-text">
-        {{ t('brand_name') }}<br />
-        {{ t('by_author').format(author=app_author) }}<br />
-        {{ app_version }}
-      </p>
+    <div class="sidebar-footer-left">
+      <form method="post" action="{{ url_for('set_language') }}" class="lang-form lang-toggle">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}" />
+        <button type="submit" name="lang" value="en" class="lang-toggle-btn {{ 'active' if lang == 'en' else '' }}" aria-label="Switch language to English">EN</button>
+        <button type="submit" name="lang" value="vi" class="lang-toggle-btn {{ 'active' if lang == 'vi' else '' }}" aria-label="Switch language to Vietnamese">VI</button>
+      </form>
     </div>
-    <form method="post" action="{{ url_for('set_language') }}" class="lang-form lang-toggle">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-      <input type="hidden" name="next" value="{{ request.full_path if request.query_string else request.path }}" />
-      <button type="submit" name="lang" value="en" class="lang-toggle-btn {{ 'active' if lang == 'en' else '' }}" aria-label="Switch language to English">EN</button>
-      <button type="submit" name="lang" value="vi" class="lang-toggle-btn {{ 'active' if lang == 'vi' else '' }}" aria-label="Switch language to Vietnamese">VI</button>
-    </form>
+
+    <div class="sidebar-footer-right">
+      <div class="sidebar-branding">
+        <p class="sidebar-branding-text">
+          {{ t('brand_name') }}<br />
+          {{ t('by_author').format(author=app_author) }}<br />
+          {{ app_version }}
+        </p>
+      </div>
+    </div>
   </div>
 </aside>
