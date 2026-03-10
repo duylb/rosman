@@ -3,7 +3,7 @@ from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
-from app.extensions import db
+from app.extensions import csrf, db
 from app.models import ProductSale, SalesReport
 
 sales_api = Blueprint("sales_api", __name__)
@@ -11,6 +11,7 @@ API_KEY = os.environ.get("SALES_API_KEY", "Baoduy567")
 
 
 @sales_api.route("/api/import-sales", methods=["POST"])
+@csrf.exempt
 def import_sales():
     if request.headers.get("x-api-key") != API_KEY:
         return jsonify({"error": "Unauthorized"}), 401
