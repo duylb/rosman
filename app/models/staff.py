@@ -1,4 +1,4 @@
-from rosman_extensions import db
+from app.extensions import db
 
 
 class Organization(db.Model):

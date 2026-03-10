@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import csv
 import io
-import importlib.util
 import os
 import re
-import sys
 from functools import wraps
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from pathlib import Path
 from typing import Any
 
 import click
@@ -19,37 +16,22 @@ from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from app.extensions import db, csrf, migrate
+from app.models import (
+    Organization,
+    RosterAssignment,
+    RosterVersion,
+    SaleItem,
+    SaleReport,
+    ShiftTemplate,
+    Staff,
+    StaffAvailability,
+    StaffShiftPreference,
+    User,
+)
 from config import DevelopmentConfig, ProductionConfig
 from duy import create_duy_blueprint
 from utils.i18n import get_lang, set_lang, t
-
-BASE_DIR = Path(__file__).resolve().parent
-EXTENSIONS_FILE = BASE_DIR / "app" / "extensions.py"
-_extensions_spec = importlib.util.spec_from_file_location("rosman_extensions", EXTENSIONS_FILE)
-if _extensions_spec is None or _extensions_spec.loader is None:
-    raise RuntimeError(f"Cannot load SQLAlchemy extensions module at {EXTENSIONS_FILE}.")
-_extensions_module = importlib.util.module_from_spec(_extensions_spec)
-_extensions_spec.loader.exec_module(_extensions_module)
-sys.modules["rosman_extensions"] = _extensions_module
-db = _extensions_module.db
-csrf = _extensions_module.csrf
-migrate = _extensions_module.migrate
-MODELS_FILE = BASE_DIR / "app" / "models" / "__init__.py"
-_models_spec = importlib.util.spec_from_file_location("rosman_models", MODELS_FILE)
-if _models_spec is None or _models_spec.loader is None:
-    raise RuntimeError(f"Cannot load models module at {MODELS_FILE}.")
-_models_module = importlib.util.module_from_spec(_models_spec)
-_models_spec.loader.exec_module(_models_module)
-Staff = _models_module.Staff
-ShiftTemplate = _models_module.ShiftTemplate
-RosterAssignment = _models_module.RosterAssignment
-RosterVersion = _models_module.RosterVersion
-StaffAvailability = _models_module.StaffAvailability
-StaffShiftPreference = _models_module.StaffShiftPreference
-User = _models_module.User
-Organization = _models_module.Organization
-SaleReport = _models_module.SaleReport
-SaleItem = _models_module.SaleItem
 
 app = Flask(__name__)
 app_env = os.environ.get("APP_ENV", os.environ.get("FLASK_ENV", "development")).lower()
