@@ -12,11 +12,17 @@
   </form>
 </section>
 <section class="panel">
-  {% set wrapper_class = 'table-wrapper' %}
-  {% set table_content %}
-  <thead><tr><th>Name</th><th>Contact</th><th>Lead Time</th></tr></thead>
-  <tbody>{% for s in suppliers %}<tr><td>{{ s.name }}</td><td>{{ s.contact or '' }}</td><td>{{ s.lead_time_days or '' }}</td></tr>{% endfor %}</tbody>
-  {% endset %}
-  {% include "components/table.html" %}
+  {% if suppliers %}
+    {% set wrapper_class = 'table-wrapper' %}
+    {% set table_content %}
+    <thead><tr><th>Name</th><th>Contact</th><th>Lead Time</th><th>Inventory Items</th></tr></thead>
+    <tbody>{% for s in suppliers %}<tr><td>{{ s.name }}</td><td>{{ s.contact or '' }}</td><td>{{ s.lead_time_days or '' }}</td><td>{{ s.inventory_count }}</td></tr>{% endfor %}</tbody>
+    {% endset %}
+    {% include "components/table.html" %}
+  {% else %}
+    {% set title = 'Suppliers' %}
+    {% set description = 'No suppliers yet.' %}
+    {% include "components/empty_state.html" %}
+  {% endif %}
 </section>
 {% endblock %}

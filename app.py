@@ -13,6 +13,7 @@ import click
 import pdfplumber
 from flask import Flask, Response, abort, flash, g, jsonify, redirect, render_template, request, session, url_for
 from sqlalchemy import func, inspect, text
+from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -346,6 +347,13 @@ def ensure_business_dummy_data(org_id: int) -> None:
 
     if made_changes:
         db.session.commit()
+
+
+def maybe_seed_business_dummy_data(org_id: int) -> None:
+    # Keep demo data generation out of production-like environments.
+    if app_env == "production":
+        return
+    ensure_business_dummy_data(org_id)
 
 
 def has_payroll_access() -> bool:
@@ -2386,7 +2394,7 @@ def payroll() -> str | Response:
 def sales_report() -> str | Response:
     org_id = current_org_id()
     if request.method == "GET":
-        ensure_business_dummy_data(org_id)
+        maybe_seed_business_dummy_data(org_id)
     filter_start_raw = request.args.get("start_date", "").strip()
     filter_end_raw = request.args.get("end_date", "").strip()
     filter_start_obj = parse_iso_date(filter_start_raw) if filter_start_raw else None
@@ -2597,6 +2605,15 @@ def sales_report() -> str | Response:
             }
             for prefix, category_name, type_name in prefix_definitions
         }
+        grouped_reports_map["OTHER"] = {
+            "prefix": "OTHER",
+            "category": "Uncategorized",
+            "type": "Other",
+            "group_label": "Other / Uncategorized",
+            "total_quantity": 0,
+            "total_revenue": Decimal("0.00"),
+            "sale_items": [],
+        }
 
         for row in grouped_rows:
             item_code = str(row.sku or "").strip().upper()
@@ -2605,12 +2622,9 @@ def sales_report() -> str | Response:
                 if item_code.startswith(prefix):
                     matched_prefix = prefix
                     break
-            if matched_prefix is None:
-                continue
-
-            group_entry = grouped_reports_map[matched_prefix]
+            group_entry = grouped_reports_map[matched_prefix] if matched_prefix else grouped_reports_map["OTHER"]
             group_entry["total_quantity"] += int(row.quantity or 0)
-            group_entry["total_revenue"] += Decimal(str(row.revenue or 0))
+            group_entry["total_revenue"] += Decimal(str(row.net_revenue or 0))
             group_entry["sale_items"].append(row)
 
         grouped_reports = [
@@ -2685,9 +2699,10 @@ def sales_report() -> str | Response:
 @business_ops_required
 def inventory() -> str:
     org_id = current_org_id()
-    ensure_business_dummy_data(org_id)
+    maybe_seed_business_dummy_data(org_id)
     items = (
-        InventoryItem.query.filter_by(org_id=org_id)
+        InventoryItem.query.options(selectinload(InventoryItem.supplier))
+        .filter_by(org_id=org_id)
         .order_by(InventoryItem.name.asc())
         .all()
     )
@@ -2700,7 +2715,7 @@ def inventory() -> str:
 def recipes() -> str | Any:
     org_id = current_org_id()
     if request.method == "GET":
-        ensure_business_dummy_data(org_id)
+        maybe_seed_business_dummy_data(org_id)
 
     if request.method == "POST":
         sale_item_ref = (request.form.get("sale_item_ref", "") or "").strip().upper()
@@ -2715,6 +2730,12 @@ def recipes() -> str | Any:
         if not sale_item_ref or not inventory_item_id_raw or not quantity_raw:
             flash("Recipe fields are required.", "error")
             return redirect(url_for("recipes"))
+        if not re.match(r"^[A-Z0-9][A-Z0-9-]*$", sale_item_ref):
+            flash("Sale Ref must contain only A-Z, 0-9, and '-'.", "error")
+            return redirect(url_for("recipes"))
+        if match_type == "prefix" and len(sale_item_ref) > 12:
+            flash("Prefix is too long.", "error")
+            return redirect(url_for("recipes"))
 
         try:
             inventory_item_id = int(inventory_item_id_raw)
@@ -2725,6 +2746,9 @@ def recipes() -> str | Any:
 
         if quantity_per_sale <= 0:
             flash("Quantity per sale must be greater than zero.", "error")
+            return redirect(url_for("recipes"))
+        if quantity_per_sale > Decimal("9999.999"):
+            flash("Quantity per sale is too large.", "error")
             return redirect(url_for("recipes"))
 
         inventory_item = InventoryItem.query.filter_by(id=inventory_item_id, org_id=org_id).first()
@@ -2783,7 +2807,7 @@ def recipes() -> str | Any:
 def suppliers() -> str | Any:
     org_id = current_org_id()
     if request.method == "GET":
-        ensure_business_dummy_data(org_id)
+        maybe_seed_business_dummy_data(org_id)
     if request.method == "POST":
         name = (request.form.get("name", "") or "").strip()
         contact = (request.form.get("contact", "") or "").strip()
@@ -2795,8 +2819,18 @@ def suppliers() -> str | Any:
             except ValueError:
                 flash("Invalid lead time.", "error")
                 return redirect(url_for("suppliers"))
+            if lead_time_days < 0:
+                flash("Lead time must be zero or greater.", "error")
+                return redirect(url_for("suppliers"))
         if not name:
             flash("Supplier name is required.", "error")
+            return redirect(url_for("suppliers"))
+        duplicate_supplier = Supplier.query.filter(
+            Supplier.org_id == org_id,
+            func.lower(Supplier.name) == name.lower(),
+        ).first()
+        if duplicate_supplier is not None:
+            flash("Supplier already exists.", "error")
             return redirect(url_for("suppliers"))
 
         db.session.add(
@@ -2811,8 +2845,24 @@ def suppliers() -> str | Any:
         flash("Supplier saved.", "success")
         return redirect(url_for("suppliers"))
 
-    rows = Supplier.query.filter_by(org_id=org_id).order_by(Supplier.name.asc()).all()
-    return render_template("business/suppliers/index.html", suppliers=rows)
+    supplier_rows = (
+        db.session.query(
+            Supplier.id,
+            Supplier.name,
+            Supplier.contact,
+            Supplier.lead_time_days,
+            func.count(InventoryItem.id).label("inventory_count"),
+        )
+        .outerjoin(
+            InventoryItem,
+            (InventoryItem.supplier_id == Supplier.id) & (InventoryItem.org_id == org_id),
+        )
+        .filter(Supplier.org_id == org_id)
+        .group_by(Supplier.id, Supplier.name, Supplier.contact, Supplier.lead_time_days)
+        .order_by(Supplier.name.asc())
+        .all()
+    )
+    return render_template("business/suppliers/index.html", suppliers=supplier_rows)
 
 
 @app.route("/data")
@@ -3356,4 +3406,3 @@ with app.app_context():
 
 if __name__ == "__main__":
     app.run(debug=True)
-

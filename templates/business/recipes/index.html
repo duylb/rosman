@@ -3,6 +3,9 @@
 {% block content %}
 <section class="panel">
   <h2 class="section-title">Recipes</h2>
+  {% if not inventory_items %}
+  <p class="hint">No inventory items found. Add inventory first before creating recipes.</p>
+  {% endif %}
   <form method="post" class="inline-form form-row-inline form-section">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label>Match Type
@@ -11,24 +14,30 @@
     <label>Sale Ref <input name="sale_item_ref" required /></label>
     <label>Sale Name <input name="sale_item_name" /></label>
     <label>Inventory Item
-      <select name="inventory_item_id" required>
+      <select name="inventory_item_id" required {% if not inventory_items %}disabled{% endif %}>
         {% for item in inventory_items %}<option value="{{ item.id }}">{{ item.name }} ({{ item.unit }})</option>{% endfor %}
       </select>
     </label>
     <label>Qty/Sale <input type="number" step="0.001" name="quantity_per_sale" required /></label>
-    <button type="submit" class="ui-btn ui-btn--primary">Save</button>
+    <button type="submit" class="ui-btn ui-btn--primary" {% if not inventory_items %}disabled{% endif %}>Save</button>
   </form>
 </section>
 <section class="panel">
-  {% set wrapper_class = 'table-wrapper' %}
-  {% set table_content %}
-  <thead><tr><th>Type</th><th>Sale Ref</th><th>Sale Name</th><th>Inventory</th><th>Qty/Sale</th></tr></thead>
-  <tbody>
-  {% for row in recipes %}
-    <tr><td>{{ row.match_type }}</td><td>{{ row.sale_item_ref }}</td><td>{{ row.sale_item_name or '' }}</td><td>{{ row.inventory_item_name }} ({{ row.inventory_item_unit }})</td><td>{{ row.quantity_per_sale }}</td></tr>
-  {% endfor %}
-  </tbody>
-  {% endset %}
-  {% include "components/table.html" %}
+  {% if recipes %}
+    {% set wrapper_class = 'table-wrapper' %}
+    {% set table_content %}
+    <thead><tr><th>Type</th><th>Sale Ref</th><th>Sale Name</th><th>Inventory</th><th>Qty/Sale</th></tr></thead>
+    <tbody>
+    {% for row in recipes %}
+      <tr><td>{{ row.match_type }}</td><td>{{ row.sale_item_ref }}</td><td>{{ row.sale_item_name or '' }}</td><td>{{ row.inventory_item_name }} ({{ row.inventory_item_unit }})</td><td>{{ row.quantity_per_sale }}</td></tr>
+    {% endfor %}
+    </tbody>
+    {% endset %}
+    {% include "components/table.html" %}
+  {% else %}
+    {% set title = 'Recipes' %}
+    {% set description = 'No recipe mappings yet.' %}
+    {% include "components/empty_state.html" %}
+  {% endif %}
 </section>
 {% endblock %}

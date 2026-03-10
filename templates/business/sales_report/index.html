@@ -147,7 +147,7 @@
         <span>
           Total Items: {{ report_group.total_quantity }}
           &nbsp;|&nbsp;
-          Total Revenue: {{ report_group.total_revenue|money }}
+          Total Net Revenue: {{ report_group.total_revenue|money }}
         </span>
       </summary>
 
@@ -160,25 +160,25 @@
               <th>
                 <button type="button" class="sales-sort-btn" onclick="sortSalesTable(this, 0, 'string')">
                   <span>{{ t('item_code') }}</span>
-                  <span class="sales-sort-icon" aria-hidden="true">↕</span>
+                  <span class="sales-sort-icon" aria-hidden="true">&#8597;</span>
                 </button>
               </th>
               <th>
                 <button type="button" class="sales-sort-btn" onclick="sortSalesTable(this, 1, 'string')">
                   <span>{{ t('name') }}</span>
-                  <span class="sales-sort-icon" aria-hidden="true">↕</span>
+                  <span class="sales-sort-icon" aria-hidden="true">&#8597;</span>
                 </button>
               </th>
               <th>
                 <button type="button" class="sales-sort-btn" onclick="sortSalesTable(this, 2, 'number')">
                   <span>{{ t('quantity_sold') }}</span>
-                  <span class="sales-sort-icon" aria-hidden="true">↕</span>
+                  <span class="sales-sort-icon" aria-hidden="true">&#8597;</span>
                 </button>
               </th>
               <th>
                 <button type="button" class="sales-sort-btn" onclick="sortSalesTable(this, 3, 'number')">
-                  <span>{{ t('revenue') }}</span>
-                  <span class="sales-sort-icon" aria-hidden="true">↕</span>
+                  <span>{{ t('total_net_revenue') }}</span>
+                  <span class="sales-sort-icon" aria-hidden="true">&#8597;</span>
                 </button>
               </th>
             </tr>
@@ -189,7 +189,7 @@
               <td>{{ item.sku }}</td>
               <td>{{ item.name }}</td>
               <td>{{ item.quantity }}</td>
-              <td>{{ item.revenue|money }}</td>
+              <td>{{ item.net_revenue|money }}</td>
             </tr>
             {% endfor %}
             {% if not report_group.sale_items %}
@@ -259,7 +259,7 @@
 
     const icons = table.querySelectorAll('.sales-sort-icon');
     icons.forEach((icon, index) => {
-      icon.textContent = index === columnIndex ? (nextDirection === 'asc' ? '↑' : '↓') : '↕';
+      icon.textContent = index === columnIndex ? (nextDirection === 'asc' ? '\u2191' : '\u2193') : '\u2195';
     });
   }
 </script>

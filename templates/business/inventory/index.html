@@ -3,20 +3,42 @@
 {% block content %}
 <section class="panel">
   <h2 class="section-title">Inventory</h2>
-  {% set wrapper_class = 'table-wrapper' %}
-  {% set table_content %}
-  <thead>
-    <tr><th>SKU</th><th>Name</th><th>Unit</th><th>Min Stock</th><th>Current Stock</th></tr>
-  </thead>
-  <tbody>
-    {% for item in items %}
-    <tr {% if (item.current_stock or 0) < (item.minimum_stock_level or 0) %}style="background:#fee2e2;"{% endif %}>
-      <td>{{ item.sku }}</td><td>{{ item.name }}</td><td>{{ item.unit }}</td>
-      <td>{{ item.minimum_stock_level }}</td><td>{{ item.current_stock }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-  {% endset %}
-  {% include "components/table.html" %}
+  {% if items %}
+    {% set wrapper_class = 'table-wrapper' %}
+    {% set table_content %}
+    <thead>
+      <tr>
+        <th>SKU</th>
+        <th>Name</th>
+        <th>Supplier</th>
+        <th>Unit</th>
+        <th>Unit Cost</th>
+        <th>Min Stock</th>
+        <th>Current Stock</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      {% set is_low = (item.current_stock or 0) < (item.minimum_stock_level or 0) %}
+      <tr {% if is_low %}style="background:#fee2e2;"{% endif %}>
+        <td>{{ item.sku }}</td>
+        <td>{{ item.name }}</td>
+        <td>{{ item.supplier.name if item.supplier else '-' }}</td>
+        <td>{{ item.unit }}</td>
+        <td>{{ item.unit_cost|money if item.unit_cost is not none else '-' }}</td>
+        <td>{{ item.minimum_stock_level }}</td>
+        <td>{{ item.current_stock }}</td>
+        <td>{{ 'Low Stock' if is_low else 'In Stock' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    {% endset %}
+    {% include "components/table.html" %}
+  {% else %}
+    {% set title = 'Inventory' %}
+    {% set description = 'No inventory items yet.' %}
+    {% include "components/empty_state.html" %}
+  {% endif %}
 </section>
 {% endblock %}
