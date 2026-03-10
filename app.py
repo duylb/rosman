@@ -582,6 +582,40 @@ def ensure_sales_schema_compatibility() -> None:
     db.session.commit()
 
 
+def ensure_inventory_schema_compatibility() -> None:
+    inspector = inspect(db.engine)
+    if not inspector.has_table("inventory_items"):
+        return
+
+    dialect_name = db.engine.dialect.name.lower()
+    if dialect_name == "postgresql":
+        db.session.execute(text("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS unit VARCHAR(50)"))
+        db.session.execute(text("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS supplier_id INTEGER"))
+        db.session.execute(
+            text("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS minimum_stock_level FLOAT DEFAULT 0")
+        )
+        db.session.execute(
+            text("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS current_stock FLOAT DEFAULT 0")
+        )
+        db.session.execute(text("ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS unit_cost FLOAT DEFAULT 0"))
+        db.session.commit()
+        return
+
+    # SQLite and other dialects without IF NOT EXISTS support.
+    inventory_columns = {col["name"] for col in inspector.get_columns("inventory_items")}
+    if "unit" not in inventory_columns:
+        db.session.execute(text("ALTER TABLE inventory_items ADD COLUMN unit VARCHAR(50)"))
+    if "supplier_id" not in inventory_columns:
+        db.session.execute(text("ALTER TABLE inventory_items ADD COLUMN supplier_id INTEGER"))
+    if "minimum_stock_level" not in inventory_columns:
+        db.session.execute(text("ALTER TABLE inventory_items ADD COLUMN minimum_stock_level FLOAT DEFAULT 0"))
+    if "current_stock" not in inventory_columns:
+        db.session.execute(text("ALTER TABLE inventory_items ADD COLUMN current_stock FLOAT DEFAULT 0"))
+    if "unit_cost" not in inventory_columns:
+        db.session.execute(text("ALTER TABLE inventory_items ADD COLUMN unit_cost FLOAT DEFAULT 0"))
+    db.session.commit()
+
+
 def ensure_user_schema_compatibility() -> None:
     inspector = inspect(db.engine)
     if not inspector.has_table("users"):
@@ -3158,6 +3192,7 @@ with app.app_context():
         ensure_user_schema_compatibility()
         ensure_staff_schema_compatibility()
         ensure_sales_schema_compatibility()
+        ensure_inventory_schema_compatibility()
         ensure_roster_schema_compatibility()
     except SQLAlchemyError:
         db.session.rollback()
