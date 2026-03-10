@@ -1,4 +1,5 @@
 import os
+import traceback
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
@@ -16,13 +17,14 @@ def import_sales():
     if request.headers.get("x-api-key") != API_KEY:
         return jsonify({"error": "Unauthorized"}), 401
 
-    data = request.get_json(silent=True) or {}
-
     try:
+        data = request.get_json()
+        print("Incoming JSON:", data)
+
         report = SalesReport(
             report_title=data["report_title"],
-            start_date=datetime.strptime(data["start_date"], "%d/%m/%Y").date(),
-            end_date=datetime.strptime(data["end_date"], "%d/%m/%Y").date(),
+            start_date=datetime.strptime(data["start_date"], "%d/%m/%Y"),
+            end_date=datetime.strptime(data["end_date"], "%d/%m/%Y"),
             branch=data["branch"],
             created_datetime=datetime.strptime(data["created_datetime"], "%d/%m/%Y %H:%M"),
             total_products=data["summary"]["total_products"],
@@ -43,15 +45,13 @@ def import_sales():
                 revenue=p["revenue"],
                 return_units=p["return_units"],
                 return_value=p["return_value"],
-                net_revenue=float(p["revenue"]) - float(p["return_value"]),
             )
             db.session.add(product)
 
         db.session.commit()
-        return jsonify({"status": "success", "report_id": report.id}), 201
-    except (KeyError, TypeError, ValueError) as exc:
+        return {"status": "success", "report_id": report.id}
+    except Exception as e:
         db.session.rollback()
-        return jsonify({"status": "error", "message": f"Invalid payload: {exc}"}), 400
-    except Exception:
-        db.session.rollback()
-        return jsonify({"status": "error", "message": "Failed to import sales"}), 500
+        print("ERROR:", str(e))
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}, 500
