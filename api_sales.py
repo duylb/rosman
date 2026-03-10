@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
@@ -6,10 +7,14 @@ from app.extensions import db
 from app.models import ProductSale, SalesReport
 
 sales_api = Blueprint("sales_api", __name__)
+API_KEY = os.environ.get("SALES_API_KEY", "super-secret-key")
 
 
 @sales_api.route("/api/import-sales", methods=["POST"])
 def import_sales():
+    if request.headers.get("x-api-key") != API_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
+
     data = request.get_json(silent=True) or {}
 
     try:
