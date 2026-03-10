@@ -200,6 +200,154 @@ def extract_sales_items_from_pdf(pdf_bytes: bytes) -> list[dict[str, Any]]:
     return parsed_rows
 
 
+def ensure_business_dummy_data(org_id: int) -> None:
+    if org_id <= 0:
+        return
+
+    made_changes = False
+    latest_report = (
+        SaleReport.query.filter_by(org_id=org_id)
+        .order_by(SaleReport.imported_at.desc(), SaleReport.id.desc())
+        .first()
+    )
+
+    if latest_report is None:
+        today_obj = date.today()
+        latest_report = SaleReport(
+            org_id=org_id,
+            filename=f"dummy_sales_report_{today_obj.strftime('%Y%m%d')}.pdf",
+            start_date=today_obj - timedelta(days=6),
+            end_date=today_obj,
+            total_revenue=Decimal("0.00"),
+        )
+        db.session.add(latest_report)
+        db.session.flush()
+
+        dummy_sales_items: list[dict[str, Any]] = [
+            {"sku": "BC001", "name": "Americano", "quantity": 128, "revenue": Decimal("6400000.00")},
+            {"sku": "BC002", "name": "Cappuccino", "quantity": 96, "revenue": Decimal("5760000.00")},
+            {"sku": "BT001", "name": "Peach Tea", "quantity": 84, "revenue": Decimal("3360000.00")},
+            {"sku": "FL001", "name": "Caesar Salad", "quantity": 52, "revenue": Decimal("4160000.00")},
+            {"sku": "FE001", "name": "Beef Steak", "quantity": 38, "revenue": Decimal("9120000.00")},
+            {"sku": "FD001", "name": "Tiramisu", "quantity": 47, "revenue": Decimal("3290000.00")},
+        ]
+        total_revenue = Decimal("0.00")
+        for row in dummy_sales_items:
+            category, item_type = get_category_info(str(row["sku"]))
+            row_revenue = Decimal(str(row["revenue"])).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            db.session.add(
+                SaleItem(
+                    sale_report_id=latest_report.id,
+                    sku=str(row["sku"]),
+                    name=str(row["name"]),
+                    quantity=int(row["quantity"]),
+                    revenue=row_revenue,
+                    returns=0,
+                    return_value=Decimal("0.00"),
+                    net_revenue=row_revenue,
+                    category=category,
+                    type=item_type,
+                )
+            )
+            total_revenue += row_revenue
+        latest_report.total_revenue = total_revenue.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        made_changes = True
+
+    source_sale_items = (
+        SaleItem.query.filter_by(sale_report_id=latest_report.id)
+        .order_by(SaleItem.net_revenue.desc(), SaleItem.name.asc())
+        .limit(12)
+        .all()
+    )
+    if not source_sale_items:
+        source_sale_items = (
+            SaleItem.query.join(SaleReport, SaleReport.id == SaleItem.sale_report_id)
+            .filter(SaleReport.org_id == org_id)
+            .order_by(SaleReport.imported_at.desc(), SaleReport.id.desc(), SaleItem.net_revenue.desc())
+            .limit(12)
+            .all()
+        )
+    if not source_sale_items:
+        return
+
+    suppliers = Supplier.query.filter_by(org_id=org_id).order_by(Supplier.id.asc()).all()
+    if not suppliers:
+        supplier_seed = [
+            ("Highland Beverage Supply", "beverage@highland.local", 2),
+            ("Metro Fresh Foods", "procurement@metrofresh.local", 3),
+            ("Green Farm Produce", "ops@greenfarm.local", 1),
+        ]
+        for name, contact, lead_time_days in supplier_seed:
+            db.session.add(
+                Supplier(
+                    org_id=org_id,
+                    name=name,
+                    contact=contact,
+                    lead_time_days=lead_time_days,
+                )
+            )
+        db.session.flush()
+        suppliers = Supplier.query.filter_by(org_id=org_id).order_by(Supplier.id.asc()).all()
+        made_changes = True
+
+    inventory_items = InventoryItem.query.filter_by(org_id=org_id).order_by(InventoryItem.id.asc()).all()
+    if not inventory_items:
+        for idx, sale_item in enumerate(source_sale_items):
+            supplier = suppliers[idx % len(suppliers)] if suppliers else None
+            unit = "kg" if str(sale_item.category or "").lower() == "food" else "litre"
+            sold_qty = max(1, int(sale_item.quantity or 1))
+            suggested_cost = (
+                Decimal(str(sale_item.net_revenue or 0))
+                / Decimal(sold_qty)
+                * Decimal("0.35")
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            db.session.add(
+                InventoryItem(
+                    org_id=org_id,
+                    supplier_id=supplier.id if supplier else None,
+                    sku=f"INV-{sale_item.sku}",
+                    name=f"{sale_item.name} Base Ingredient",
+                    unit=unit,
+                    minimum_stock_level=Decimal(str(max(10, sold_qty // 2))).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    ),
+                    current_stock=Decimal(str(max(30, sold_qty * 2))).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    ),
+                    unit_cost=suggested_cost,
+                )
+            )
+        db.session.flush()
+        inventory_items = InventoryItem.query.filter_by(org_id=org_id).order_by(InventoryItem.id.asc()).all()
+        made_changes = True
+
+    if not Recipe.query.filter_by(org_id=org_id).first() and inventory_items:
+        inventory_by_sale_sku = {
+            str(item.sku).replace("INV-", "", 1).upper(): item for item in inventory_items if item.sku
+        }
+        for idx, sale_item in enumerate(source_sale_items):
+            inventory_item = inventory_by_sale_sku.get(str(sale_item.sku).upper())
+            if inventory_item is None:
+                inventory_item = inventory_items[idx % len(inventory_items)]
+            quantity_per_sale = Decimal("0.350")
+            if str(sale_item.category or "").lower() == "beverage":
+                quantity_per_sale = Decimal("0.180")
+            db.session.add(
+                Recipe(
+                    org_id=org_id,
+                    match_type="exact",
+                    sale_item_ref=str(sale_item.sku).upper(),
+                    sale_item_name=sale_item.name,
+                    inventory_item_id=inventory_item.id,
+                    quantity_per_sale=quantity_per_sale,
+                )
+            )
+        made_changes = True
+
+    if made_changes:
+        db.session.commit()
+
+
 def has_payroll_access() -> bool:
     user = getattr(g, "user", None)
     role = (user.role if user else "") or ""
@@ -2237,6 +2385,8 @@ def payroll() -> str | Response:
 @business_ops_required
 def sales_report() -> str | Response:
     org_id = current_org_id()
+    if request.method == "GET":
+        ensure_business_dummy_data(org_id)
     filter_start_raw = request.args.get("start_date", "").strip()
     filter_end_raw = request.args.get("end_date", "").strip()
     filter_start_obj = parse_iso_date(filter_start_raw) if filter_start_raw else None
@@ -2535,6 +2685,7 @@ def sales_report() -> str | Response:
 @business_ops_required
 def inventory() -> str:
     org_id = current_org_id()
+    ensure_business_dummy_data(org_id)
     items = (
         InventoryItem.query.filter_by(org_id=org_id)
         .order_by(InventoryItem.name.asc())
@@ -2548,6 +2699,8 @@ def inventory() -> str:
 @business_ops_required
 def recipes() -> str | Any:
     org_id = current_org_id()
+    if request.method == "GET":
+        ensure_business_dummy_data(org_id)
 
     if request.method == "POST":
         sale_item_ref = (request.form.get("sale_item_ref", "") or "").strip().upper()
@@ -2629,6 +2782,8 @@ def recipes() -> str | Any:
 @business_ops_required
 def suppliers() -> str | Any:
     org_id = current_org_id()
+    if request.method == "GET":
+        ensure_business_dummy_data(org_id)
     if request.method == "POST":
         name = (request.form.get("name", "") or "").strip()
         contact = (request.form.get("contact", "") or "").strip()
@@ -3201,6 +3356,4 @@ with app.app_context():
 
 if __name__ == "__main__":
     app.run(debug=True)
-
-
 
