@@ -1090,23 +1090,6 @@ app.register_blueprint(
 )
 app.register_blueprint(sales_api)
 
-
-@app.route("/api/fix-product-sequence")
-def fix_product_sequence() -> Any:
-    db.session.execute(
-        text(
-            """
-            SELECT setval(
-                'product_sales_id_seq',
-                (SELECT COALESCE(MAX(id), 1) FROM product_sales)
-            )
-            """
-        )
-    )
-    db.session.commit()
-    return {"status": "sequence fixed"}
-
-
 def auto_schedule_week(week_start: date) -> tuple[int, int, int]:
     org_id = current_org_id()
     staff_rows = Staff.query.filter_by(org_id=org_id, active=1).order_by(Staff.name).all()
