@@ -23,8 +23,26 @@ class Organization(db.Model):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    suppliers = db.relationship(
+        "Supplier",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     inventory_items = db.relationship(
         "InventoryItem",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    recipes = db.relationship(
+        "Recipe",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    stock_logs = db.relationship(
+        "StockLog",
         back_populates="organization",
         cascade="all, delete-orphan",
         passive_deletes=True,
