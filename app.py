@@ -2540,7 +2540,7 @@ def inventory() -> str:
         .order_by(InventoryItem.name.asc())
         .all()
     )
-    return render_template("business_ops/inventory/index.html", items=items)
+    return render_template("business/inventory/index.html", items=items)
 
 
 @app.route("/recipes", methods=["GET", "POST"])
@@ -2618,7 +2618,7 @@ def recipes() -> str | Any:
         .all()
     )
     return render_template(
-        "business_ops/recipes/index.html",
+        "business/recipes/index.html",
         recipes=recipe_rows,
         inventory_items=inventory_items,
     )
@@ -2657,7 +2657,7 @@ def suppliers() -> str | Any:
         return redirect(url_for("suppliers"))
 
     rows = Supplier.query.filter_by(org_id=org_id).order_by(Supplier.name.asc()).all()
-    return render_template("business_ops/suppliers/index.html", suppliers=rows)
+    return render_template("business/suppliers/index.html", suppliers=rows)
 
 
 @app.route("/data")
