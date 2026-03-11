@@ -270,9 +270,21 @@
 
     try {
       const response = await fetch(url, { headers: { Accept: "application/json" } });
-      const payload = await response.json();
+      const contentType = (response.headers.get("content-type") || "").toLowerCase();
+      let payload = null;
+
+      if (contentType.includes("application/json")) {
+        payload = await response.json();
+      } else {
+        const rawBody = await response.text();
+        if (response.status === 401 || response.status === 403 || response.redirected || rawBody.toLowerCase().includes("<!doctype")) {
+          throw new Error("Your session may have expired. Please refresh and log in again.");
+        }
+        throw new Error("Sales report API returned an unexpected response format.");
+      }
+
       if (!response.ok) {
-        throw new Error(payload.message || "Failed to load report.");
+        throw new Error((payload && payload.message) || "Failed to load report.");
       }
 
       state.rows = Array.isArray(payload.products) ? payload.products : [];

@@ -393,6 +393,8 @@ def load_current_user() -> None:
             next_url = request.full_path if request.query_string else request.path
             if not next_url.startswith("/"):
                 next_url = url_for("dashboard")
+            if request.path.startswith("/api/"):
+                return jsonify({"status": "error", "message": "Unauthorized"}), 401
             return redirect(url_for("login", next=next_url))
 
 
@@ -402,12 +404,21 @@ def current_org_id() -> int:
     return int(g.user.org_id)
 
 
+def is_api_request() -> bool:
+    if request.path.startswith("/api/"):
+        return True
+    accept_header = (request.headers.get("Accept") or "").lower()
+    return "application/json" in accept_header
+
+
 def login_required(func: Any) -> Any:
     @wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         if getattr(g, "user", None) is not None:
             return func(*args, **kwargs)
         next_url = request.full_path if request.query_string else request.path
+        if is_api_request():
+            return jsonify({"status": "error", "message": "Unauthorized"}), 401
         return redirect(url_for("login", next=next_url))
 
     return wrapper
@@ -445,6 +456,8 @@ def business_ops_required(func: Any) -> Any:
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         if is_business_ops_enabled(getattr(g, "user", None)):
             return func(*args, **kwargs)
+        if is_api_request():
+            return jsonify({"status": "error", "message": "Business operations module is disabled."}), 403
         flash("msg_module_business_ops_disabled", "error")
         return redirect(url_for("dashboard"))
 
@@ -624,7 +637,7 @@ def parse_report_range() -> tuple[date, date]:
 
 def build_sales_report_payload(org_id: int, start_obj: date, end_obj: date) -> dict[str, Any]:
     reports = (
-        SaleReport.query.options(selectinload(SaleReport.sale_items))
+        SaleReport.query.options(selectinload(SaleReport.sales_items))
         .filter(SaleReport.org_id == org_id)
         .order_by(SaleReport.imported_at.desc(), SaleReport.id.desc())
         .all()
