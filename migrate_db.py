@@ -15,21 +15,42 @@ def run() -> None:
     item_id_def = "SERIAL PRIMARY KEY" if dialect == "postgresql" else "INTEGER PRIMARY KEY"
 
     with engine.begin() as conn:
-        # 1) Drop all sales-related tables/data.
-        for table_name in ["sales_items", "sales_reports", "product_sales", "sale_items", "sale_reports", "sales"]:
+        # 1) Remove old sales/inventory/supplier architecture completely.
+        for table_name in [
+            "sales_items",
+            "sales_reports",
+            "product_sales",
+            "sale_items",
+            "sale_reports",
+            "sales",
+            "stock_logs",
+            "recipes",
+            "inventory_items",
+            "suppliers",
+            "inventory",
+        ]:
             conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
 
-        # 2) Recreate n8n-ready sales schema from scratch.
+        # 2) Recreate clean report-ingestion schema.
         conn.execute(
             text(
                 f"""
                 CREATE TABLE sales_reports (
                     id {report_id_def},
-                    organization_id INTEGER NOT NULL,
+                    org_id INTEGER NOT NULL,
+                    report_title VARCHAR(255) NOT NULL,
                     start_date DATE NOT NULL,
                     end_date DATE NOT NULL,
+                    branch VARCHAR(160),
                     created_datetime TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE
+                    total_products INTEGER NOT NULL DEFAULT 0,
+                    total_units_sold INTEGER NOT NULL DEFAULT 0,
+                    total_revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    total_return_units INTEGER NOT NULL DEFAULT 0,
+                    total_return_value NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    net_revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (org_id) REFERENCES organizations (id) ON DELETE CASCADE
                 )
                 """
             )
@@ -44,26 +65,22 @@ def run() -> None:
                     item_name VARCHAR(255) NOT NULL,
                     units_sold INTEGER NOT NULL DEFAULT 0,
                     revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
-                    returned_quantity INTEGER NOT NULL DEFAULT 0,
-                    returned_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+                    return_quantity INTEGER NOT NULL DEFAULT 0,
+                    return_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
                     net_revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
-                    category VARCHAR(120) NOT NULL DEFAULT 'Uncategorized',
-                    type VARCHAR(120) NOT NULL DEFAULT 'Other',
                     FOREIGN KEY (report_id) REFERENCES sales_reports (id) ON DELETE CASCADE
                 )
                 """
             )
         )
 
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_organization_id ON sales_reports (organization_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_org_id ON sales_reports (org_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_start_date ON sales_reports (start_date)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_end_date ON sales_reports (end_date)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_report_id ON sales_items (report_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_item_code ON sales_items (item_code)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_category ON sales_items (category)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_type ON sales_items (type)"))
 
-    print("Sales database reset and n8n-ready schema created.")
+    print("Sales architecture reset completed with new report schema.")
 
 
 if __name__ == "__main__":

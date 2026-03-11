@@ -31,18 +31,6 @@
     <span class="nav-icon">{% set name = 'chart' %}{% include "components/icon.html" %}</span>
     <span class="nav-label">{{ t('nav_sales_report') }}</span>
   </a>
-  <a class="{{ 'active' if request.path.startswith('/inventory') else '' }}" href="{{ url_for('inventory') }}" aria-label="Inventory">
-    <span class="nav-icon">{% set name = 'box' %}{% include "components/icon.html" %}</span>
-    <span class="nav-label">Inventory</span>
-  </a>
-  <a class="{{ 'active' if request.path.startswith('/recipes') else '' }}" href="{{ url_for('recipes') }}" aria-label="Recipes">
-    <span class="nav-icon">{% set name = 'flask' %}{% include "components/icon.html" %}</span>
-    <span class="nav-label">Recipes</span>
-  </a>
-  <a class="{{ 'active' if request.path.startswith('/suppliers') else '' }}" href="{{ url_for('suppliers') }}" aria-label="Suppliers">
-    <span class="nav-icon">{% set name = 'truck' %}{% include "components/icon.html" %}</span>
-    <span class="nav-label">Suppliers</span>
-  </a>
   {% endif %}
   <a class="{{ 'active' if request.path.startswith('/data') else '' }}" href="{{ url_for('data_page') }}" aria-label="{{ t('nav_data_io') }}">
     <span class="nav-icon">{% set name = 'arrows' %}{% include "components/icon.html" %}</span>

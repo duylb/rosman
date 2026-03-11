@@ -70,10 +70,10 @@
 
   function updateSummary(summary) {
     document.getElementById("stat-total-revenue").textContent = formatMoney(summary.total_revenue);
-    document.getElementById("stat-returned-amount").textContent = formatMoney(summary.total_returned_amount);
+    document.getElementById("stat-returned-amount").textContent = formatMoney(summary.total_return_value);
     document.getElementById("stat-net-revenue").textContent = formatMoney(summary.net_revenue);
     document.getElementById("stat-units-sold").textContent = formatInt(summary.total_units_sold);
-    document.getElementById("stat-returned-units").textContent = formatInt(summary.total_returned_units);
+    document.getElementById("stat-returned-units").textContent = formatInt(summary.total_return_units);
     document.getElementById("stat-product-count").textContent = formatInt(summary.product_count);
   }
 
@@ -158,7 +158,7 @@
         datasets: [
           {
             label: "Returned amount",
-            data: returnNetRows.map((row) => Number(row.returned_amount || 0)),
+            data: returnNetRows.map((row) => Number(row.return_amount || 0)),
             backgroundColor: "#f59e0b",
           },
           {
@@ -226,8 +226,8 @@
           <td>${row.item_name || ""}</td>
           <td>${formatInt(row.units_sold)}</td>
           <td>${formatMoney(row.revenue)}</td>
-          <td>${formatInt(row.returned_quantity)}</td>
-          <td>${formatMoney(row.returned_amount)}</td>
+          <td>${formatInt(row.return_quantity)}</td>
+          <td>${formatMoney(row.return_amount)}</td>
           <td>${formatMoney(row.net_revenue)}</td>
         `;
         tableBody.appendChild(tr);
@@ -249,9 +249,9 @@
     sortButtons.forEach((button) => {
       const key = button.dataset.key;
       if (key === state.sortKey) {
-        button.textContent = `${button.textContent.replace(/[\u2191\u2193]/g, "").trim()} ${state.sortDirection === "asc" ? "↑" : "↓"}`;
+        button.textContent = `${button.textContent.replace(/[\^v]/g, "").trim()} ${state.sortDirection === "asc" ? "^" : "v"}`;
       } else {
-        button.textContent = button.textContent.replace(/[\u2191\u2193]/g, "").trim();
+        button.textContent = button.textContent.replace(/[\^v]/g, "").trim();
       }
     });
   }
@@ -292,7 +292,7 @@
       updateSummary(payload.summary || {});
       renderCharts(state.rows);
       renderTable();
-      setStatus(`Showing report from ${payload.start_date} to ${payload.end_date}.`);
+      setStatus(`Showing report from ${start} to ${end}.`);
     } catch (error) {
       setStatus(error.message || "Unable to load report.", true);
     }

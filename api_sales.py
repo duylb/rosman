@@ -88,6 +88,9 @@ def import_sales():
         end_date_raw = str(data.get("end_date", "")).strip()
         if not start_date_raw or not end_date_raw:
             return jsonify({"status": "error", "message": "start_date and end_date are required."}), 400
+        report_title = str(data.get("report_title", "")).strip() or "Sales Report"
+        branch = str(data.get("branch", "")).strip() or None
+        summary_payload = data.get("summary") or {}
 
         items_payload = data.get("items")
         if items_payload is None:
@@ -122,11 +125,30 @@ def import_sales():
             )
 
         report = SalesReport(
-            organization_id=organization.id,
-            report_title=organization.name,
+            org_id=organization.id,
+            report_title=report_title,
             start_date=parse_date_value(start_date_raw),
             end_date=parse_date_value(end_date_raw),
+            branch=branch,
             created_datetime=parse_datetime_value(data.get("created_datetime")) if data.get("created_datetime") else datetime.utcnow(),
+            total_products=int(summary_payload.get("total_products", len(normalized_items)) or len(normalized_items)),
+            total_units_sold=int(
+                summary_payload.get("total_units_sold", sum(int(item["quantity"]) for item in normalized_items))
+                or 0
+            ),
+            total_revenue=parse_decimal_value(
+                summary_payload.get("total_revenue", sum(parse_decimal_value(item["revenue"]) for item in normalized_items))
+            ),
+            total_return_units=int(
+                summary_payload.get("total_return_units", sum(int(item["returned_quantity"]) for item in normalized_items))
+                or 0
+            ),
+            total_return_value=parse_decimal_value(
+                summary_payload.get("total_return_value", sum(parse_decimal_value(item["returned_amount"]) for item in normalized_items))
+            ),
+            net_revenue=parse_decimal_value(
+                summary_payload.get("net_revenue", sum(parse_decimal_value(item["net_revenue"]) for item in normalized_items))
+            ),
         )
         db.session.add(report)
         db.session.flush()
