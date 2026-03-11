@@ -3367,17 +3367,18 @@ def create_owner() -> None:
     click.echo(f"Owner user created: {email} (org: {org.name})")
 
 
-with app.app_context():
-    db.create_all()
-    try:
-        ensure_org_schema_compatibility()
-        ensure_user_schema_compatibility()
-        ensure_staff_schema_compatibility()
-        ensure_sales_schema_compatibility()
-        ensure_roster_schema_compatibility()
-    except SQLAlchemyError:
-        db.session.rollback()
-        raise
+if app_env != "production":
+    with app.app_context():
+        db.create_all()
+        try:
+            ensure_org_schema_compatibility()
+            ensure_user_schema_compatibility()
+            ensure_staff_schema_compatibility()
+            ensure_sales_schema_compatibility()
+            ensure_roster_schema_compatibility()
+        except SQLAlchemyError:
+            db.session.rollback()
+            raise
 
 
 if __name__ == "__main__":
