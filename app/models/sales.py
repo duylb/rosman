@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 from app.extensions import db
 from sqlalchemy.orm import synonym
 
 
 class SalesReport(db.Model):
     __tablename__ = "sales_reports"
+    __allow_unmapped__ = True
 
     id = db.Column(db.Integer, primary_key=True)
     organization_id = db.Column(
@@ -31,9 +34,9 @@ class SalesReport(db.Model):
     imported_at = synonym("created_datetime")
 
     # Legacy placeholders retained so old code paths can assign without crashing.
-    _legacy_report_title: str | None = None
-    _legacy_total_revenue: float | None = None
-    _legacy_branch: str | None = None
+    _legacy_report_title: ClassVar[str | None] = None
+    _legacy_total_revenue: ClassVar[float | None] = None
+    _legacy_branch: ClassVar[str | None] = None
 
     @property
     def filename(self) -> str | None:
