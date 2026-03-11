@@ -6,12 +6,14 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, request
+from sqlalchemy import inspect, text
 
 from app.extensions import csrf, db
 from app.models import Organization, SaleItem, SalesReport
 
 sales_api = Blueprint("sales_api", __name__)
 API_KEY = os.environ.get("SALES_API_KEY")
+_schema_checked = False
 
 
 def parse_date_value(raw: str) -> datetime:
@@ -102,6 +104,79 @@ def default_month_bounds() -> tuple[str, str]:
     return month_start.strftime("%Y-%m-%d"), month_end.strftime("%Y-%m-%d")
 
 
+def ensure_sales_schema_for_import() -> None:
+    global _schema_checked
+    if _schema_checked:
+        return
+
+    inspector = inspect(db.engine)
+    if not inspector.has_table("sales_reports"):
+        _schema_checked = True
+        return
+
+    report_columns = {col["name"] for col in inspector.get_columns("sales_reports")}
+    if "org_id" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN org_id INTEGER"))
+        if "organization_id" in report_columns:
+            db.session.execute(text("UPDATE sales_reports SET org_id = organization_id WHERE org_id IS NULL"))
+    if "report_title" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN report_title VARCHAR(255)"))
+        if "filename" in report_columns:
+            db.session.execute(text("UPDATE sales_reports SET report_title = COALESCE(filename, 'Sales Report')"))
+        else:
+            db.session.execute(text("UPDATE sales_reports SET report_title = 'Sales Report' WHERE report_title IS NULL"))
+    if "created_datetime" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN created_datetime TIMESTAMP"))
+        if "imported_at" in report_columns:
+            db.session.execute(text("UPDATE sales_reports SET created_datetime = imported_at WHERE created_datetime IS NULL"))
+    if "branch" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN branch VARCHAR(160)"))
+    if "total_products" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN total_products INTEGER DEFAULT 0"))
+    if "total_units_sold" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN total_units_sold INTEGER DEFAULT 0"))
+    if "total_revenue" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN total_revenue NUMERIC(14,2) DEFAULT 0"))
+    if "total_return_units" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN total_return_units INTEGER DEFAULT 0"))
+    if "total_return_value" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN total_return_value NUMERIC(14,2) DEFAULT 0"))
+    if "net_revenue" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN net_revenue NUMERIC(14,2) DEFAULT 0"))
+    if "created_at" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
+
+    if inspector.has_table("sales_items"):
+        item_columns = {col["name"] for col in inspector.get_columns("sales_items")}
+        if "report_id" not in item_columns and "sale_report_id" in item_columns:
+            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN report_id INTEGER"))
+            db.session.execute(text("UPDATE sales_items SET report_id = sale_report_id WHERE report_id IS NULL"))
+        if "item_code" not in item_columns and "sku" in item_columns:
+            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN item_code VARCHAR(64)"))
+            db.session.execute(text("UPDATE sales_items SET item_code = sku WHERE item_code IS NULL"))
+        if "item_name" not in item_columns and "name" in item_columns:
+            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN item_name VARCHAR(255)"))
+            db.session.execute(text("UPDATE sales_items SET item_name = name WHERE item_name IS NULL"))
+        if "units_sold" not in item_columns and "quantity" in item_columns:
+            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN units_sold INTEGER DEFAULT 0"))
+            db.session.execute(text("UPDATE sales_items SET units_sold = quantity WHERE units_sold IS NULL"))
+        if "return_quantity" not in item_columns and "returned_quantity" in item_columns:
+            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN return_quantity INTEGER DEFAULT 0"))
+            db.session.execute(text("UPDATE sales_items SET return_quantity = returned_quantity WHERE return_quantity IS NULL"))
+        if "return_amount" not in item_columns and "returned_amount" in item_columns:
+            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN return_amount NUMERIC(14,2) DEFAULT 0"))
+            db.session.execute(text("UPDATE sales_items SET return_amount = returned_amount WHERE return_amount IS NULL"))
+        if "net_revenue" not in item_columns:
+            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN net_revenue NUMERIC(14,2) DEFAULT 0"))
+            db.session.execute(text("UPDATE sales_items SET net_revenue = COALESCE(revenue, 0) - COALESCE(return_amount, 0)"))
+
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_org_id ON sales_reports (org_id)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_report_id ON sales_items (report_id)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_item_code ON sales_items (item_code)"))
+    db.session.commit()
+    _schema_checked = True
+
+
 def infer_month_bounds_from_created_datetime(raw_created: object) -> tuple[str, str]:
     if not raw_created:
         return "", ""
@@ -139,6 +214,7 @@ def import_sales():
         return jsonify({"error": "Unauthorized"}), 401
 
     try:
+        ensure_sales_schema_for_import()
         data = normalize_payload(request.get_json(silent=True))
         if not data and request.form:
             form_data = request.form.to_dict(flat=True)
