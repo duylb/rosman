@@ -717,196 +717,188 @@ def ensure_sales_schema_compatibility() -> None:
     inspector = inspect(db.engine)
     dialect_name = db.engine.dialect.name.lower()
     report_id_def = "SERIAL PRIMARY KEY" if dialect_name == "postgresql" else "INTEGER PRIMARY KEY"
-    product_id_def = "SERIAL PRIMARY KEY" if dialect_name == "postgresql" else "INTEGER PRIMARY KEY"
+    item_id_def = "SERIAL PRIMARY KEY" if dialect_name == "postgresql" else "INTEGER PRIMARY KEY"
 
-    # Ensure new canonical tables exist.
-    if not inspector.has_table("sales_reports"):
-        db.session.execute(
-            text(
-                f"""
-                CREATE TABLE IF NOT EXISTS sales_reports (
-                    id {report_id_def},
-                    org_id INTEGER,
-                    report_title VARCHAR(200),
-                    start_date DATE,
-                    end_date DATE,
-                    branch VARCHAR(200),
-                    created_datetime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    total_products INTEGER DEFAULT 0,
-                    total_units_sold INTEGER DEFAULT 0,
-                    total_revenue FLOAT DEFAULT 0,
-                    total_return_value FLOAT DEFAULT 0,
-                    total_return_units INTEGER DEFAULT 0
-                )
-                """
+    db.session.execute(
+        text(
+            f"""
+            CREATE TABLE IF NOT EXISTS sales_reports (
+                id {report_id_def},
+                organization_id INTEGER NOT NULL,
+                start_date DATE,
+                end_date DATE,
+                created_datetime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE
             )
+            """
         )
-        db.session.commit()
-        inspector = inspect(db.engine)
-
-    if not inspector.has_table("product_sales"):
-        db.session.execute(
-            text(
-                f"""
-                CREATE TABLE IF NOT EXISTS product_sales (
-                    id {product_id_def},
-                    report_id INTEGER NOT NULL,
-                    product_code VARCHAR(50),
-                    product_name VARCHAR(200),
-                    units_sold INTEGER DEFAULT 0,
-                    revenue FLOAT DEFAULT 0,
-                    return_units INTEGER DEFAULT 0,
-                    return_value FLOAT DEFAULT 0,
-                    net_revenue FLOAT DEFAULT 0,
-                    category VARCHAR(120) DEFAULT 'Uncategorized',
-                    type VARCHAR(120) DEFAULT 'Other'
-                )
-                """
+    )
+    db.session.execute(
+        text(
+            f"""
+            CREATE TABLE IF NOT EXISTS sales_items (
+                id {item_id_def},
+                report_id INTEGER NOT NULL,
+                item_code VARCHAR(64) NOT NULL,
+                item_name VARCHAR(255) NOT NULL,
+                revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
+                returned_quantity INTEGER NOT NULL DEFAULT 0,
+                returned_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+                net_revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
+                quantity INTEGER NOT NULL DEFAULT 0,
+                category VARCHAR(120) NOT NULL DEFAULT 'Uncategorized',
+                type VARCHAR(120) NOT NULL DEFAULT 'Other',
+                FOREIGN KEY (report_id) REFERENCES sales_reports (id) ON DELETE CASCADE
             )
+            """
         )
-        db.session.commit()
-        inspector = inspect(db.engine)
+    )
+    db.session.commit()
+    inspector = inspect(db.engine)
 
-    # Add missing columns to support n8n target schema and app compatibility.
     report_columns = {col["name"] for col in inspector.get_columns("sales_reports")}
-    product_columns = {col["name"] for col in inspector.get_columns("product_sales")}
+    if "organization_id" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN organization_id INTEGER"))
+    if "start_date" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN start_date DATE"))
+    if "end_date" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN end_date DATE"))
+    if "created_datetime" not in report_columns:
+        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN created_datetime TIMESTAMP"))
+    if "org_id" in report_columns:
+        db.session.execute(
+            text(
+                """
+                UPDATE sales_reports
+                SET organization_id = COALESCE(organization_id, org_id)
+                WHERE organization_id IS NULL
+                """
+            )
+        )
+    db.session.execute(
+        text(
+            """
+            UPDATE sales_reports
+            SET created_datetime = COALESCE(created_datetime, CURRENT_TIMESTAMP)
+            WHERE created_datetime IS NULL
+            """
+        )
+    )
 
-    report_column_defs = [
-        ("org_id", "INTEGER"),
-        ("report_title", "VARCHAR(200)"),
-        ("start_date", "DATE"),
-        ("end_date", "DATE"),
-        ("branch", "VARCHAR(200)"),
-        ("created_datetime", "TIMESTAMP"),
-        ("total_products", "INTEGER DEFAULT 0"),
-        ("total_units_sold", "INTEGER DEFAULT 0"),
-        ("total_revenue", "FLOAT DEFAULT 0"),
-        ("total_return_value", "FLOAT DEFAULT 0"),
-        ("total_return_units", "INTEGER DEFAULT 0"),
-    ]
-    for column_name, column_def in report_column_defs:
-        if column_name not in report_columns:
-            db.session.execute(text(f"ALTER TABLE sales_reports ADD COLUMN {column_name} {column_def}"))
-
-    product_column_defs = [
-        ("report_id", "INTEGER"),
-        ("product_code", "VARCHAR(50)"),
-        ("product_name", "VARCHAR(200)"),
-        ("units_sold", "INTEGER DEFAULT 0"),
-        ("revenue", "FLOAT DEFAULT 0"),
-        ("return_units", "INTEGER DEFAULT 0"),
-        ("return_value", "FLOAT DEFAULT 0"),
-        ("net_revenue", "FLOAT DEFAULT 0"),
-        ("category", "VARCHAR(120) DEFAULT 'Uncategorized'"),
-        ("type", "VARCHAR(120) DEFAULT 'Other'"),
-    ]
-    for column_name, column_def in product_column_defs:
-        if column_name not in product_columns:
-            db.session.execute(text(f"ALTER TABLE product_sales ADD COLUMN {column_name} {column_def}"))
-
-    # Copy legacy data (sale_reports/sale_items) into new tables if legacy tables exist.
     legacy_reports_exists = inspector.has_table("sale_reports")
-    legacy_items_exists = inspector.has_table("sale_items")
     if legacy_reports_exists:
         legacy_report_columns = {col["name"] for col in inspector.get_columns("sale_reports")}
-        report_title_expr = "COALESCE(sr.filename, sr.report_title, 'Sales Report')"
-        if "filename" not in legacy_report_columns and "report_title" in legacy_report_columns:
-            report_title_expr = "COALESCE(sr.report_title, 'Sales Report')"
-        elif "filename" in legacy_report_columns and "report_title" not in legacy_report_columns:
-            report_title_expr = "COALESCE(sr.filename, 'Sales Report')"
-
-        created_datetime_expr = "COALESCE(sr.imported_at, sr.created_datetime, CURRENT_TIMESTAMP)"
-        if "imported_at" not in legacy_report_columns and "created_datetime" in legacy_report_columns:
-            created_datetime_expr = "COALESCE(sr.created_datetime, CURRENT_TIMESTAMP)"
-        elif "imported_at" in legacy_report_columns and "created_datetime" not in legacy_report_columns:
-            created_datetime_expr = "COALESCE(sr.imported_at, CURRENT_TIMESTAMP)"
-
-        org_expr = "sr.org_id" if "org_id" in legacy_report_columns else "NULL"
-        start_expr = "sr.start_date" if "start_date" in legacy_report_columns else "NULL"
-        end_expr = "sr.end_date" if "end_date" in legacy_report_columns else "NULL"
-        revenue_expr = "COALESCE(sr.total_revenue, 0)" if "total_revenue" in legacy_report_columns else "0"
-        branch_expr = "sr.branch" if "branch" in legacy_report_columns else "NULL"
-
-        products_expr = "0"
-        units_expr = "0"
-        return_value_expr = "0"
-        return_units_expr = "0"
-        if legacy_items_exists:
-            products_expr = "(SELECT COUNT(1) FROM sale_items si WHERE si.sale_report_id = sr.id)"
-            units_expr = "(SELECT COALESCE(SUM(si.quantity), 0) FROM sale_items si WHERE si.sale_report_id = sr.id)"
-            return_value_expr = "(SELECT COALESCE(SUM(si.return_value), 0) FROM sale_items si WHERE si.sale_report_id = sr.id)"
-            return_units_expr = "(SELECT COALESCE(SUM(si.returns), 0) FROM sale_items si WHERE si.sale_report_id = sr.id)"
-
+        org_expr = "sr.organization_id" if "organization_id" in legacy_report_columns else "sr.org_id"
+        created_expr = (
+            "COALESCE(sr.created_datetime, CURRENT_TIMESTAMP)"
+            if "created_datetime" in legacy_report_columns
+            else "COALESCE(sr.imported_at, CURRENT_TIMESTAMP)"
+        )
         db.session.execute(
             text(
                 f"""
-                INSERT INTO sales_reports (
-                    id, org_id, report_title, start_date, end_date, branch, created_datetime,
-                    total_products, total_units_sold, total_revenue, total_return_value, total_return_units
-                )
+                INSERT INTO sales_reports (id, organization_id, start_date, end_date, created_datetime)
                 SELECT
-                    sr.id, {org_expr}, {report_title_expr}, {start_expr}, {end_expr}, {branch_expr}, {created_datetime_expr},
-                    {products_expr}, {units_expr}, {revenue_expr}, {return_value_expr}, {return_units_expr}
+                    sr.id,
+                    {org_expr},
+                    sr.start_date,
+                    sr.end_date,
+                    {created_expr}
                 FROM sale_reports sr
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM sales_reports ns WHERE ns.id = sr.id
-                )
+                WHERE {org_expr} IS NOT NULL
+                  AND NOT EXISTS (SELECT 1 FROM sales_reports ns WHERE ns.id = sr.id)
                 """
             )
         )
 
-    if legacy_items_exists:
-        legacy_item_columns = {col["name"] for col in inspector.get_columns("sale_items")}
-        report_ref_expr = "si.sale_report_id" if "sale_report_id" in legacy_item_columns else "si.report_id"
-        product_code_expr = "si.sku" if "sku" in legacy_item_columns else "si.product_code"
-        product_name_expr = "si.name" if "name" in legacy_item_columns else "si.product_name"
-        units_expr = "COALESCE(si.quantity, 0)" if "quantity" in legacy_item_columns else "COALESCE(si.units_sold, 0)"
-        revenue_expr = "COALESCE(si.revenue, 0)"
-        return_units_expr = "COALESCE(si.returns, 0)" if "returns" in legacy_item_columns else "COALESCE(si.return_units, 0)"
-        return_value_expr = "COALESCE(si.return_value, 0)"
-        net_revenue_expr = (
-            "COALESCE(si.net_revenue, COALESCE(si.revenue, 0) - COALESCE(si.return_value, 0))"
-            if "net_revenue" in legacy_item_columns
-            else f"({revenue_expr} - {return_value_expr})"
+    item_columns = {col["name"] for col in inspector.get_columns("sales_items")}
+    if "quantity" not in item_columns:
+        db.session.execute(text("ALTER TABLE sales_items ADD COLUMN quantity INTEGER NOT NULL DEFAULT 0"))
+    if "category" not in item_columns:
+        db.session.execute(
+            text("ALTER TABLE sales_items ADD COLUMN category VARCHAR(120) NOT NULL DEFAULT 'Uncategorized'")
         )
-        category_expr = "COALESCE(NULLIF(si.category, ''), 'Uncategorized')" if "category" in legacy_item_columns else "'Uncategorized'"
-        type_expr = "COALESCE(NULLIF(si.type, ''), 'Other')" if "type" in legacy_item_columns else "'Other'"
+    if "type" not in item_columns:
+        db.session.execute(text("ALTER TABLE sales_items ADD COLUMN type VARCHAR(120) NOT NULL DEFAULT 'Other'"))
+
+    def _migrate_legacy_items(table_name: str) -> None:
+        if not inspector.has_table(table_name):
+            return
+        cols = {col["name"] for col in inspector.get_columns(table_name)}
+        report_ref_expr = "si.report_id" if "report_id" in cols else "si.sale_report_id"
+        item_code_expr = "si.item_code" if "item_code" in cols else "si.product_code"
+        if "item_code" not in cols and "product_code" not in cols and "sku" in cols:
+            item_code_expr = "si.sku"
+        item_name_expr = "si.item_name" if "item_name" in cols else "si.product_name"
+        if "item_name" not in cols and "product_name" not in cols and "name" in cols:
+            item_name_expr = "si.name"
+        returned_qty_expr = "COALESCE(si.returned_quantity, 0)" if "returned_quantity" in cols else "COALESCE(si.return_units, 0)"
+        if "returned_quantity" not in cols and "return_units" not in cols and "returns" in cols:
+            returned_qty_expr = "COALESCE(si.returns, 0)"
+        returned_amount_expr = "COALESCE(si.returned_amount, 0)" if "returned_amount" in cols else "COALESCE(si.return_value, 0)"
+        revenue_expr = "COALESCE(si.revenue, 0)"
+        net_expr = (
+            "COALESCE(si.net_revenue, COALESCE(si.revenue, 0) - COALESCE(si.returned_amount, 0))"
+            if "net_revenue" in cols and "returned_amount" in cols
+            else "COALESCE(si.net_revenue, COALESCE(si.revenue, 0) - COALESCE(si.return_value, 0))"
+        )
+        quantity_expr = "COALESCE(si.quantity, 0)" if "quantity" in cols else "COALESCE(si.units_sold, 0)"
+        if "quantity" not in cols and "units_sold" not in cols:
+            quantity_expr = "0"
+        category_expr = "COALESCE(si.category, 'Uncategorized')" if "category" in cols else "'Uncategorized'"
+        type_expr = "COALESCE(si.type, 'Other')" if "type" in cols else "'Other'"
 
         db.session.execute(
             text(
                 f"""
-                INSERT INTO product_sales (
-                    id, report_id, product_code, product_name, units_sold, revenue, return_units, return_value,
-                    net_revenue, category, type
+                INSERT INTO sales_items (
+                    id, report_id, item_code, item_name, revenue,
+                    returned_quantity, returned_amount, net_revenue, quantity, category, type
                 )
                 SELECT
                     si.id,
                     {report_ref_expr},
-                    {product_code_expr},
-                    {product_name_expr},
-                    {units_expr},
+                    {item_code_expr},
+                    {item_name_expr},
                     {revenue_expr},
-                    {return_units_expr},
-                    {return_value_expr},
-                    {net_revenue_expr},
+                    {returned_qty_expr},
+                    {returned_amount_expr},
+                    {net_expr},
+                    {quantity_expr},
                     {category_expr},
                     {type_expr}
-                FROM sale_items si
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM product_sales ps WHERE ps.id = si.id
-                )
+                FROM {table_name} si
+                WHERE {report_ref_expr} IS NOT NULL
+                  AND {item_code_expr} IS NOT NULL
+                  AND {item_name_expr} IS NOT NULL
+                  AND NOT EXISTS (SELECT 1 FROM sales_items ns WHERE ns.id = si.id)
                 """
             )
         )
 
-    # Helpful indexes for reporting screens and filters.
-    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_org_id ON sales_reports (org_id)"))
+    _migrate_legacy_items("product_sales")
+    _migrate_legacy_items("sale_items")
+
+    if dialect_name == "postgresql":
+        for column_name in [
+            "org_id",
+            "report_title",
+            "branch",
+            "total_products",
+            "total_units_sold",
+            "total_revenue",
+            "total_return_value",
+            "total_return_units",
+        ]:
+            db.session.execute(text(f"ALTER TABLE sales_reports DROP COLUMN IF EXISTS {column_name}"))
+
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_organization_id ON sales_reports (organization_id)"))
     db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_start_date ON sales_reports (start_date)"))
     db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_end_date ON sales_reports (end_date)"))
-    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_product_sales_report_id ON product_sales (report_id)"))
-    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_product_sales_product_code ON product_sales (product_code)"))
-    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_product_sales_category ON product_sales (category)"))
-    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_product_sales_type ON product_sales (type)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_report_id ON sales_items (report_id)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_item_code ON sales_items (item_code)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_category ON sales_items (category)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_type ON sales_items (type)"))
     db.session.commit()
 
 

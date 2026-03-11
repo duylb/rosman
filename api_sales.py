@@ -1,11 +1,12 @@
 import os
 import traceback
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, request
 
 from app.extensions import csrf, db
-from app.models import ProductSale, SalesReport
+from app.models import Organization, SaleItem, SalesReport
 
 sales_api = Blueprint("sales_api", __name__)
 API_KEY = os.environ.get("SALES_API_KEY")
@@ -31,6 +32,15 @@ def parse_datetime_value(raw: str) -> datetime:
     raise ValueError("Invalid datetime format.")
 
 
+def parse_decimal_value(raw: object, fallback: Decimal = Decimal("0")) -> Decimal:
+    if raw is None or raw == "":
+        return fallback
+    try:
+        return Decimal(str(raw))
+    except (InvalidOperation, ValueError, TypeError):
+        return fallback
+
+
 @sales_api.route("/api/import-sales", methods=["POST"])
 @csrf.exempt
 def import_sales():
@@ -41,81 +51,95 @@ def import_sales():
         data = request.get_json() or {}
         print("Incoming JSON:", data)
 
-        org_id = data.get("org_id")
-        if org_id is None:
-            return jsonify({"status": "error", "message": "org_id is required."}), 400
-        try:
-            org_id = int(org_id)
-        except (TypeError, ValueError):
-            return jsonify({"status": "error", "message": "org_id must be an integer."}), 400
+        organization_name = str(data.get("organization", "")).strip()
+        org_id_raw = data.get("org_id")
+        organization: Organization | None = None
 
-        summary = data.get("summary") or {}
-        products = data.get("products") or []
-        if not isinstance(products, list):
-            return jsonify({"status": "error", "message": "products must be an array."}), 400
-        for required_key in ("report_title", "start_date", "end_date", "branch"):
-            if not str(data.get(required_key, "")).strip():
-                return jsonify({"status": "error", "message": f"{required_key} is required."}), 400
+        if organization_name:
+            organization = Organization.query.filter_by(name=organization_name).first()
+            if organization is None:
+                organization = Organization(name=organization_name)
+                db.session.add(organization)
+                db.session.flush()
+        elif org_id_raw is not None:
+            try:
+                org_id = int(org_id_raw)
+            except (TypeError, ValueError):
+                return jsonify({"status": "error", "message": "org_id must be an integer."}), 400
+            organization = Organization.query.filter_by(id=org_id).first()
+            if organization is None:
+                return jsonify({"status": "error", "message": "organization not found for org_id."}), 404
+        else:
+            return jsonify({"status": "error", "message": "organization or org_id is required."}), 400
 
-        total_units_from_rows = 0
-        total_revenue_from_rows = 0
-        total_return_units_from_rows = 0
-        total_return_value_from_rows = 0
-        normalized_products = []
-        for p in products:
-            units_sold = int(p.get("units_sold", 0) or 0)
-            revenue = float(p.get("revenue", 0) or 0)
-            return_units = int(p.get("return_units", 0) or 0)
-            return_value = float(p.get("return_value", 0) or 0)
-            total_units_from_rows += units_sold
-            total_revenue_from_rows += revenue
-            total_return_units_from_rows += return_units
-            total_return_value_from_rows += return_value
-            normalized_products.append(
+        start_date_raw = str(data.get("start_date", "")).strip()
+        end_date_raw = str(data.get("end_date", "")).strip()
+        if not start_date_raw or not end_date_raw:
+            return jsonify({"status": "error", "message": "start_date and end_date are required."}), 400
+
+        items_payload = data.get("items")
+        if items_payload is None:
+            # Backward-compatible payload support.
+            items_payload = data.get("products", [])
+        if not isinstance(items_payload, list):
+            return jsonify({"status": "error", "message": "items must be an array."}), 400
+
+        normalized_items: list[dict[str, object]] = []
+        for item in items_payload:
+            item_code = str(item.get("item_code", item.get("product_code", "")) or "").strip()
+            item_name = str(item.get("item_name", item.get("product_name", "")) or "").strip()
+            if not item_code or not item_name:
+                return jsonify({"status": "error", "message": "Each item requires item_code and item_name."}), 400
+
+            revenue = parse_decimal_value(item.get("revenue"))
+            returned_quantity = int(item.get("returned_quantity", item.get("return_units", 0)) or 0)
+            returned_amount = parse_decimal_value(item.get("returned_amount", item.get("return_value", 0)))
+            net_revenue = parse_decimal_value(item.get("net_revenue"), revenue - returned_amount)
+            quantity = int(item.get("quantity", item.get("units_sold", 0)) or 0)
+
+            normalized_items.append(
                 {
-                    "product_code": p.get("product_code", "") or "",
-                    "product_name": p.get("product_name", "") or "",
-                    "units_sold": units_sold,
+                    "item_code": item_code,
+                    "item_name": item_name,
                     "revenue": revenue,
-                    "return_units": return_units,
-                    "return_value": return_value,
+                    "returned_quantity": max(0, returned_quantity),
+                    "returned_amount": returned_amount,
+                    "net_revenue": net_revenue,
+                    "quantity": max(0, quantity),
                 }
             )
 
         report = SalesReport(
-            org_id=org_id,
-            report_title=data["report_title"],
-            start_date=parse_date_value(data["start_date"]),
-            end_date=parse_date_value(data["end_date"]),
-            branch=data["branch"],
+            organization_id=organization.id,
+            report_title=organization.name,
+            start_date=parse_date_value(start_date_raw),
+            end_date=parse_date_value(end_date_raw),
             created_datetime=parse_datetime_value(data.get("created_datetime")) if data.get("created_datetime") else datetime.utcnow(),
-            total_products=int(summary.get("total_products", len(normalized_products)) or len(normalized_products)),
-            total_units_sold=int(summary.get("total_units_sold", total_units_from_rows) or total_units_from_rows),
-            total_revenue=float(summary.get("total_revenue", total_revenue_from_rows) or total_revenue_from_rows),
-            total_return_value=float(
-                summary.get("total_return_value", total_return_value_from_rows) or total_return_value_from_rows
-            ),
-            total_return_units=int(
-                summary.get("total_return_units", total_return_units_from_rows) or total_return_units_from_rows
-            ),
         )
         db.session.add(report)
         db.session.flush()
 
-        for p in normalized_products:
-            product = ProductSale(
+        for item in normalized_items:
+            product = SaleItem(
                 report_id=report.id,
-                product_code=p["product_code"],
-                product_name=p["product_name"],
-                units_sold=p["units_sold"],
-                revenue=p["revenue"],
-                return_units=p["return_units"],
-                return_value=p["return_value"],
+                item_code=str(item["item_code"]),
+                item_name=str(item["item_name"]),
+                revenue=item["revenue"],
+                returned_quantity=int(item["returned_quantity"]),
+                returned_amount=item["returned_amount"],
+                net_revenue=item["net_revenue"],
+                quantity=int(item["quantity"]),
             )
             db.session.add(product)
 
         db.session.commit()
-        return {"status": "success", "report_id": report.id}
+        return {
+            "status": "success",
+            "report_id": report.id,
+            "organization_id": organization.id,
+            "organization": organization.name,
+            "items_inserted": len(normalized_items),
+        }
     except Exception as e:
         db.session.rollback()
         print("ERROR:", str(e))

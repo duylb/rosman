@@ -8,7 +8,7 @@ from .staff import (
     StaffAvailability,
     StaffShiftPreference,
 )
-from .sales import SalesReport, ProductSale, SaleReport, SaleItem
+from .sales import SalesReport, SalesItem, ProductSale, SaleReport, SaleItem
 from .inventory import InventoryItem, Supplier, Recipe, StockLog
 
 __all__ = [
@@ -21,6 +21,7 @@ __all__ = [
     "StaffAvailability",
     "StaffShiftPreference",
     "SalesReport",
+    "SalesItem",
     "ProductSale",
     "SaleReport",
     "SaleItem",
