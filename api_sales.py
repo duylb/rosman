@@ -1,7 +1,7 @@
 import os
 import re
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, request
@@ -31,6 +31,33 @@ def parse_datetime_value(raw: str) -> datetime:
         except ValueError:
             continue
     raise ValueError("Invalid datetime format.")
+
+
+def get_nested_value(payload: dict[str, object], path: tuple[str, ...]) -> object:
+    current: object = payload
+    for key in path:
+        if not isinstance(current, dict) or key not in current:
+            return None
+        current = current[key]
+    return current
+
+
+def first_non_empty_str(*values: object) -> str:
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def infer_month_bounds_from_created_datetime(raw_created: object) -> tuple[str, str]:
+    if not raw_created:
+        return "", ""
+    created_obj = parse_datetime_value(str(raw_created))
+    month_start = created_obj.replace(day=1)
+    next_month = (month_start + timedelta(days=32)).replace(day=1)
+    month_end = next_month - timedelta(days=1)
+    return month_start.strftime("%Y-%m-%d"), month_end.strftime("%Y-%m-%d")
 
 
 def parse_decimal_value(raw: object, fallback: Decimal = Decimal("0")) -> Decimal:
@@ -84,10 +111,40 @@ def import_sales():
         else:
             return jsonify({"status": "error", "message": "organization or org_id is required."}), 400
 
-        start_date_raw = str(data.get("start_date", "")).strip()
-        end_date_raw = str(data.get("end_date", "")).strip()
+        start_date_raw = first_non_empty_str(
+            data.get("start_date"),
+            data.get("startDate"),
+            data.get("report_start_date"),
+            data.get("period_start"),
+            get_nested_value(data, ("report_period", "start_date")),
+            get_nested_value(data, ("reportPeriod", "startDate")),
+        )
+        end_date_raw = first_non_empty_str(
+            data.get("end_date"),
+            data.get("endDate"),
+            data.get("report_end_date"),
+            data.get("period_end"),
+            get_nested_value(data, ("report_period", "end_date")),
+            get_nested_value(data, ("reportPeriod", "endDate")),
+        )
         if not start_date_raw or not end_date_raw:
-            return jsonify({"status": "error", "message": "start_date and end_date are required."}), 400
+            inferred_start, inferred_end = infer_month_bounds_from_created_datetime(data.get("created_datetime"))
+            start_date_raw = start_date_raw or inferred_start
+            end_date_raw = end_date_raw or inferred_end
+        if not start_date_raw or not end_date_raw:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "start_date and end_date are required.",
+                        "hints": [
+                            "Provide start_date/end_date (DD/MM/YYYY or YYYY-MM-DD).",
+                            "Accepted aliases: startDate/endDate, report_period.start_date/end_date.",
+                        ],
+                    }
+                ),
+                400,
+            )
         report_title = str(data.get("report_title", "")).strip() or "Sales Report"
         branch = str(data.get("branch", "")).strip() or None
         summary_payload = data.get("summary") or {}
