@@ -354,6 +354,8 @@ def import_sales():
             fallback_start, fallback_end = default_month_bounds()
             start_date_raw = start_date_raw or fallback_start
             end_date_raw = end_date_raw or fallback_end
+        report_start = parse_date_value(start_date_raw).date()
+        report_end = parse_date_value(end_date_raw).date()
         report_title = str(data.get("report_title", "")).strip() or "Sales Report"
         branch = str(data.get("branch", "")).strip() or None
         summary_payload = data.get("summary") or {}
@@ -390,36 +392,53 @@ def import_sales():
                 }
             )
 
+        if not normalized_items:
+            return jsonify({"status": "error", "message": "At least one sales item is required."}), 400
+
         branch = get_or_create_branch(organization.id, branch)
 
-        report = SalesReport(
+        report = SalesReport.query.filter_by(
             organization_id=organization.id,
             branch_id=branch.id,
-            report_title=report_title,
-            start_date=parse_date_value(start_date_raw),
-            end_date=parse_date_value(end_date_raw),
-            created_datetime=parse_datetime_value(data.get("created_datetime")) if data.get("created_datetime") else datetime.utcnow(),
-            total_products=int(summary_payload.get("total_products", len(normalized_items)) or len(normalized_items)),
-            total_units_sold=int(
-                summary_payload.get("total_units_sold", sum(int(item["quantity"]) for item in normalized_items))
-                or 0
-            ),
-            total_revenue=parse_decimal_value(
-                summary_payload.get("total_revenue", sum(parse_decimal_value(item["revenue"]) for item in normalized_items))
-            ),
-            total_return_units=int(
-                summary_payload.get("total_return_units", sum(int(item["returned_quantity"]) for item in normalized_items))
-                or 0
-            ),
-            total_return_value=parse_decimal_value(
-                summary_payload.get("total_return_value", sum(parse_decimal_value(item["returned_amount"]) for item in normalized_items))
-            ),
-            net_revenue=parse_decimal_value(
-                summary_payload.get("net_revenue", sum(parse_decimal_value(item["net_revenue"]) for item in normalized_items))
-            ),
+            start_date=report_start,
+            end_date=report_end,
+        ).first()
+        report_action = "updated" if report is not None else "created"
+        if report is None:
+            report = SalesReport(
+                organization_id=organization.id,
+                branch_id=branch.id,
+                start_date=report_start,
+                end_date=report_end,
+            )
+            db.session.add(report)
+            db.session.flush()
+
+        report.report_title = report_title
+        report.created_datetime = (
+            parse_datetime_value(data.get("created_datetime")) if data.get("created_datetime") else datetime.utcnow()
         )
-        db.session.add(report)
+        report.total_products = int(summary_payload.get("total_products", len(normalized_items)) or len(normalized_items))
+        report.total_units_sold = int(
+            summary_payload.get("total_units_sold", sum(int(item["quantity"]) for item in normalized_items)) or 0
+        )
+        report.total_revenue = parse_decimal_value(
+            summary_payload.get("total_revenue", sum(parse_decimal_value(item["revenue"]) for item in normalized_items))
+        )
+        report.total_return_units = int(
+            summary_payload.get("total_return_units", sum(int(item["returned_quantity"]) for item in normalized_items))
+            or 0
+        )
+        report.total_return_value = parse_decimal_value(
+            summary_payload.get("total_return_value", sum(parse_decimal_value(item["returned_amount"]) for item in normalized_items))
+        )
+        report.net_revenue = parse_decimal_value(
+            summary_payload.get("net_revenue", sum(parse_decimal_value(item["net_revenue"]) for item in normalized_items))
+        )
         db.session.flush()
+
+        # Replace items for this report on re-import to keep data in sync with source payload.
+        SaleItem.query.filter_by(report_id=report.id).delete(synchronize_session=False)
 
         for item in normalized_items:
             product_ref = get_or_create_product(str(item["item_code"]), str(item["item_name"]))
@@ -438,6 +457,7 @@ def import_sales():
         db.session.commit()
         return {
             "status": "success",
+            "action": report_action,
             "report_id": report.id,
             "organization_id": organization.id,
             "organization": organization.name,

@@ -41,20 +41,26 @@ def create_duy_blueprint(
     def panel() -> str:
         org_rows = Organization.query.order_by(Organization.name.asc()).all()
         now_utc = datetime.utcnow()
+        select_columns = [
+            User.id,
+            User.email,
+            User.org_id,
+            Organization.name.label("org_name"),
+            User.is_active,
+            User.expires_at,
+            User.is_owner,
+            User.enable_people_ops,
+            User.enable_business_ops,
+        ]
+        org_people_col = getattr(Organization, "enable_people_ops", None)
+        org_business_col = getattr(Organization, "enable_business_ops", None)
+        if org_people_col is not None:
+            select_columns.append(org_people_col.label("org_enable_people_ops"))
+        if org_business_col is not None:
+            select_columns.append(org_business_col.label("org_enable_business_ops"))
+
         users = (
-            db.session.query(
-                User.id,
-                User.email,
-                User.org_id,
-                Organization.name.label("org_name"),
-                User.is_active,
-                User.expires_at,
-                User.is_owner,
-                User.enable_people_ops,
-                User.enable_business_ops,
-                Organization.enable_people_ops.label("org_enable_people_ops"),
-                Organization.enable_business_ops.label("org_enable_business_ops"),
-            )
+            db.session.query(*select_columns)
             .join(Organization, Organization.id == User.org_id)
             .order_by(User.is_owner.desc(), User.email.asc())
             .all()
@@ -80,8 +86,8 @@ def create_duy_blueprint(
                     "is_owner": bool(row.is_owner),
                     "enable_people_ops": bool(row.enable_people_ops),
                     "enable_business_ops": bool(row.enable_business_ops),
-                    "org_enable_people_ops": bool(row.org_enable_people_ops),
-                    "org_enable_business_ops": bool(row.org_enable_business_ops),
+                    "org_enable_people_ops": bool(getattr(row, "org_enable_people_ops", True)),
+                    "org_enable_business_ops": bool(getattr(row, "org_enable_business_ops", True)),
                     "status_key": status_key,
                 }
             )
@@ -214,6 +220,12 @@ def create_duy_blueprint(
 
         enable_people_ops = request.form.get("enable_people_ops") == "1"
         enable_business_ops = request.form.get("enable_business_ops") == "1"
+
+        org_people_col = getattr(Organization, "enable_people_ops", None)
+        org_business_col = getattr(Organization, "enable_business_ops", None)
+        if org_people_col is None or org_business_col is None:
+            flash("msg_duy_org_modules_unsupported", "error")
+            return redirect(url_for("duy.panel"))
 
         org.enable_people_ops = enable_people_ops
         org.enable_business_ops = enable_business_ops
