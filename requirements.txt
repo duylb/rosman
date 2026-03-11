@@ -6,3 +6,5 @@ Flask-Migrate==4.1.0
 psycopg2-binary==2.9.9
 gunicorn==23.0.0
 pdfplumber==0.11.4
+openpyxl==3.1.5
+reportlab==4.2.5

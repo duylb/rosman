@@ -599,6 +599,122 @@ def csv_response(filename: str, headers: list[str], rows: list[dict[str, Any]]) 
     )
 
 
+def as_decimal(value: Any) -> Decimal:
+    try:
+        return Decimal(str(value or 0))
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal("0")
+
+
+def parse_report_range() -> tuple[date, date]:
+    start_raw = (request.args.get("start_date", "") or "").strip()
+    end_raw = (request.args.get("end_date", "") or "").strip()
+
+    today_obj = date.today()
+    default_start, default_end = month_bounds(today_obj)
+    start_obj = parse_iso_date(start_raw) if start_raw else default_start
+    end_obj = parse_iso_date(end_raw) if end_raw else default_end
+
+    if start_obj is None or end_obj is None:
+        raise ValueError("Invalid start_date or end_date. Use YYYY-MM-DD.")
+    if end_obj < start_obj:
+        raise ValueError("end_date must be on or after start_date.")
+    return start_obj, end_obj
+
+
+def build_sales_report_payload(org_id: int, start_obj: date, end_obj: date) -> dict[str, Any]:
+    reports = (
+        SaleReport.query.options(selectinload(SaleReport.sale_items))
+        .filter(SaleReport.org_id == org_id)
+        .order_by(SaleReport.imported_at.desc(), SaleReport.id.desc())
+        .all()
+    )
+
+    rows_by_item: dict[tuple[str, str], dict[str, Any]] = {}
+    total_revenue = Decimal("0")
+    total_returned_amount = Decimal("0")
+    total_net_revenue = Decimal("0")
+    total_units_sold = 0
+    total_returned_units = 0
+
+    for report in reports:
+        report_start = report.start_date or (report.imported_at.date() if report.imported_at else None)
+        report_end = report.end_date or report_start
+        if report_start is None:
+            continue
+        if report_end < start_obj or report_start > end_obj:
+            continue
+
+        for item in report.sale_items:
+            item_code = str(item.sku or "").strip()
+            item_name = str(item.name or "").strip()
+            if not item_code and not item_name:
+                continue
+            key = (item_code, item_name)
+
+            units_sold = int(item.quantity or 0)
+            revenue = as_decimal(item.revenue).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            returned_quantity = int(item.returns or 0)
+            returned_amount = as_decimal(item.return_value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            net_revenue = as_decimal(item.net_revenue).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+            if key not in rows_by_item:
+                rows_by_item[key] = {
+                    "item_code": item_code,
+                    "item_name": item_name,
+                    "units_sold": 0,
+                    "revenue": Decimal("0.00"),
+                    "returned_quantity": 0,
+                    "returned_amount": Decimal("0.00"),
+                    "net_revenue": Decimal("0.00"),
+                }
+
+            row = rows_by_item[key]
+            row["units_sold"] += units_sold
+            row["revenue"] += revenue
+            row["returned_quantity"] += returned_quantity
+            row["returned_amount"] += returned_amount
+            row["net_revenue"] += net_revenue
+
+            total_units_sold += units_sold
+            total_revenue += revenue
+            total_returned_units += returned_quantity
+            total_returned_amount += returned_amount
+            total_net_revenue += net_revenue
+
+    products = []
+    for row in rows_by_item.values():
+        products.append(
+            {
+                "item_code": row["item_code"],
+                "item_name": row["item_name"],
+                "units_sold": int(row["units_sold"]),
+                "revenue": float(row["revenue"].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                "returned_quantity": int(row["returned_quantity"]),
+                "returned_amount": float(row["returned_amount"].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+                "net_revenue": float(row["net_revenue"].quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+            }
+        )
+
+    products.sort(key=lambda entry: (entry["net_revenue"], entry["revenue"]), reverse=True)
+
+    summary = {
+        "total_revenue": float(total_revenue.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+        "total_returned_amount": float(total_returned_amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+        "net_revenue": float(total_net_revenue.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)),
+        "total_units_sold": int(total_units_sold),
+        "total_returned_units": int(total_returned_units),
+        "product_count": len(products),
+    }
+
+    return {
+        "start_date": start_obj.isoformat(),
+        "end_date": end_obj.isoformat(),
+        "summary": summary,
+        "products": products,
+    }
+
+
 def ensure_roster_schema_compatibility() -> None:
     """Bring older databases forward for roster versioning without full Alembic migrations."""
     inspector = inspect(db.engine)
@@ -2559,17 +2675,6 @@ def sales_report() -> str | Response:
     org_id = current_org_id()
     if request.method == "GET":
         maybe_seed_business_dummy_data(org_id)
-    filter_start_raw = request.args.get("start_date", "").strip()
-    filter_end_raw = request.args.get("end_date", "").strip()
-    filter_start_obj = parse_iso_date(filter_start_raw) if filter_start_raw else None
-    filter_end_obj = parse_iso_date(filter_end_raw) if filter_end_raw else None
-    if filter_start_raw and filter_start_obj is None:
-        flash("Invalid start date filter.", "error")
-    if filter_end_raw and filter_end_obj is None:
-        flash("Invalid end date filter.", "error")
-    if filter_start_obj and filter_end_obj and filter_end_obj < filter_start_obj:
-        flash("End date must be on or after start date.", "error")
-        filter_end_obj = filter_start_obj
 
     if request.method == "POST":
         file_obj = request.files.get("pdf_file")
@@ -2644,217 +2749,209 @@ def sales_report() -> str | Response:
                 ),
                 "success",
             )
-            return redirect(url_for("sales_report", report_id=report.id))
+            return redirect(
+                url_for(
+                    "sales_report",
+                    start_date=(report_start_obj or date.today()).isoformat(),
+                    end_date=(report_end_obj or date.today()).isoformat(),
+                )
+            )
         except IntegrityError:
             db.session.rollback()
             flash(t("msg_import_failed_reference_or_duplicate"), "error")
             return redirect(url_for("sales_report"))
 
-    reports = (
-        SaleReport.query.filter_by(org_id=org_id)
-        .order_by(SaleReport.imported_at.desc(), SaleReport.id.desc())
-        .all()
-    )
-    if filter_start_obj or filter_end_obj:
-        reports = [
-            report
-            for report in reports
-            if (
-                (filter_start_obj is None or (report.end_date is None or report.end_date >= filter_start_obj))
-                and (filter_end_obj is None or (report.start_date is None or report.start_date <= filter_end_obj))
-            )
-        ]
-    selected_report_raw = request.args.get("report_id", "").strip()
-    selected_report_id: int | None = None
-    if selected_report_raw:
-        try:
-            selected_report_id = int(selected_report_raw)
-        except ValueError:
-            flash(t("msg_invalid_sales_report"), "error")
-
-    current_report = None
-    if selected_report_id is not None:
-        current_report = next((item for item in reports if item.id == selected_report_id), None)
-        if current_report is None:
-            flash(t("msg_sales_report_not_found"), "error")
-    elif reports:
-        current_report = reports[0]
-
-    items: list[SaleItem] = []
-    grouped_reports: list[dict[str, Any]] = []
-    categories: list[str] = []
-    selected_category = request.args.get("category", "").strip()
-    summary = {
-        "items_count": 0,
-        "total_quantity": 0,
-        "total_revenue": Decimal("0.00"),
-    }
-
-    if current_report is not None:
-        category_rows = (
-            db.session.query(SaleItem.category)
-            .filter(SaleItem.sale_report_id == current_report.id)
-            .distinct()
-            .order_by(SaleItem.category.asc())
-            .all()
-        )
-        categories = [str(row.category) for row in category_rows if row.category]
-        if selected_category and selected_category not in categories:
-            flash(t("msg_invalid_sales_category_filter"), "error")
-            selected_category = ""
-
-        base_query = SaleItem.query.filter(SaleItem.sale_report_id == current_report.id)
-        if selected_category:
-            base_query = base_query.filter(SaleItem.category == selected_category)
-
-        export_csv = request.args.get("export", "").strip().lower() == "csv"
-        if export_csv:
-            export_rows = base_query.order_by(SaleItem.net_revenue.desc(), SaleItem.name.asc()).all()
-            headers = [
-                "sku",
-                "name",
-                "category",
-                "type",
-                "quantity",
-                "revenue",
-                "returns",
-                "return_value",
-                "net_revenue",
-            ]
-            data_rows = [
-                {
-                    "sku": row.sku,
-                    "name": row.name,
-                    "category": row.category,
-                    "type": row.type,
-                    "quantity": row.quantity,
-                    "revenue": format_money(row.revenue),
-                    "returns": row.returns,
-                    "return_value": format_money(row.return_value),
-                    "net_revenue": format_money(row.net_revenue),
-                }
-                for row in export_rows
-            ]
-            return csv_response(
-                f"sales_report_{current_report.id}.csv",
-                headers,
-                data_rows,
-            )
-
-        total_items_count = base_query.count()
-        items = base_query.order_by(SaleItem.net_revenue.desc(), SaleItem.name.asc()).limit(200).all()
-        grouped_rows = base_query.order_by(SaleItem.sku.asc(), SaleItem.name.asc()).all()
-
-        prefix_definitions: list[tuple[str, str, str]] = [
-            ("BC", "Beverage", "Coffee"),
-            ("BT", "Beverage", "Tea"),
-            ("BWR", "Beverage", "Red Wine"),
-            ("BWW", "Beverage", "White Wine"),
-            ("FD", "Food", "Dessert"),
-            ("FB", "Food", "Beef"),
-            ("FC", "Food", "Chicken"),
-            ("FL", "Food", "Salad"),
-            ("FE", "Food", "Entree"),
-            ("FS", "Food", "Side Dish"),
-        ]
-        grouped_reports_map: dict[str, dict[str, Any]] = {
-            prefix: {
-                "prefix": prefix,
-                "category": category_name,
-                "type": type_name,
-                "group_label": f"{type_name} ({prefix})",
-                "total_quantity": 0,
-                "total_revenue": Decimal("0.00"),
-                "sale_items": [],
-            }
-            for prefix, category_name, type_name in prefix_definitions
-        }
-        grouped_reports_map["OTHER"] = {
-            "prefix": "OTHER",
-            "category": "Uncategorized",
-            "type": "Other",
-            "group_label": "Other / Uncategorized",
-            "total_quantity": 0,
-            "total_revenue": Decimal("0.00"),
-            "sale_items": [],
-        }
-
-        for row in grouped_rows:
-            item_code = str(row.sku or "").strip().upper()
-            matched_prefix: str | None = None
-            for prefix, _, _ in prefix_definitions:
-                if item_code.startswith(prefix):
-                    matched_prefix = prefix
-                    break
-            group_entry = grouped_reports_map[matched_prefix] if matched_prefix else grouped_reports_map["OTHER"]
-            group_entry["total_quantity"] += int(row.quantity or 0)
-            group_entry["total_revenue"] += Decimal(str(row.net_revenue or 0))
-            group_entry["sale_items"].append(row)
-
-        grouped_reports = [
-            {
-                "prefix": entry["prefix"],
-                "category": entry["category"],
-                "type": entry["type"],
-                "group_label": entry["group_label"],
-                "total_quantity": entry["total_quantity"],
-                "total_revenue": entry["total_revenue"].quantize(
-                    Decimal("0.01"),
-                    rounding=ROUND_HALF_UP,
-                ),
-                "sale_items": entry["sale_items"],
-            }
-            for prefix, entry in grouped_reports_map.items()
-            if entry["sale_items"]
-        ]
-        qty_total = (
-            db.session.query(func.coalesce(func.sum(SaleItem.quantity), 0))
-            .filter(SaleItem.sale_report_id == current_report.id)
-            .scalar()
-        )
-        revenue_total = (
-            db.session.query(func.coalesce(func.sum(SaleItem.net_revenue), 0))
-            .filter(SaleItem.sale_report_id == current_report.id)
-            .scalar()
-        )
-        if selected_category:
-            qty_total = (
-                db.session.query(func.coalesce(func.sum(SaleItem.quantity), 0))
-                .filter(
-                    SaleItem.sale_report_id == current_report.id,
-                    SaleItem.category == selected_category,
-                )
-                .scalar()
-            )
-            revenue_total = (
-                db.session.query(func.coalesce(func.sum(SaleItem.net_revenue), 0))
-                .filter(
-                    SaleItem.sale_report_id == current_report.id,
-                    SaleItem.category == selected_category,
-                )
-                .scalar()
-            )
-
-        summary = {
-            "items_count": int(total_items_count),
-            "total_quantity": int(qty_total or 0),
-            "total_revenue": Decimal(str(revenue_total or 0)).quantize(
-                Decimal("0.01"),
-                rounding=ROUND_HALF_UP,
-            ),
-        }
+    start_default, end_default = month_bounds(date.today())
+    start_raw = (request.args.get("start_date", "") or "").strip()
+    end_raw = (request.args.get("end_date", "") or "").strip()
+    start_obj = parse_iso_date(start_raw) if start_raw else start_default
+    end_obj = parse_iso_date(end_raw) if end_raw else end_default
+    if start_obj is None or end_obj is None:
+        flash("Invalid start date or end date.", "error")
+        start_obj, end_obj = start_default, end_default
+    if end_obj < start_obj:
+        flash("End date must be on or after start date.", "error")
+        end_obj = start_obj
 
     return render_template(
         "sales_report.html",
-        reports=reports,
-        current_report=current_report,
-        filter_start_date=filter_start_obj.isoformat() if filter_start_obj else "",
-        filter_end_date=filter_end_obj.isoformat() if filter_end_obj else "",
-        items=items,
-        grouped_reports=grouped_reports,
-        categories=categories,
-        selected_category=selected_category,
-        summary=summary,
+        start_date=start_obj.isoformat(),
+        end_date=end_obj.isoformat(),
+    )
+
+
+@app.route("/api/sales-report", methods=["GET"])
+@login_required
+@business_ops_required
+def api_sales_report() -> Response:
+    try:
+        start_obj, end_obj = parse_report_range()
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+    payload = build_sales_report_payload(current_org_id(), start_obj, end_obj)
+    return jsonify(payload)
+
+
+@app.route("/api/sales-report/export/csv", methods=["GET"])
+@login_required
+@business_ops_required
+def export_sales_report_csv() -> Response:
+    try:
+        start_obj, end_obj = parse_report_range()
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+    payload = build_sales_report_payload(current_org_id(), start_obj, end_obj)
+    headers = [
+        "item_code",
+        "item_name",
+        "units_sold",
+        "revenue",
+        "returned_quantity",
+        "returned_amount",
+        "net_revenue",
+    ]
+    rows = payload["products"]
+    filename = f"sales_report_{start_obj.isoformat()}_{end_obj.isoformat()}.csv"
+    return csv_response(filename, headers, rows)
+
+
+@app.route("/api/sales-report/export/excel", methods=["GET"])
+@login_required
+@business_ops_required
+def export_sales_report_excel() -> Response:
+    try:
+        start_obj, end_obj = parse_report_range()
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+    payload = build_sales_report_payload(current_org_id(), start_obj, end_obj)
+    try:
+        from openpyxl import Workbook
+    except ImportError:
+        return jsonify({"status": "error", "message": "openpyxl is required for Excel export."}), 500
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Sales Report"
+    sheet.append(
+        [
+            "Item code",
+            "Item name",
+            "Units sold",
+            "Revenue",
+            "Returned quantity",
+            "Returned amount",
+            "Net revenue",
+        ]
+    )
+    for row in payload["products"]:
+        sheet.append(
+            [
+                row["item_code"],
+                row["item_name"],
+                row["units_sold"],
+                row["revenue"],
+                row["returned_quantity"],
+                row["returned_amount"],
+                row["net_revenue"],
+            ]
+        )
+
+    workbook_stream = io.BytesIO()
+    workbook.save(workbook_stream)
+    workbook_stream.seek(0)
+    filename = f"sales_report_{start_obj.isoformat()}_{end_obj.isoformat()}.xlsx"
+    return Response(
+        workbook_stream.getvalue(),
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@app.route("/api/sales-report/export/pdf", methods=["GET"])
+@login_required
+@business_ops_required
+def export_sales_report_pdf() -> Response:
+    try:
+        start_obj, end_obj = parse_report_range()
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+    payload = build_sales_report_payload(current_org_id(), start_obj, end_obj)
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    except ImportError:
+        return jsonify({"status": "error", "message": "reportlab is required for PDF export."}), 500
+
+    pdf_stream = io.BytesIO()
+    document = SimpleDocTemplate(pdf_stream, pagesize=landscape(A4))
+    styles = getSampleStyleSheet()
+
+    summary = payload["summary"]
+    content: list[Any] = [
+        Paragraph(
+            f"Sales Report ({payload['start_date']} to {payload['end_date']})",
+            styles["Heading2"],
+        ),
+        Spacer(1, 8),
+        Paragraph(
+            (
+                f"Total revenue: {summary['total_revenue']:.2f} | "
+                f"Returned amount: {summary['total_returned_amount']:.2f} | "
+                f"Net revenue: {summary['net_revenue']:.2f} | "
+                f"Units sold: {summary['total_units_sold']} | "
+                f"Returned units: {summary['total_returned_units']} | "
+                f"Products: {summary['product_count']}"
+            ),
+            styles["Normal"],
+        ),
+        Spacer(1, 10),
+    ]
+
+    table_data = [
+        ["Item code", "Item name", "Units sold", "Revenue", "Returned qty", "Returned amount", "Net revenue"]
+    ]
+    for row in payload["products"]:
+        table_data.append(
+            [
+                row["item_code"],
+                row["item_name"],
+                str(row["units_sold"]),
+                f"{row['revenue']:.2f}",
+                str(row["returned_quantity"]),
+                f"{row['returned_amount']:.2f}",
+                f"{row['net_revenue']:.2f}",
+            ]
+        )
+
+    table = Table(table_data, repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f2937")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#cbd5e1")),
+                ("ALIGN", (2, 1), (-1, -1), "RIGHT"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ]
+        )
+    )
+    content.append(table)
+    document.build(content)
+
+    pdf_stream.seek(0)
+    filename = f"sales_report_{start_obj.isoformat()}_{end_obj.isoformat()}.pdf"
+    return Response(
+        pdf_stream.getvalue(),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 

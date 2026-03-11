@@ -1,267 +1,204 @@
 {% extends "base.html" %}
-{% block page_title %}{{ t('page_sales_report') }}{% endblock %}
+{% block page_title %}Sales Report Dashboard{% endblock %}
 {% block content %}
-<style>
-  .sales-prefix-group {
-    border: 1px solid #e5e7eb;
-    border-radius: 0.5rem;
-    margin-bottom: 0.75rem;
-    overflow: hidden;
-    background: #fff;
-  }
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
 
-  .sales-prefix-summary {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    background: #f3f4f6;
-    cursor: pointer;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    transition: background-color 180ms ease, box-shadow 180ms ease;
-  }
+<section
+  id="sales-dashboard"
+  class="sales-dashboard container-fluid px-0"
+  data-default-start="{{ start_date }}"
+  data-default-end="{{ end_date }}"
+  data-api-url="{{ url_for('api_sales_report') }}"
+  data-export-csv-url="{{ url_for('export_sales_report_csv') }}"
+  data-export-excel-url="{{ url_for('export_sales_report_excel') }}"
+  data-export-pdf-url="{{ url_for('export_sales_report_pdf') }}"
+>
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold mb-1" for="report-start-date">Start date</label>
+          <input id="report-start-date" type="date" class="form-control" value="{{ start_date }}" />
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold mb-1" for="report-end-date">End date</label>
+          <input id="report-end-date" type="date" class="form-control" value="{{ end_date }}" />
+        </div>
+        <div class="col-12 col-md-2">
+          <button id="view-report-btn" type="button" class="btn btn-primary w-100">View Report</button>
+        </div>
+        <div class="col-12 col-md-2">
+          <div class="dropdown d-grid">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+              Export
+            </button>
+            <ul class="dropdown-menu w-100">
+              <li><a class="dropdown-item" href="#" id="export-csv-link">Export CSV</a></li>
+              <li><a class="dropdown-item" href="#" id="export-excel-link">Export Excel (.xlsx)</a></li>
+              <li><a class="dropdown-item" href="#" id="export-pdf-link">Export PDF</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="col-12 col-md-2">
+          <button id="toggle-upload-btn" class="btn btn-outline-dark w-100" type="button">Import PDF</button>
+        </div>
+      </div>
+      <div id="dashboard-status" class="form-text mt-2"></div>
+    </div>
+  </div>
 
-  .sales-prefix-group[open] .sales-prefix-summary {
-    background: #e5e7eb;
-    box-shadow: inset 0 -1px 0 #d1d5db;
-  }
+  <div id="upload-panel" class="card border-0 shadow-sm mb-3 d-none">
+    <div class="card-body">
+      <h2 class="h6 mb-3">Import Sales PDF</h2>
+      <form method="post" action="{{ url_for('sales_report') }}" enctype="multipart/form-data" class="row g-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <div class="col-12 col-md-4">
+          <label class="form-label mb-1">Report name</label>
+          <input type="text" class="form-control" name="report_name" placeholder="December sales report" />
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label mb-1">Start date</label>
+          <input type="date" class="form-control" name="start_date" />
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label mb-1">End date</label>
+          <input type="date" class="form-control" name="end_date" />
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label mb-1">PDF file</label>
+          <input type="file" class="form-control" name="pdf_file" accept=".pdf,application/pdf" required />
+        </div>
+        <div class="col-12">
+          <button type="submit" class="btn btn-success">Import PDF</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
-  .sales-prefix-body {
-    padding: 0.75rem 1rem 1rem;
-    animation: salesAccordionIn 180ms ease;
-  }
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-4 col-xl-2">
+      <article class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <p class="sales-stat-label">Total revenue</p>
+          <p class="sales-stat-value" id="stat-total-revenue">0</p>
+        </div>
+      </article>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <article class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <p class="sales-stat-label">Returned amount</p>
+          <p class="sales-stat-value" id="stat-returned-amount">0</p>
+        </div>
+      </article>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <article class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <p class="sales-stat-label">Net revenue</p>
+          <p class="sales-stat-value" id="stat-net-revenue">0</p>
+        </div>
+      </article>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <article class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <p class="sales-stat-label">Units sold</p>
+          <p class="sales-stat-value" id="stat-units-sold">0</p>
+        </div>
+      </article>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <article class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <p class="sales-stat-label">Returned units</p>
+          <p class="sales-stat-value" id="stat-returned-units">0</p>
+        </div>
+      </article>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <article class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <p class="sales-stat-label">Products</p>
+          <p class="sales-stat-value" id="stat-product-count">0</p>
+        </div>
+      </article>
+    </div>
+  </div>
 
-  @keyframes salesAccordionIn {
-    from { opacity: 0; transform: translateY(-3px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-xl-7">
+      <article class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h2 class="h6 mb-3">Revenue per product</h2>
+          <canvas id="chart-revenue-bar" height="120"></canvas>
+        </div>
+      </article>
+    </div>
+    <div class="col-12 col-md-6 col-xl-5">
+      <article class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h2 class="h6 mb-3">Revenue distribution</h2>
+          <canvas id="chart-revenue-pie" height="120"></canvas>
+        </div>
+      </article>
+    </div>
+    <div class="col-12">
+      <article class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <h2 class="h6 mb-3">Returned amount vs net revenue</h2>
+          <canvas id="chart-return-net" height="80"></canvas>
+        </div>
+      </article>
+    </div>
+  </div>
 
-  .sales-sort-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    width: 100%;
-    border: 0;
-    padding: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .sales-sort-icon {
-    display: inline-block;
-    width: 1.2em;
-    text-align: center;
-    color: #6b7280;
-    font-size: 0.9em;
-    line-height: 1;
-  }
-</style>
-
-<section class="panel">
-  <h2 class="section-title">{{ t('sales_report') }}</h2>
-  <p class="hint">{{ t('sales_report_upload_hint') }}</p>
-  <form method="post" action="{{ url_for('sales_report') }}" enctype="multipart/form-data" class="inline-form form-row-inline form-section">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-    <label>{{ t('report_name_optional') }} <input type="text" name="report_name" placeholder="{{ t('report_name_optional') }}" /></label>
-    <label>Start Date <input type="date" name="start_date" /></label>
-    <label>End Date <input type="date" name="end_date" /></label>
-    <label>{{ t('pdf_file') }} <input type="file" name="pdf_file" accept=".pdf,application/pdf" required /></label>
-    <button type="submit" class="ui-btn ui-btn--primary">
-      {% set name = 'upload' %}
-      {% set size = 16 %}
-      {% include "components/icon.html" %}
-      <span>{{ t('import_pdf') }}</span>
-    </button>
-  </form>
-</section>
-
-<section class="panel">
-  <form method="get" class="inline-form form-row-inline form-section sales-report-toolbar">
-    <label>Start Date <input type="date" name="start_date" value="{{ filter_start_date }}" class="ui-input" /></label>
-    <label>End Date <input type="date" name="end_date" value="{{ filter_end_date }}" class="ui-input" /></label>
-    <label>{{ t('select_report') }}
-      <select name="report_id" class="ui-input" onchange="this.form.submit()">
-        {% for report in reports %}
-        <option value="{{ report.id }}" {% if current_report and current_report.id == report.id %}selected{% endif %}>
-          #{{ report.id }} - {{ report.filename }} ({{ report.imported_at|datetimefmt }})
-        </option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>{{ t('category') }}
-      <select name="category" class="ui-input">
-        <option value="">{{ t('all_categories') }}</option>
-        {% for category_name in categories %}
-        <option value="{{ category_name }}" {% if selected_category == category_name %}selected{% endif %}>{{ category_name }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <button type="submit" class="ui-btn ui-btn--primary">
-      {% set name = 'eye' %}
-      {% set size = 16 %}
-      {% include "components/icon.html" %}
-      <span>View</span>
-    </button>
-    {% if current_report %}
-    <a
-      class="ui-btn ui-btn--secondary"
-      href="{{ url_for('sales_report', report_id=current_report.id, category=selected_category or '', export='csv') }}"
-    >
-      {% set name = 'download' %}
-      {% set size = 16 %}
-      {% include "components/icon.html" %}
-      <span>{{ t('export_sales_csv') }}</span>
-    </a>
-    {% endif %}
-  </form>
-</section>
-
-{% if current_report %}
-<section class="metric-grid">
-  <article class="ui-card metric-card">
-    <div class="metric-head"><h2 class="metric-title">{{ t('items_count') }}</h2></div>
-    <p class="metric-value">{{ summary.items_count }}</p>
-  </article>
-  <article class="ui-card metric-card">
-    <div class="metric-head"><h2 class="metric-title">{{ t('total_quantity') }}</h2></div>
-    <p class="metric-value">{{ summary.total_quantity }}</p>
-  </article>
-  <article class="ui-card metric-card">
-    <div class="metric-head"><h2 class="metric-title">{{ t('total_net_revenue') }}</h2></div>
-    <p class="metric-value">{{ summary.total_revenue|money }}</p>
-  </article>
-</section>
-
-<section class="panel">
-  {% if grouped_reports %}
-    <p class="hint">Showing summary only. Click a category to view item-level details.</p>
-    {% for report_group in grouped_reports %}
-    <details class="sales-prefix-group">
-      <summary class="sales-prefix-summary">
-        <strong>{{ report_group.group_label }}</strong>
-        <span>
-          Total Items: {{ report_group.total_quantity }}
-          &nbsp;|&nbsp;
-          Total Net Revenue: {{ report_group.total_revenue|money }}
-        </span>
-      </summary>
-
-      <div class="sales-prefix-body">
-        {% set wrapper_class = 'table-wrapper' %}
-        {% set table_class = 'sales-report-table' %}
-        {% set table_content %}
-          <thead>
+  <article class="card border-0 shadow-sm">
+    <div class="card-body">
+      <div class="row g-2 align-items-center mb-3">
+        <div class="col-12 col-md-4">
+          <h2 class="h6 mb-0">Detailed items</h2>
+        </div>
+        <div class="col-12 col-md-5">
+          <input id="table-search-input" type="search" class="form-control" placeholder="Search item code or item name" />
+        </div>
+        <div class="col-12 col-md-3">
+          <select id="table-page-size" class="form-select">
+            <option value="10">10 rows</option>
+            <option value="25">25 rows</option>
+            <option value="50">50 rows</option>
+            <option value="100">100 rows</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle" id="sales-data-table">
+          <thead class="table-light">
             <tr>
-              <th>
-                <button type="button" class="sales-sort-btn" onclick="sortSalesTable(this, 0, 'string')">
-                  <span>{{ t('item_code') }}</span>
-                  <span class="sales-sort-icon" aria-hidden="true">&#8597;</span>
-                </button>
-              </th>
-              <th>
-                <button type="button" class="sales-sort-btn" onclick="sortSalesTable(this, 1, 'string')">
-                  <span>{{ t('name') }}</span>
-                  <span class="sales-sort-icon" aria-hidden="true">&#8597;</span>
-                </button>
-              </th>
-              <th>
-                <button type="button" class="sales-sort-btn" onclick="sortSalesTable(this, 2, 'number')">
-                  <span>{{ t('quantity_sold') }}</span>
-                  <span class="sales-sort-icon" aria-hidden="true">&#8597;</span>
-                </button>
-              </th>
-              <th>
-                <button type="button" class="sales-sort-btn" onclick="sortSalesTable(this, 3, 'number')">
-                  <span>{{ t('total_net_revenue') }}</span>
-                  <span class="sales-sort-icon" aria-hidden="true">&#8597;</span>
-                </button>
-              </th>
+              <th><button type="button" class="btn btn-sm btn-link text-decoration-none p-0 table-sort" data-key="item_code">Item code</button></th>
+              <th><button type="button" class="btn btn-sm btn-link text-decoration-none p-0 table-sort" data-key="item_name">Item name</button></th>
+              <th><button type="button" class="btn btn-sm btn-link text-decoration-none p-0 table-sort" data-key="units_sold">Units sold</button></th>
+              <th><button type="button" class="btn btn-sm btn-link text-decoration-none p-0 table-sort" data-key="revenue">Revenue</button></th>
+              <th><button type="button" class="btn btn-sm btn-link text-decoration-none p-0 table-sort" data-key="returned_quantity">Returned quantity</button></th>
+              <th><button type="button" class="btn btn-sm btn-link text-decoration-none p-0 table-sort" data-key="returned_amount">Returned amount</button></th>
+              <th><button type="button" class="btn btn-sm btn-link text-decoration-none p-0 table-sort" data-key="net_revenue">Net revenue</button></th>
             </tr>
           </thead>
-          <tbody>
-            {% for item in report_group.sale_items %}
-            <tr>
-              <td>{{ item.sku }}</td>
-              <td>{{ item.name }}</td>
-              <td>{{ item.quantity }}</td>
-              <td>{{ item.net_revenue|money }}</td>
-            </tr>
-            {% endfor %}
-            {% if not report_group.sale_items %}
-            <tr>
-              <td colspan="4">No data</td>
-            </tr>
-            {% endif %}
-          </tbody>
-        {% endset %}
-        {% include "components/table.html" %}
+          <tbody id="sales-table-body"></tbody>
+        </table>
       </div>
-    </details>
-    {% endfor %}
-  {% else %}
-    {% set title = t('sales_items') %}
-    {% set description = t('no_sales_items_for_filter') %}
-    {% include "components/empty_state.html" %}
-  {% endif %}
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <small id="table-page-label" class="text-muted"></small>
+        <div class="btn-group">
+          <button id="table-prev-page" type="button" class="btn btn-outline-secondary btn-sm">Previous</button>
+          <button id="table-next-page" type="button" class="btn btn-outline-secondary btn-sm">Next</button>
+        </div>
+      </div>
+    </div>
+  </article>
 </section>
-{% else %}
-<section class="panel">
-  {% set title = t('sales_report') %}
-  {% set description = t('no_sales_report_uploaded') %}
-  {% include "components/empty_state.html" %}
-</section>
-{% endif %}
 
-<script>
-  function parseSalesNumber(value) {
-    const normalized = String(value || '').replace(/[^0-9.-]/g, '');
-    const number = parseFloat(normalized);
-    return Number.isNaN(number) ? 0 : number;
-  }
-
-  function sortSalesTable(headerButton, columnIndex, type) {
-    const table = headerButton.closest('table');
-    if (!table || !table.tBodies.length) return;
-
-    const tbody = table.tBodies[0];
-    const rows = Array.from(tbody.rows).filter((row) => {
-      const firstCell = row.cells[0];
-      return firstCell && firstCell.colSpan < 4;
-    });
-
-    if (!rows.length) return;
-
-    const currentColumn = Number(table.dataset.sortColumn);
-    const currentDirection = table.dataset.sortDirection || 'asc';
-    const nextDirection = currentColumn === columnIndex && currentDirection === 'asc' ? 'desc' : 'asc';
-    const directionFactor = nextDirection === 'asc' ? 1 : -1;
-
-    rows.sort((rowA, rowB) => {
-      const valueA = rowA.cells[columnIndex]?.textContent.trim() || '';
-      const valueB = rowB.cells[columnIndex]?.textContent.trim() || '';
-
-      if (type === 'number') {
-        return (parseSalesNumber(valueA) - parseSalesNumber(valueB)) * directionFactor;
-      }
-
-      return valueA.localeCompare(valueB, undefined, { sensitivity: 'base', numeric: true }) * directionFactor;
-    });
-
-    rows.forEach((row) => tbody.appendChild(row));
-
-    table.dataset.sortColumn = String(columnIndex);
-    table.dataset.sortDirection = nextDirection;
-
-    const icons = table.querySelectorAll('.sales-sort-icon');
-    icons.forEach((icon, index) => {
-      icon.textContent = index === columnIndex ? (nextDirection === 'asc' ? '\u2191' : '\u2193') : '\u2195';
-    });
-  }
-</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/sales_report_dashboard.js') }}"></script>
 {% endblock %}

@@ -490,3 +490,35 @@
     text-align: left;
   }
 }
+
+.sales-dashboard .card {
+  border-radius: 0.9rem;
+}
+
+.sales-dashboard .sales-stat-label {
+  margin: 0 0 0.4rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.sales-dashboard .sales-stat-value {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.sales-dashboard .table-sort {
+  color: #334155;
+  font-weight: 600;
+}
+
+.sales-dashboard .table-sort:hover {
+  color: #0f172a;
+}
+
+.sales-dashboard canvas {
+  max-height: 360px;
+}
