@@ -101,13 +101,12 @@ class SalesItem(db.Model):
     )
     item_code = db.Column(db.String(64), nullable=False, index=True)
     item_name = db.Column(db.String(255), nullable=False)
+    units_sold = db.Column(db.Integer, nullable=False, server_default=db.text("0"))
     revenue = db.Column(db.Numeric(14, 2), nullable=False, server_default=db.text("0"))
     returned_quantity = db.Column(db.Integer, nullable=False, server_default=db.text("0"))
     returned_amount = db.Column(db.Numeric(14, 2), nullable=False, server_default=db.text("0"))
     net_revenue = db.Column(db.Numeric(14, 2), nullable=False, server_default=db.text("0"))
 
-    # Compatibility columns used by existing reporting screens.
-    quantity = db.Column(db.Integer, nullable=False, server_default=db.text("0"))
     category = db.Column(db.String(120), nullable=False, server_default=db.text("'Uncategorized'"), index=True)
     type = db.Column(db.String(120), nullable=False, server_default=db.text("'Other'"), index=True)
 
@@ -119,6 +118,7 @@ class SalesItem(db.Model):
     product_name = synonym("item_name")
     sku = synonym("item_code")
     name = synonym("item_name")
+    quantity = synonym("units_sold")
     return_units = synonym("returned_quantity")
     returns = synonym("returned_quantity")
     return_value = synonym("returned_amount")
