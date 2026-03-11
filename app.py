@@ -350,8 +350,8 @@ def login_required(func: Any) -> Any:
 def is_people_ops_enabled(user: Any) -> bool:
     if user is None:
         return False
-    org_enabled = bool(getattr(user.organization, "enable_people_ops", True))
-    user_enabled = bool(getattr(user, "enable_people_ops", True))
+    org_enabled = bool(getattr(user.organization, "enable_people_ops", False))
+    user_enabled = bool(getattr(user, "enable_people_ops", False))
     return org_enabled and user_enabled
 
 
@@ -1208,20 +1208,30 @@ def dashboard() -> str:
     org_id = current_org_id()
     today = date.today().isoformat()
 
-    staff_count = Staff.query.filter_by(org_id=org_id, active=1).count()
-    shift_count = ShiftTemplate.query.filter_by(org_id=org_id).count()
-    assignments_today = RosterAssignment.query.filter_by(org_id=org_id, roster_date=today).count()
-    unavailable_today = (
-        db.session.query(StaffAvailability.staff_id)
-        .filter(
-            StaffAvailability.org_id == org_id,
-            StaffAvailability.status.in_(["leave", "unavailable"]),
-            StaffAvailability.start_date <= today,
-            StaffAvailability.end_date >= today,
-        )
-        .distinct()
-        .count()
+    inspector = inspect(db.engine)
+    has_staff = inspector.has_table("staff")
+    has_shift_templates = inspector.has_table("shift_templates")
+    has_roster_assignments = inspector.has_table("roster_assignments")
+    has_staff_availability = inspector.has_table("staff_availability")
+
+    staff_count = Staff.query.filter_by(org_id=org_id, active=1).count() if has_staff else 0
+    shift_count = ShiftTemplate.query.filter_by(org_id=org_id).count() if has_shift_templates else 0
+    assignments_today = (
+        RosterAssignment.query.filter_by(org_id=org_id, roster_date=today).count() if has_roster_assignments else 0
     )
+    unavailable_today = 0
+    if has_staff_availability:
+        unavailable_today = (
+            db.session.query(StaffAvailability.staff_id)
+            .filter(
+                StaffAvailability.org_id == org_id,
+                StaffAvailability.status.in_(["leave", "unavailable"]),
+                StaffAvailability.start_date <= today,
+                StaffAvailability.end_date >= today,
+            )
+            .distinct()
+            .count()
+        )
 
     return render_template(
         "dashboard.html",
