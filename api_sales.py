@@ -364,6 +364,15 @@ def import_sales():
         if items_payload is None:
             # Backward-compatible payload support.
             items_payload = data.get("products", [])
+        if items_payload is None:
+            items_payload = get_nested_value(data, ("summary", "products"))
+        if isinstance(items_payload, str):
+            try:
+                decoded_items = json.loads(items_payload)
+            except (TypeError, ValueError):
+                decoded_items = None
+            if isinstance(decoded_items, list):
+                items_payload = decoded_items
         if not isinstance(items_payload, list):
             return jsonify({"status": "error", "message": "items must be an array."}), 400
 
@@ -393,7 +402,13 @@ def import_sales():
             )
 
         if not normalized_items:
-            return jsonify({"status": "error", "message": "At least one sales item is required."}), 400
+            return jsonify(
+                {
+                    "status": "success",
+                    "action": "ignored",
+                    "message": "No sales items found in payload. Nothing imported.",
+                }
+            ), 200
 
         branch = get_or_create_branch(organization.id, branch)
 
