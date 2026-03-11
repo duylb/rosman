@@ -1,4 +1,5 @@
 import os
+import re
 import traceback
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -39,6 +40,17 @@ def parse_decimal_value(raw: object, fallback: Decimal = Decimal("0")) -> Decima
         return Decimal(str(raw))
     except (InvalidOperation, ValueError, TypeError):
         return fallback
+
+
+def build_item_code(item: dict[str, object], index: int) -> str:
+    raw_code = str(item.get("item_code", item.get("product_code", "")) or "").strip()
+    if raw_code:
+        return raw_code
+    raw_name = str(item.get("item_name", item.get("product_name", "")) or "").strip().upper()
+    normalized = re.sub(r"[^A-Z0-9]+", "", raw_name)[:24]
+    if normalized:
+        return f"AUTO-{normalized}"
+    return f"AUTO-{index + 1:05d}"
 
 
 @sales_api.route("/api/import-sales", methods=["POST"])
@@ -85,11 +97,11 @@ def import_sales():
             return jsonify({"status": "error", "message": "items must be an array."}), 400
 
         normalized_items: list[dict[str, object]] = []
-        for item in items_payload:
-            item_code = str(item.get("item_code", item.get("product_code", "")) or "").strip()
+        for idx, item in enumerate(items_payload):
+            item_code = build_item_code(item, idx)
             item_name = str(item.get("item_name", item.get("product_name", "")) or "").strip()
-            if not item_code or not item_name:
-                return jsonify({"status": "error", "message": "Each item requires item_code and item_name."}), 400
+            if not item_name:
+                return jsonify({"status": "error", "message": "Each item requires item_name or product_name."}), 400
 
             revenue = parse_decimal_value(item.get("revenue"))
             returned_quantity = int(item.get("returned_quantity", item.get("return_units", 0)) or 0)
@@ -124,6 +136,7 @@ def import_sales():
                 report_id=report.id,
                 item_code=str(item["item_code"]),
                 item_name=str(item["item_name"]),
+                units_sold=int(item["quantity"]),
                 revenue=item["revenue"],
                 returned_quantity=int(item["returned_quantity"]),
                 returned_amount=item["returned_amount"],

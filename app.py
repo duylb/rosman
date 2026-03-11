@@ -870,6 +870,7 @@ def ensure_sales_schema_compatibility() -> None:
                 report_id INTEGER NOT NULL,
                 item_code VARCHAR(64) NOT NULL,
                 item_name VARCHAR(255) NOT NULL,
+                units_sold INTEGER NOT NULL DEFAULT 0,
                 revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
                 returned_quantity INTEGER NOT NULL DEFAULT 0,
                 returned_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
@@ -941,8 +942,19 @@ def ensure_sales_schema_compatibility() -> None:
         )
 
     item_columns = {col["name"] for col in inspector.get_columns("sales_items")}
+    if "units_sold" not in item_columns:
+        db.session.execute(text("ALTER TABLE sales_items ADD COLUMN units_sold INTEGER NOT NULL DEFAULT 0"))
     if "quantity" not in item_columns:
         db.session.execute(text("ALTER TABLE sales_items ADD COLUMN quantity INTEGER NOT NULL DEFAULT 0"))
+    db.session.execute(
+        text(
+            """
+            UPDATE sales_items
+            SET units_sold = COALESCE(units_sold, quantity, 0),
+                quantity = COALESCE(quantity, units_sold, 0)
+            """
+        )
+    )
     if "category" not in item_columns:
         db.session.execute(
             text("ALTER TABLE sales_items ADD COLUMN category VARCHAR(120) NOT NULL DEFAULT 'Uncategorized'")
@@ -982,7 +994,7 @@ def ensure_sales_schema_compatibility() -> None:
                 f"""
                 INSERT INTO sales_items (
                     id, report_id, item_code, item_name, revenue,
-                    returned_quantity, returned_amount, net_revenue, quantity, category, type
+                    returned_quantity, returned_amount, net_revenue, units_sold, quantity, category, type
                 )
                 SELECT
                     si.id,
@@ -993,6 +1005,7 @@ def ensure_sales_schema_compatibility() -> None:
                     {returned_qty_expr},
                     {returned_amount_expr},
                     {net_expr},
+                    {quantity_expr},
                     {quantity_expr},
                     {category_expr},
                     {type_expr}
