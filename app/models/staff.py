@@ -5,10 +5,8 @@ class Organization(db.Model):
     __tablename__ = "organizations"
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.Text, nullable=False, unique=True)
-    created_at = db.Column(db.Text, nullable=False, server_default=db.text("CURRENT_TIMESTAMP"))
-    enable_people_ops = db.Column(db.Boolean, nullable=False, server_default=db.text("1"), default=True)
-    enable_business_ops = db.Column(db.Boolean, nullable=False, server_default=db.text("1"), default=True)
+    name = db.Column(db.String(255), nullable=False, unique=True)
+    created_at = db.Column(db.DateTime, nullable=False, server_default=db.text("CURRENT_TIMESTAMP"))
 
     users = db.relationship("User", back_populates="organization")
     staff_members = db.relationship("Staff", back_populates="organization")
@@ -17,7 +15,13 @@ class Organization(db.Model):
     roster_assignments = db.relationship("RosterAssignment", back_populates="organization")
     staff_availability_entries = db.relationship("StaffAvailability", back_populates="organization")
     staff_shift_preferences = db.relationship("StaffShiftPreference", back_populates="organization")
-    sale_reports = db.relationship(
+    branches = db.relationship(
+        "Branch",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    sales_reports = db.relationship(
         "SalesReport",
         back_populates="organization",
         cascade="all, delete-orphan",

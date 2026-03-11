@@ -9,7 +9,7 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy import inspect, text
 
 from app.extensions import csrf, db
-from app.models import Organization, SaleItem, SalesReport
+from app.models import Branch, Organization, Product, SaleItem, SalesReport
 
 sales_api = Blueprint("sales_api", __name__)
 API_KEY = os.environ.get("SALES_API_KEY")
@@ -110,69 +110,81 @@ def ensure_sales_schema_for_import() -> None:
         return
 
     inspector = inspect(db.engine)
+    if not inspector.has_table("branches"):
+        db.session.execute(
+            text(
+                """
+                CREATE TABLE branches (
+                    id SERIAL PRIMARY KEY,
+                    organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                    branch_name VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+    if not inspector.has_table("products"):
+        db.session.execute(
+            text(
+                """
+                CREATE TABLE products (
+                    id SERIAL PRIMARY KEY,
+                    item_code VARCHAR(50) UNIQUE NOT NULL,
+                    item_name VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
     if not inspector.has_table("sales_reports"):
-        _schema_checked = True
-        return
+        db.session.execute(
+            text(
+                """
+                CREATE TABLE sales_reports (
+                    id SERIAL PRIMARY KEY,
+                    organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                    branch_id INTEGER NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+                    report_title VARCHAR(255),
+                    start_date DATE NOT NULL,
+                    end_date DATE NOT NULL,
+                    created_datetime TIMESTAMP,
+                    total_products INTEGER,
+                    total_units_sold INTEGER,
+                    total_revenue NUMERIC(14,2),
+                    total_return_units INTEGER,
+                    total_return_value NUMERIC(14,2),
+                    net_revenue NUMERIC(14,2),
+                    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (branch_id, start_date, end_date)
+                )
+                """
+            )
+        )
+    if not inspector.has_table("sales_report_items"):
+        db.session.execute(
+            text(
+                """
+                CREATE TABLE sales_report_items (
+                    id SERIAL PRIMARY KEY,
+                    report_id INTEGER NOT NULL REFERENCES sales_reports(id) ON DELETE CASCADE,
+                    product_id INTEGER NOT NULL REFERENCES products(id),
+                    units_sold INTEGER,
+                    revenue NUMERIC(14,2),
+                    return_quantity INTEGER,
+                    return_amount NUMERIC(14,2),
+                    net_revenue NUMERIC(14,2)
+                )
+                """
+            )
+        )
 
-    report_columns = {col["name"] for col in inspector.get_columns("sales_reports")}
-    if "org_id" not in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN org_id INTEGER"))
-        if "organization_id" in report_columns:
-            db.session.execute(text("UPDATE sales_reports SET org_id = organization_id WHERE org_id IS NULL"))
-    if "report_title" not in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN report_title VARCHAR(255)"))
-        if "filename" in report_columns:
-            db.session.execute(text("UPDATE sales_reports SET report_title = COALESCE(filename, 'Sales Report')"))
-        else:
-            db.session.execute(text("UPDATE sales_reports SET report_title = 'Sales Report' WHERE report_title IS NULL"))
-    if "created_datetime" not in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN created_datetime TIMESTAMP"))
-        if "imported_at" in report_columns:
-            db.session.execute(text("UPDATE sales_reports SET created_datetime = imported_at WHERE created_datetime IS NULL"))
-    if "branch" not in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN branch VARCHAR(160)"))
-    if "total_products" not in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN total_products INTEGER DEFAULT 0"))
-    if "total_units_sold" not in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN total_units_sold INTEGER DEFAULT 0"))
-    if "total_revenue" not in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN total_revenue NUMERIC(14,2) DEFAULT 0"))
-    if "total_return_units" not in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN total_return_units INTEGER DEFAULT 0"))
-    if "total_return_value" not in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN total_return_value NUMERIC(14,2) DEFAULT 0"))
-    if "net_revenue" not in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN net_revenue NUMERIC(14,2) DEFAULT 0"))
-    if "created_at" not in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"))
-
-    if inspector.has_table("sales_items"):
-        item_columns = {col["name"] for col in inspector.get_columns("sales_items")}
-        if "report_id" not in item_columns and "sale_report_id" in item_columns:
-            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN report_id INTEGER"))
-            db.session.execute(text("UPDATE sales_items SET report_id = sale_report_id WHERE report_id IS NULL"))
-        if "item_code" not in item_columns and "sku" in item_columns:
-            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN item_code VARCHAR(64)"))
-            db.session.execute(text("UPDATE sales_items SET item_code = sku WHERE item_code IS NULL"))
-        if "item_name" not in item_columns and "name" in item_columns:
-            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN item_name VARCHAR(255)"))
-            db.session.execute(text("UPDATE sales_items SET item_name = name WHERE item_name IS NULL"))
-        if "units_sold" not in item_columns and "quantity" in item_columns:
-            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN units_sold INTEGER DEFAULT 0"))
-            db.session.execute(text("UPDATE sales_items SET units_sold = quantity WHERE units_sold IS NULL"))
-        if "return_quantity" not in item_columns and "returned_quantity" in item_columns:
-            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN return_quantity INTEGER DEFAULT 0"))
-            db.session.execute(text("UPDATE sales_items SET return_quantity = returned_quantity WHERE return_quantity IS NULL"))
-        if "return_amount" not in item_columns and "returned_amount" in item_columns:
-            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN return_amount NUMERIC(14,2) DEFAULT 0"))
-            db.session.execute(text("UPDATE sales_items SET return_amount = returned_amount WHERE return_amount IS NULL"))
-        if "net_revenue" not in item_columns:
-            db.session.execute(text("ALTER TABLE sales_items ADD COLUMN net_revenue NUMERIC(14,2) DEFAULT 0"))
-            db.session.execute(text("UPDATE sales_items SET net_revenue = COALESCE(revenue, 0) - COALESCE(return_amount, 0)"))
-
-    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_org_id ON sales_reports (org_id)"))
-    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_report_id ON sales_items (report_id)"))
-    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_item_code ON sales_items (item_code)"))
+    db.session.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_organizations_name ON organizations (name)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_branches_organization_id ON branches (organization_id)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_products_item_code ON products (item_code)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_branch_id ON sales_reports (branch_id)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_start_end ON sales_reports (start_date, end_date)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_report_items_report_id ON sales_report_items (report_id)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_report_items_product_id ON sales_report_items (product_id)"))
     db.session.commit()
     _schema_checked = True
 
@@ -205,6 +217,29 @@ def build_item_code(item: dict[str, object], index: int) -> str:
     if normalized:
         return f"AUTO-{normalized}"
     return f"AUTO-{index + 1:05d}"
+
+
+def get_or_create_branch(organization_id: int, branch_name: str | None) -> Branch:
+    normalized_name = (branch_name or "").strip() or "Main"
+    branch = Branch.query.filter_by(organization_id=organization_id, branch_name=normalized_name).first()
+    if branch is None:
+        branch = Branch(organization_id=organization_id, branch_name=normalized_name)
+        db.session.add(branch)
+        db.session.flush()
+    return branch
+
+
+def get_or_create_product(item_code: str, item_name: str) -> Product:
+    code = (item_code or "").strip()
+    name = (item_name or "").strip()
+    product = Product.query.filter_by(item_code=code).first()
+    if product is None:
+        product = Product(item_code=code, item_name=name)
+        db.session.add(product)
+        db.session.flush()
+    elif name and product.item_name != name:
+        product.item_name = name
+    return product
 
 
 @sales_api.route("/api/import-sales", methods=["POST"])
@@ -355,12 +390,14 @@ def import_sales():
                 }
             )
 
+        branch = get_or_create_branch(organization.id, branch)
+
         report = SalesReport(
-            org_id=organization.id,
+            organization_id=organization.id,
+            branch_id=branch.id,
             report_title=report_title,
             start_date=parse_date_value(start_date_raw),
             end_date=parse_date_value(end_date_raw),
-            branch=branch,
             created_datetime=parse_datetime_value(data.get("created_datetime")) if data.get("created_datetime") else datetime.utcnow(),
             total_products=int(summary_payload.get("total_products", len(normalized_items)) or len(normalized_items)),
             total_units_sold=int(
@@ -385,10 +422,10 @@ def import_sales():
         db.session.flush()
 
         for item in normalized_items:
+            product_ref = get_or_create_product(str(item["item_code"]), str(item["item_name"]))
             product = SaleItem(
                 report_id=report.id,
-                item_code=str(item["item_code"]),
-                item_name=str(item["item_name"]),
+                product_id=product_ref.id,
                 units_sold=int(item["quantity"]),
                 revenue=item["revenue"],
                 returned_quantity=int(item["returned_quantity"]),

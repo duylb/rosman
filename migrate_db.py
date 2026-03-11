@@ -10,77 +10,96 @@ def run() -> None:
         raise RuntimeError("DATABASE_URL is required to run migrations.")
 
     engine = create_engine(database_url)
-    dialect = engine.dialect.name.lower()
-    report_id_def = "SERIAL PRIMARY KEY" if dialect == "postgresql" else "INTEGER PRIMARY KEY"
-    item_id_def = "SERIAL PRIMARY KEY" if dialect == "postgresql" else "INTEGER PRIMARY KEY"
-
     with engine.begin() as conn:
-        # 1) Remove old sales/inventory/supplier architecture completely.
-        for table_name in [
-            "sales_items",
-            "sales_reports",
-            "product_sales",
-            "sale_items",
-            "sale_reports",
-            "sales",
-            "stock_logs",
-            "recipes",
-            "inventory_items",
-            "suppliers",
-            "inventory",
-        ]:
-            conn.execute(text(f"DROP TABLE IF EXISTS {table_name} CASCADE"))
-
-        # 2) Recreate clean report-ingestion schema.
         conn.execute(
             text(
-                f"""
+                """
+                DO $$
+                DECLARE
+                    r RECORD;
+                BEGIN
+                    FOR r IN
+                        SELECT tablename
+                        FROM pg_tables
+                        WHERE schemaname = 'public'
+                          AND tablename <> 'alembic_version'
+                    LOOP
+                        EXECUTE format('DROP TABLE IF EXISTS public.%I CASCADE', r.tablename);
+                    END LOOP;
+                END
+                $$;
+                """
+            )
+        )
+
+        conn.execute(
+            text(
+                """
+                CREATE TABLE organizations (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE UNIQUE INDEX uq_organizations_name ON organizations (name);
+
+                CREATE TABLE branches (
+                    id SERIAL PRIMARY KEY,
+                    organization_id INTEGER NOT NULL,
+                    branch_name VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+                );
+                CREATE INDEX ix_branches_organization_id ON branches (organization_id);
+
+                CREATE TABLE products (
+                    id SERIAL PRIMARY KEY,
+                    item_code VARCHAR(50) UNIQUE NOT NULL,
+                    item_name VARCHAR(255) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX ix_products_item_code ON products (item_code);
+
                 CREATE TABLE sales_reports (
-                    id {report_id_def},
-                    org_id INTEGER NOT NULL,
-                    report_title VARCHAR(255) NOT NULL,
+                    id SERIAL PRIMARY KEY,
+                    organization_id INTEGER NOT NULL,
+                    branch_id INTEGER NOT NULL,
+                    report_title VARCHAR(255),
                     start_date DATE NOT NULL,
                     end_date DATE NOT NULL,
-                    branch VARCHAR(160),
-                    created_datetime TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    total_products INTEGER NOT NULL DEFAULT 0,
-                    total_units_sold INTEGER NOT NULL DEFAULT 0,
-                    total_revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
-                    total_return_units INTEGER NOT NULL DEFAULT 0,
-                    total_return_value NUMERIC(14,2) NOT NULL DEFAULT 0,
-                    net_revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
-                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (org_id) REFERENCES organizations (id) ON DELETE CASCADE
-                )
-                """
-            )
-        )
-        conn.execute(
-            text(
-                f"""
-                CREATE TABLE sales_items (
-                    id {item_id_def},
+                    created_datetime TIMESTAMP,
+                    total_products INTEGER,
+                    total_units_sold INTEGER,
+                    total_revenue NUMERIC(14,2),
+                    total_return_units INTEGER,
+                    total_return_value NUMERIC(14,2),
+                    net_revenue NUMERIC(14,2),
+                    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (organization_id) REFERENCES organizations(id),
+                    FOREIGN KEY (branch_id) REFERENCES branches(id),
+                    UNIQUE (branch_id, start_date, end_date)
+                );
+                CREATE INDEX ix_sales_reports_branch_id ON sales_reports (branch_id);
+                CREATE INDEX ix_sales_reports_start_end ON sales_reports (start_date, end_date);
+
+                CREATE TABLE sales_report_items (
+                    id SERIAL PRIMARY KEY,
                     report_id INTEGER NOT NULL,
-                    item_code VARCHAR(64) NOT NULL,
-                    item_name VARCHAR(255) NOT NULL,
-                    units_sold INTEGER NOT NULL DEFAULT 0,
-                    revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
-                    return_quantity INTEGER NOT NULL DEFAULT 0,
-                    return_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
-                    net_revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
-                    FOREIGN KEY (report_id) REFERENCES sales_reports (id) ON DELETE CASCADE
-                )
+                    product_id INTEGER NOT NULL,
+                    units_sold INTEGER,
+                    revenue NUMERIC(14,2),
+                    return_quantity INTEGER,
+                    return_amount NUMERIC(14,2),
+                    net_revenue NUMERIC(14,2),
+                    FOREIGN KEY (report_id) REFERENCES sales_reports(id) ON DELETE CASCADE,
+                    FOREIGN KEY (product_id) REFERENCES products(id)
+                );
+                CREATE INDEX ix_sales_report_items_report_id ON sales_report_items (report_id);
+                CREATE INDEX ix_sales_report_items_product_id ON sales_report_items (product_id);
                 """
             )
         )
 
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_org_id ON sales_reports (org_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_start_date ON sales_reports (start_date)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_end_date ON sales_reports (end_date)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_report_id ON sales_items (report_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_item_code ON sales_items (item_code)"))
-
-    print("Sales architecture reset completed with new report schema.")
+    print("Schema reset completed: organizations, branches, products, sales_reports, sales_report_items")
 
 
 if __name__ == "__main__":

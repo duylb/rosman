@@ -19,7 +19,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.extensions import db, csrf, migrate
 from app.models import (
+    Branch,
     Organization,
+    Product,
     RosterAssignment,
     RosterVersion,
     SaleItem,
@@ -204,19 +206,25 @@ def ensure_business_dummy_data(org_id: int) -> None:
         return
 
     latest_report = (
-        SaleReport.query.filter_by(org_id=org_id)
+        SaleReport.query.filter_by(organization_id=org_id)
         .order_by(SaleReport.imported_at.desc(), SaleReport.id.desc())
         .first()
     )
 
     if latest_report is None:
         today_obj = date.today()
+        default_branch = Branch.query.filter_by(organization_id=org_id, branch_name="Main").first()
+        if default_branch is None:
+            default_branch = Branch(organization_id=org_id, branch_name="Main")
+            db.session.add(default_branch)
+            db.session.flush()
+
         latest_report = SaleReport(
-            org_id=org_id,
+            organization_id=org_id,
+            branch_id=default_branch.id,
             filename=f"dummy_sales_report_{today_obj.strftime('%Y%m%d')}.pdf",
             start_date=today_obj - timedelta(days=6),
             end_date=today_obj,
-            branch="Main",
             total_products=0,
             total_units_sold=0,
             total_return_units=0,
@@ -239,11 +247,15 @@ def ensure_business_dummy_data(org_id: int) -> None:
         for row in dummy_sales_items:
             category, item_type = get_category_info(str(row["sku"]))
             row_revenue = Decimal(str(row["revenue"])).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            product_ref = Product.query.filter_by(item_code=str(row["sku"])).first()
+            if product_ref is None:
+                product_ref = Product(item_code=str(row["sku"]), item_name=str(row["name"]))
+                db.session.add(product_ref)
+                db.session.flush()
             db.session.add(
                 SaleItem(
                     sale_report_id=latest_report.id,
-                    sku=str(row["sku"]),
-                    name=str(row["name"]),
+                    product_id=product_ref.id,
                     quantity=int(row["quantity"]),
                     return_quantity=0,
                     revenue=row_revenue,
@@ -549,7 +561,7 @@ def parse_report_range() -> tuple[date, date]:
 def build_sales_report_payload(org_id: int, start_obj: date, end_obj: date) -> dict[str, Any]:
     reports = (
         SaleReport.query.options(selectinload(SaleReport.products))
-        .filter(SaleReport.org_id == org_id)
+        .filter(SaleReport.organization_id == org_id)
         .order_by(SaleReport.imported_at.desc(), SaleReport.id.desc())
         .all()
     )
@@ -755,28 +767,54 @@ def ensure_staff_schema_compatibility() -> None:
 
 def ensure_sales_schema_compatibility() -> None:
     dialect_name = db.engine.dialect.name.lower()
-    report_id_def = "SERIAL PRIMARY KEY" if dialect_name == "postgresql" else "INTEGER PRIMARY KEY"
-    product_id_def = "SERIAL PRIMARY KEY" if dialect_name == "postgresql" else "INTEGER PRIMARY KEY"
+    serial_pk = "SERIAL PRIMARY KEY" if dialect_name == "postgresql" else "INTEGER PRIMARY KEY"
 
+    db.session.execute(
+        text(
+            f"""
+            CREATE TABLE IF NOT EXISTS branches (
+                id {serial_pk},
+                organization_id INTEGER NOT NULL,
+                branch_name VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE
+            )
+            """
+        )
+    )
+    db.session.execute(
+        text(
+            f"""
+            CREATE TABLE IF NOT EXISTS products (
+                id {serial_pk},
+                item_code VARCHAR(50) UNIQUE NOT NULL,
+                item_name VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+    )
     db.session.execute(
         text(
             f"""
             CREATE TABLE IF NOT EXISTS sales_reports (
-                id {report_id_def},
-                org_id INTEGER NOT NULL,
-                report_title VARCHAR(255) NOT NULL,
+                id {serial_pk},
+                organization_id INTEGER NOT NULL,
+                branch_id INTEGER NOT NULL,
+                report_title VARCHAR(255),
                 start_date DATE NOT NULL,
                 end_date DATE NOT NULL,
-                created_datetime TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                branch VARCHAR(160),
-                total_products INTEGER NOT NULL DEFAULT 0,
-                total_units_sold INTEGER NOT NULL DEFAULT 0,
-                total_revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
-                total_return_units INTEGER NOT NULL DEFAULT 0,
-                total_return_value NUMERIC(14,2) NOT NULL DEFAULT 0,
-                net_revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
-                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (org_id) REFERENCES organizations (id) ON DELETE CASCADE
+                created_datetime TIMESTAMP,
+                total_products INTEGER,
+                total_units_sold INTEGER,
+                total_revenue NUMERIC(14,2),
+                total_return_units INTEGER,
+                total_return_value NUMERIC(14,2),
+                net_revenue NUMERIC(14,2),
+                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE,
+                FOREIGN KEY (branch_id) REFERENCES branches (id) ON DELETE CASCADE,
+                UNIQUE (branch_id, start_date, end_date)
             )
             """
         )
@@ -784,133 +822,29 @@ def ensure_sales_schema_compatibility() -> None:
     db.session.execute(
         text(
             f"""
-            CREATE TABLE IF NOT EXISTS sales_items (
-                id {product_id_def},
+            CREATE TABLE IF NOT EXISTS sales_report_items (
+                id {serial_pk},
                 report_id INTEGER NOT NULL,
-                item_code VARCHAR(64) NOT NULL,
-                item_name VARCHAR(255) NOT NULL,
-                units_sold INTEGER NOT NULL DEFAULT 0,
-                revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
-                return_quantity INTEGER NOT NULL DEFAULT 0,
-                return_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
-                net_revenue NUMERIC(14,2) NOT NULL DEFAULT 0,
-                FOREIGN KEY (report_id) REFERENCES sales_reports (id) ON DELETE CASCADE
+                product_id INTEGER NOT NULL,
+                units_sold INTEGER,
+                revenue NUMERIC(14,2),
+                return_quantity INTEGER,
+                return_amount NUMERIC(14,2),
+                net_revenue NUMERIC(14,2),
+                FOREIGN KEY (report_id) REFERENCES sales_reports (id) ON DELETE CASCADE,
+                FOREIGN KEY (product_id) REFERENCES products (id)
             )
             """
         )
     )
 
-    inspector = inspect(db.engine)
-    report_columns = {col["name"] for col in inspector.get_columns("sales_reports")}
-    report_defs = [
-        ("org_id", "INTEGER"),
-        ("report_title", "VARCHAR(255)"),
-        ("start_date", "DATE"),
-        ("end_date", "DATE"),
-        ("created_datetime", "TIMESTAMP"),
-        ("branch", "VARCHAR(160)"),
-        ("total_products", "INTEGER DEFAULT 0"),
-        ("total_units_sold", "INTEGER DEFAULT 0"),
-        ("total_revenue", "NUMERIC(14,2) DEFAULT 0"),
-        ("total_return_units", "INTEGER DEFAULT 0"),
-        ("total_return_value", "NUMERIC(14,2) DEFAULT 0"),
-        ("net_revenue", "NUMERIC(14,2) DEFAULT 0"),
-        ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
-    ]
-    for column_name, column_def in report_defs:
-        if column_name not in report_columns:
-            db.session.execute(text(f"ALTER TABLE sales_reports ADD COLUMN {column_name} {column_def}"))
-
-    item_columns = {col["name"] for col in inspector.get_columns("sales_items")}
-    item_defs = [
-        ("report_id", "INTEGER"),
-        ("item_code", "VARCHAR(64)"),
-        ("item_name", "VARCHAR(255)"),
-        ("units_sold", "INTEGER DEFAULT 0"),
-        ("revenue", "NUMERIC(14,2) DEFAULT 0"),
-        ("return_quantity", "INTEGER DEFAULT 0"),
-        ("return_amount", "NUMERIC(14,2) DEFAULT 0"),
-        ("net_revenue", "NUMERIC(14,2) DEFAULT 0"),
-    ]
-    for column_name, column_def in item_defs:
-        if column_name not in item_columns:
-            db.session.execute(text(f"ALTER TABLE sales_items ADD COLUMN {column_name} {column_def}"))
-
-    # Legacy sales_reports columns to new schema.
-    report_columns = {col["name"] for col in inspect(db.engine).get_columns("sales_reports")}
-    if "org_id" in report_columns and "organization_id" in report_columns:
-        db.session.execute(text("UPDATE sales_reports SET org_id = COALESCE(org_id, organization_id)"))
-    elif "org_id" not in report_columns and "organization_id" in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN org_id INTEGER"))
-        db.session.execute(text("UPDATE sales_reports SET org_id = organization_id WHERE organization_id IS NOT NULL"))
-    if "report_title" in report_columns and "filename" in report_columns:
-        db.session.execute(
-            text("UPDATE sales_reports SET report_title = COALESCE(NULLIF(report_title, ''), filename, 'Sales Report')")
-        )
-    elif "report_title" not in report_columns and "filename" in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN report_title VARCHAR(255)"))
-        db.session.execute(
-            text("UPDATE sales_reports SET report_title = COALESCE(NULLIF(filename, ''), 'Sales Report')")
-        )
-    if "created_datetime" in report_columns and "imported_at" in report_columns:
-        db.session.execute(text("UPDATE sales_reports SET created_datetime = COALESCE(created_datetime, imported_at)"))
-    elif "created_datetime" not in report_columns and "imported_at" in report_columns:
-        db.session.execute(text("ALTER TABLE sales_reports ADD COLUMN created_datetime TIMESTAMP"))
-        db.session.execute(text("UPDATE sales_reports SET created_datetime = imported_at WHERE imported_at IS NOT NULL"))
-
-    # Legacy sales_items columns to new schema.
-    item_columns = {col["name"] for col in inspect(db.engine).get_columns("sales_items")}
-    if "report_id" in item_columns and "sale_report_id" in item_columns:
-        db.session.execute(text("UPDATE sales_items SET report_id = COALESCE(report_id, sale_report_id)"))
-    elif "report_id" not in item_columns and "sale_report_id" in item_columns:
-        db.session.execute(text("ALTER TABLE sales_items ADD COLUMN report_id INTEGER"))
-        db.session.execute(text("UPDATE sales_items SET report_id = sale_report_id WHERE sale_report_id IS NOT NULL"))
-
-    if "item_code" in item_columns and "sku" in item_columns:
-        db.session.execute(text("UPDATE sales_items SET item_code = COALESCE(NULLIF(item_code, ''), sku, '')"))
-    elif "item_code" not in item_columns and "sku" in item_columns:
-        db.session.execute(text("ALTER TABLE sales_items ADD COLUMN item_code VARCHAR(64)"))
-        db.session.execute(text("UPDATE sales_items SET item_code = COALESCE(NULLIF(sku, ''), '')"))
-
-    if "item_name" in item_columns and "name" in item_columns:
-        db.session.execute(text("UPDATE sales_items SET item_name = COALESCE(NULLIF(item_name, ''), name, '')"))
-    elif "item_name" not in item_columns and "name" in item_columns:
-        db.session.execute(text("ALTER TABLE sales_items ADD COLUMN item_name VARCHAR(255)"))
-        db.session.execute(text("UPDATE sales_items SET item_name = COALESCE(NULLIF(name, ''), '')"))
-
-    if "units_sold" in item_columns and "quantity" in item_columns:
-        db.session.execute(text("UPDATE sales_items SET units_sold = COALESCE(units_sold, quantity, 0)"))
-    elif "units_sold" not in item_columns and "quantity" in item_columns:
-        db.session.execute(text("ALTER TABLE sales_items ADD COLUMN units_sold INTEGER DEFAULT 0"))
-        db.session.execute(text("UPDATE sales_items SET units_sold = COALESCE(quantity, 0)"))
-
-    if "return_quantity" in item_columns and "returned_quantity" in item_columns:
-        db.session.execute(
-            text("UPDATE sales_items SET return_quantity = COALESCE(return_quantity, returned_quantity, 0)")
-        )
-    elif "return_quantity" not in item_columns and "returned_quantity" in item_columns:
-        db.session.execute(text("ALTER TABLE sales_items ADD COLUMN return_quantity INTEGER DEFAULT 0"))
-        db.session.execute(text("UPDATE sales_items SET return_quantity = COALESCE(returned_quantity, 0)"))
-
-    if "return_amount" in item_columns and "returned_amount" in item_columns:
-        db.session.execute(
-            text("UPDATE sales_items SET return_amount = COALESCE(return_amount, returned_amount, 0)")
-        )
-    elif "return_amount" not in item_columns and "returned_amount" in item_columns:
-        db.session.execute(text("ALTER TABLE sales_items ADD COLUMN return_amount NUMERIC(14,2) DEFAULT 0"))
-        db.session.execute(text("UPDATE sales_items SET return_amount = COALESCE(returned_amount, 0)"))
-
-    if "net_revenue" not in item_columns:
-        db.session.execute(text("ALTER TABLE sales_items ADD COLUMN net_revenue NUMERIC(14,2) DEFAULT 0"))
-        db.session.execute(
-            text("UPDATE sales_items SET net_revenue = COALESCE(revenue, 0) - COALESCE(return_amount, 0)")
-        )
-
-    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_org_id ON sales_reports (org_id)"))
-    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_start_date ON sales_reports (start_date)"))
-    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_end_date ON sales_reports (end_date)"))
-    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_report_id ON sales_items (report_id)"))
-    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_items_item_code ON sales_items (item_code)"))
+    db.session.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_organizations_name ON organizations (name)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_branches_organization_id ON branches (organization_id)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_products_item_code ON products (item_code)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_branch_id ON sales_reports (branch_id)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_reports_start_end ON sales_reports (start_date, end_date)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_report_items_report_id ON sales_report_items (report_id)"))
+    db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_report_items_product_id ON sales_report_items (product_id)"))
     db.session.commit()
 
 
@@ -2574,12 +2508,18 @@ def sales_report() -> str | Response:
             return redirect(url_for("sales_report"))
 
         try:
+            default_branch = Branch.query.filter_by(organization_id=org_id, branch_name="Main").first()
+            if default_branch is None:
+                default_branch = Branch(organization_id=org_id, branch_name="Main")
+                db.session.add(default_branch)
+                db.session.flush()
+
             report = SaleReport(
-                org_id=org_id,
+                organization_id=org_id,
+                branch_id=default_branch.id,
                 filename=report_name or file_obj.filename,
                 start_date=report_start_obj,
                 end_date=report_end_obj,
-                branch="Main",
                 total_products=0,
                 total_units_sold=0,
                 total_return_units=0,
@@ -2592,11 +2532,15 @@ def sales_report() -> str | Response:
 
             total_revenue = Decimal("0.00")
             for parsed in parsed_rows:
+                product_ref = Product.query.filter_by(item_code=str(parsed["sku"])).first()
+                if product_ref is None:
+                    product_ref = Product(item_code=str(parsed["sku"]), item_name=str(parsed["name"]))
+                    db.session.add(product_ref)
+                    db.session.flush()
                 db.session.add(
                     SaleItem(
                         sale_report_id=report.id,
-                        sku=parsed["sku"],
-                        name=parsed["name"],
+                        product_id=product_ref.id,
                         quantity=parsed["quantity"],
                         return_quantity=parsed["returns"],
                         revenue=parsed["revenue"],

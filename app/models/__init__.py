@@ -9,6 +9,7 @@ from .staff import (
     StaffShiftPreference,
 )
 from .sales import SalesReport, SalesProduct, ProductSale, SaleReport, SaleItem
+from .sales import Branch, Product, SalesReportItem
 
 __all__ = [
     "Organization",
@@ -19,6 +20,9 @@ __all__ = [
     "RosterAssignment",
     "StaffAvailability",
     "StaffShiftPreference",
+    "Branch",
+    "Product",
+    "SalesReportItem",
     "SalesReport",
     "SalesProduct",
     "ProductSale",
