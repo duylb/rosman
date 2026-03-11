@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import traceback
 from datetime import datetime, timedelta
@@ -33,6 +34,22 @@ def parse_datetime_value(raw: str) -> datetime:
     raise ValueError("Invalid datetime format.")
 
 
+def normalize_payload(raw_payload: object) -> dict[str, object]:
+    payload = raw_payload
+    if isinstance(payload, list):
+        payload = payload[0] if payload else {}
+    if not isinstance(payload, dict):
+        return {}
+
+    # Common n8n wrappers: {json: {...}}, {body: {...}}, {data: {...}}, {payload: {...}}
+    for wrapper_key in ("json", "body", "data", "payload"):
+        wrapped = payload.get(wrapper_key)
+        if isinstance(wrapped, dict):
+            payload = wrapped
+            break
+    return payload
+
+
 def get_nested_value(payload: dict[str, object], path: tuple[str, ...]) -> object:
     current: object = payload
     for key in path:
@@ -48,6 +65,16 @@ def first_non_empty_str(*values: object) -> str:
         if text:
             return text
     return ""
+
+
+def parse_period_text(raw_period: object) -> tuple[str, str]:
+    text = str(raw_period or "").strip()
+    if not text:
+        return "", ""
+    matches = re.findall(r"(\d{1,2}/\d{1,2}/\d{4}|\d{4}-\d{2}-\d{2})", text)
+    if len(matches) >= 2:
+        return matches[0], matches[1]
+    return "", ""
 
 
 def infer_month_bounds_from_created_datetime(raw_created: object) -> tuple[str, str]:
@@ -87,7 +114,22 @@ def import_sales():
         return jsonify({"error": "Unauthorized"}), 401
 
     try:
-        data = request.get_json() or {}
+        data = normalize_payload(request.get_json(silent=True))
+        if not data and request.form:
+            form_data = request.form.to_dict(flat=True)
+            for key in ("json", "body", "data", "payload"):
+                raw_nested = form_data.get(key)
+                if not raw_nested:
+                    continue
+                try:
+                    parsed_nested = json.loads(raw_nested)
+                except (TypeError, ValueError):
+                    continue
+                data = normalize_payload(parsed_nested)
+                if data:
+                    break
+            if not data:
+                data = normalize_payload(form_data)
         print("Incoming JSON:", data)
 
         organization_name = str(data.get("organization", "")).strip()
@@ -127,6 +169,17 @@ def import_sales():
             get_nested_value(data, ("report_period", "end_date")),
             get_nested_value(data, ("reportPeriod", "endDate")),
         )
+        if not start_date_raw or not end_date_raw:
+            period_start, period_end = parse_period_text(
+                first_non_empty_str(
+                    data.get("report_period"),
+                    data.get("period"),
+                    data.get("date_range"),
+                    get_nested_value(data, ("summary", "report_period")),
+                )
+            )
+            start_date_raw = start_date_raw or period_start
+            end_date_raw = end_date_raw or period_end
         if not start_date_raw or not end_date_raw:
             inferred_start, inferred_end = infer_month_bounds_from_created_datetime(data.get("created_datetime"))
             start_date_raw = start_date_raw or inferred_start
