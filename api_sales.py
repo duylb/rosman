@@ -2,7 +2,7 @@ import os
 import json
 import re
 import traceback
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, request
@@ -16,7 +16,7 @@ API_KEY = os.environ.get("SALES_API_KEY")
 
 def parse_date_value(raw: str) -> datetime:
     value = (raw or "").strip()
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%d-%m-%Y"):
         try:
             return datetime.strptime(value, fmt)
         except ValueError:
@@ -26,7 +26,7 @@ def parse_date_value(raw: str) -> datetime:
 
 def parse_datetime_value(raw: str) -> datetime:
     value = (raw or "").strip()
-    for fmt in ("%d/%m/%Y %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M"):
+    for fmt in ("%d/%m/%Y %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M", "%m/%d/%Y %H:%M"):
         try:
             return datetime.strptime(value, fmt)
         except ValueError:
@@ -75,6 +75,31 @@ def parse_period_text(raw_period: object) -> tuple[str, str]:
     if len(matches) >= 2:
         return matches[0], matches[1]
     return "", ""
+
+
+def find_first_value_by_keys(payload: object, key_candidates: set[str]) -> object:
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if str(key).lower() in key_candidates and value not in (None, "", []):
+                return value
+        for value in payload.values():
+            found = find_first_value_by_keys(value, key_candidates)
+            if found not in (None, "", []):
+                return found
+    elif isinstance(payload, list):
+        for item in payload:
+            found = find_first_value_by_keys(item, key_candidates)
+            if found not in (None, "", []):
+                return found
+    return None
+
+
+def default_month_bounds() -> tuple[str, str]:
+    today_obj = date.today()
+    month_start = today_obj.replace(day=1)
+    next_month = (month_start + timedelta(days=32)).replace(day=1)
+    month_end = next_month - timedelta(days=1)
+    return month_start.strftime("%Y-%m-%d"), month_end.strftime("%Y-%m-%d")
 
 
 def infer_month_bounds_from_created_datetime(raw_created: object) -> tuple[str, str]:
@@ -180,24 +205,44 @@ def import_sales():
             )
             start_date_raw = start_date_raw or period_start
             end_date_raw = end_date_raw or period_end
+
+        if not start_date_raw or not end_date_raw:
+            recursive_start = first_non_empty_str(
+                find_first_value_by_keys(
+                    data,
+                    {
+                        "start_date",
+                        "startdate",
+                        "period_start",
+                        "report_start_date",
+                        "from_date",
+                        "from",
+                    },
+                )
+            )
+            recursive_end = first_non_empty_str(
+                find_first_value_by_keys(
+                    data,
+                    {
+                        "end_date",
+                        "enddate",
+                        "period_end",
+                        "report_end_date",
+                        "to_date",
+                        "to",
+                    },
+                )
+            )
+            start_date_raw = start_date_raw or recursive_start
+            end_date_raw = end_date_raw or recursive_end
         if not start_date_raw or not end_date_raw:
             inferred_start, inferred_end = infer_month_bounds_from_created_datetime(data.get("created_datetime"))
             start_date_raw = start_date_raw or inferred_start
             end_date_raw = end_date_raw or inferred_end
         if not start_date_raw or not end_date_raw:
-            return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "message": "start_date and end_date are required.",
-                        "hints": [
-                            "Provide start_date/end_date (DD/MM/YYYY or YYYY-MM-DD).",
-                            "Accepted aliases: startDate/endDate, report_period.start_date/end_date.",
-                        ],
-                    }
-                ),
-                400,
-            )
+            fallback_start, fallback_end = default_month_bounds()
+            start_date_raw = start_date_raw or fallback_start
+            end_date_raw = end_date_raw or fallback_end
         report_title = str(data.get("report_title", "")).strip() or "Sales Report"
         branch = str(data.get("branch", "")).strip() or None
         summary_payload = data.get("summary") or {}
