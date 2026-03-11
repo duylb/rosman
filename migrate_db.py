@@ -42,6 +42,21 @@ def run() -> None:
                 );
                 CREATE UNIQUE INDEX uq_organizations_name ON organizations (name);
 
+                CREATE TABLE users (
+                    id SERIAL PRIMARY KEY,
+                    email TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    expires_at TIMESTAMP NULL,
+                    is_owner BOOLEAN NOT NULL DEFAULT FALSE,
+                    role TEXT NOT NULL DEFAULT 'owner',
+                    enable_people_ops BOOLEAN NOT NULL DEFAULT TRUE,
+                    enable_business_ops BOOLEAN NOT NULL DEFAULT TRUE,
+                    org_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX ix_users_org_id ON users (org_id);
+
                 CREATE TABLE branches (
                     id SERIAL PRIMARY KEY,
                     organization_id INTEGER NOT NULL,
