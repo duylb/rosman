@@ -1,11 +1,10 @@
 import os
 import json
 import re
-import traceback
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import inspect, text
 
 from app.extensions import csrf, db
@@ -110,6 +109,19 @@ def ensure_sales_schema_for_import() -> None:
         return
 
     inspector = inspect(db.engine)
+    required_tables = {"organizations", "branches", "products", "sales_reports", "sales_report_items"}
+    existing_tables = set(inspector.get_table_names())
+    missing_tables = sorted(required_tables - existing_tables)
+    app_env = (os.environ.get("APP_ENV", "") or "").strip().lower()
+    if app_env == "production":
+        if missing_tables:
+            raise RuntimeError(
+                "Database schema is missing required tables for sales import. "
+                "Run Alembic migrations before importing."
+            )
+        _schema_checked = True
+        return
+
     if not inspector.has_table("branches"):
         db.session.execute(
             text(
@@ -202,6 +214,18 @@ def infer_month_bounds_from_created_datetime(raw_created: object) -> tuple[str, 
 def parse_decimal_value(raw: object, fallback: Decimal = Decimal("0")) -> Decimal:
     if raw is None or raw == "":
         return fallback
+
+
+def parse_int_value(raw: object, fallback: int = 0) -> int:
+    if raw is None or raw == "":
+        return fallback
+    compact = re.sub(r"[^\d-]", "", str(raw).strip())
+    if compact in {"", "-"}:
+        return fallback
+    try:
+        return int(compact)
+    except (TypeError, ValueError):
+        return fallback
     try:
         return Decimal(str(raw))
     except (InvalidOperation, ValueError, TypeError):
@@ -266,7 +290,7 @@ def import_sales():
                     break
             if not data:
                 data = normalize_payload(form_data)
-        print("Incoming JSON:", data)
+        current_app.logger.info("import-sales request received with keys: %s", sorted(data.keys()))
 
         organization_name = str(data.get("organization", "")).strip()
         org_id_raw = data.get("org_id")
@@ -378,16 +402,19 @@ def import_sales():
 
         normalized_items: list[dict[str, object]] = []
         for idx, item in enumerate(items_payload):
+            if not isinstance(item, dict):
+                return jsonify({"status": "error", "message": "Each item must be an object."}), 400
+
             item_code = build_item_code(item, idx)
             item_name = str(item.get("item_name", item.get("product_name", "")) or "").strip()
             if not item_name:
                 return jsonify({"status": "error", "message": "Each item requires item_name or product_name."}), 400
 
             revenue = parse_decimal_value(item.get("revenue"))
-            returned_quantity = int(item.get("returned_quantity", item.get("return_units", 0)) or 0)
+            returned_quantity = parse_int_value(item.get("returned_quantity", item.get("return_units", 0)))
             returned_amount = parse_decimal_value(item.get("returned_amount", item.get("return_value", 0)))
             net_revenue = parse_decimal_value(item.get("net_revenue"), revenue - returned_amount)
-            quantity = int(item.get("quantity", item.get("units_sold", 0)) or 0)
+            quantity = parse_int_value(item.get("quantity", item.get("units_sold", 0)))
 
             normalized_items.append(
                 {
@@ -404,11 +431,14 @@ def import_sales():
         if not normalized_items:
             return jsonify(
                 {
-                    "status": "success",
-                    "action": "ignored",
-                    "message": "No sales items found in payload. Nothing imported.",
+                    "status": "error",
+                    "message": "At least one sales item is required.",
+                    "hints": [
+                        "Pass an array at items or products with at least one object.",
+                        "Each object must contain item_name/product_name and revenue/units_sold fields.",
+                    ],
                 }
-            ), 200
+            ), 400
 
         branch = get_or_create_branch(organization.id, branch)
 
@@ -480,6 +510,5 @@ def import_sales():
         }
     except Exception as e:
         db.session.rollback()
-        print("ERROR:", str(e))
-        traceback.print_exc()
-        return {"status": "error", "message": str(e)}, 500
+        current_app.logger.exception("import-sales failed")
+        return {"status": "error", "message": "Import failed. Check payload and schema."}, 500

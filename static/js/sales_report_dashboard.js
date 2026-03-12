@@ -221,15 +221,21 @@
     } else {
       pagedRows.forEach((row) => {
         const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${row.item_code || ""}</td>
-          <td>${row.item_name || ""}</td>
-          <td>${formatInt(row.units_sold)}</td>
-          <td>${formatMoney(row.revenue)}</td>
-          <td>${formatInt(row.return_quantity)}</td>
-          <td>${formatMoney(row.return_amount)}</td>
-          <td>${formatMoney(row.net_revenue)}</td>
-        `;
+
+        const values = [
+          row.item_code || "",
+          row.item_name || "",
+          formatInt(row.units_sold),
+          formatMoney(row.revenue),
+          formatInt(row.return_quantity),
+          formatMoney(row.return_amount),
+          formatMoney(row.net_revenue),
+        ];
+        values.forEach((value) => {
+          const td = document.createElement("td");
+          td.textContent = String(value);
+          tr.appendChild(td);
+        });
         tableBody.appendChild(tr);
       });
     }

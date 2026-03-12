@@ -3,8 +3,8 @@ services:
     name: rosman-web
     env: python
     plan: starter
-    buildCommand: pip install -r requirements.txt && python migrate_db.py
-    preDeployCommand: python migrate_db.py
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: flask db upgrade
     startCommand: gunicorn --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-1} --access-logfile - --error-logfile - wsgi:app
     healthCheckPath: /login
     envVars:

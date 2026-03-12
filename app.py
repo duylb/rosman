@@ -368,6 +368,8 @@ def people_ops_required(func: Any) -> Any:
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         if is_people_ops_enabled(getattr(g, "user", None)):
             return func(*args, **kwargs)
+        if is_api_request():
+            return jsonify({"status": "error", "message": "People Ops module is disabled."}), 403
         flash("msg_module_people_ops_disabled", "error")
         return redirect(url_for("dashboard"))
 
@@ -560,7 +562,7 @@ def parse_report_range() -> tuple[date, date]:
 
 def build_sales_report_payload(org_id: int, start_obj: date, end_obj: date) -> dict[str, Any]:
     reports = (
-        SaleReport.query.options(selectinload(SaleReport.products))
+        SaleReport.query.options(selectinload(SaleReport.sales_report_items))
         .filter(SaleReport.organization_id == org_id)
         .order_by(SaleReport.imported_at.desc(), SaleReport.id.desc())
         .all()
@@ -581,7 +583,7 @@ def build_sales_report_payload(org_id: int, start_obj: date, end_obj: date) -> d
         if report_end < start_obj or report_start > end_obj:
             continue
 
-        for item in report.products:
+        for item in report.sales_report_items:
             item_code = str(item.sku or "").strip()
             item_name = str(item.name or "").strip()
             if not item_code and not item_name:
@@ -957,7 +959,7 @@ def login() -> str | Any:
             session["user_id"] = user.id
             session["role"] = user.role
             session.permanent = remember_me_checked
-            if not next_url.startswith("/"):
+            if not next_url.startswith("/") or next_url.startswith("//"):
                 next_url = url_for("dashboard")
             return redirect(next_url or url_for("dashboard"))
 
@@ -2524,21 +2526,33 @@ def sales_report() -> str | Response:
                 db.session.add(default_branch)
                 db.session.flush()
 
-            report = SaleReport(
+            report_start = report_start_obj or date.today()
+            report_end = report_end_obj or report_start
+            report = SaleReport.query.filter_by(
                 organization_id=org_id,
                 branch_id=default_branch.id,
-                filename=report_name or file_obj.filename,
-                start_date=report_start_obj,
-                end_date=report_end_obj,
-                total_products=0,
-                total_units_sold=0,
-                total_return_units=0,
-                total_return_value=Decimal("0.00"),
-                net_revenue=Decimal("0.00"),
-                total_revenue=Decimal("0.00"),
-            )
-            db.session.add(report)
-            db.session.flush()
+                start_date=report_start,
+                end_date=report_end,
+            ).first()
+            if report is None:
+                report = SaleReport(
+                    organization_id=org_id,
+                    branch_id=default_branch.id,
+                    start_date=report_start,
+                    end_date=report_end,
+                )
+                db.session.add(report)
+                db.session.flush()
+            else:
+                SaleItem.query.filter_by(report_id=report.id).delete(synchronize_session=False)
+
+            report.filename = report_name or file_obj.filename
+            report.total_products = 0
+            report.total_units_sold = 0
+            report.total_return_units = 0
+            report.total_return_value = Decimal("0.00")
+            report.net_revenue = Decimal("0.00")
+            report.total_revenue = Decimal("0.00")
 
             total_revenue = Decimal("0.00")
             for parsed in parsed_rows:
@@ -2577,8 +2591,8 @@ def sales_report() -> str | Response:
             return redirect(
                 url_for(
                     "sales_report",
-                    start_date=(report_start_obj or date.today()).isoformat(),
-                    end_date=(report_end_obj or date.today()).isoformat(),
+                    start_date=report_start.isoformat(),
+                    end_date=report_end.isoformat(),
                 )
             )
         except IntegrityError:

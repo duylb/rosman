@@ -58,6 +58,7 @@ def create_duy_blueprint(
             select_columns.append(org_people_col.label("org_enable_people_ops"))
         if org_business_col is not None:
             select_columns.append(org_business_col.label("org_enable_business_ops"))
+        can_toggle_org_modules = org_people_col is not None and org_business_col is not None
 
         users = (
             db.session.query(*select_columns)
@@ -92,7 +93,12 @@ def create_duy_blueprint(
                 }
             )
 
-        return render_template("duy/panel.html", users=user_rows, organizations=org_rows)
+        return render_template(
+            "duy/panel.html",
+            users=user_rows,
+            organizations=org_rows,
+            can_toggle_org_modules=can_toggle_org_modules,
+        )
 
     @bp.post("/users/create")
     @login_required

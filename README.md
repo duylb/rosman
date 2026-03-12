@@ -1,12 +1,13 @@
-# RosMan - Rostering Management (Local Python App)
+# RosMan - Operations Management (Flask + PostgreSQL)
 
-A lightweight Flask + SQLite app for managing:
+Flask web app for managing:
 - Staff members
 - Shift templates
 - Daily roster assignments
 - Leave/availability windows
 - Weekly auto-scheduling
 - CSV import/export
+- Sales reports, analytics, and exports
 
 ## Quick Start
 
@@ -23,13 +24,26 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-3. Run the app:
+3. Set environment variables:
+
+```powershell
+$env:DATABASE_URL="postgresql://<user>:<pass>@<host>/<db>"
+$env:SECRET_KEY="change-me"
+```
+
+4. Run migrations:
+
+```powershell
+flask db upgrade
+```
+
+5. Run the app:
 
 ```powershell
 python app.py
 ```
 
-4. Open in browser:
+6. Open in browser:
 
 `http://127.0.0.1:5000`
 
@@ -52,6 +66,6 @@ Date format is `YYYY-MM-DD`.
 
 ## Notes
 
-- Database file is `roster.db` in the project root.
-- To reset all data, stop app and delete `roster.db`.
-- This is intended for local/internal use.
+- Production uses PostgreSQL (Render).
+- Do not reset schema by dropping tables in production.
+- Use Alembic migrations (`flask db upgrade`) for all schema changes.

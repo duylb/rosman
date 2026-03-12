@@ -49,7 +49,9 @@
 
 <section class="panel">
   <h2>{{ t('module_toggles_org_title') if t('module_toggles_org_title') != 'module_toggles_org_title' else 'Organization Modules' }}</h2>
-  {% if organizations %}
+  {% if not can_toggle_org_modules %}
+  <p class="hint">{{ t('msg_duy_org_modules_unsupported') if t('msg_duy_org_modules_unsupported') != 'msg_duy_org_modules_unsupported' else 'Organization-level module toggles are not available in this schema.' }}</p>
+  {% elif organizations %}
   <div class="panel-grid">
     {% for org in organizations %}
     <form method="post" action="{{ url_for('duy.toggle_org_modules', org_id=org.id) }}" class="inline-form form-row-inline form-section">
